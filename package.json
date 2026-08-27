@@ -6,29 +6,44 @@
     "dev": "next dev --webpack",
     "build": "npm run check && next build --webpack",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --incremental false",
     "lint": "eslint .",
-    "check": "npm run typecheck && npm run lint"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "prove": "tsx scripts/prove.ts",
+    "check": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1119.0",
     "@fontsource-variable/manrope": "5.3.0",
     "@fontsource-variable/newsreader": "5.3.0",
+    "@neondatabase/serverless": "1.1.0",
+    "@noble/hashes": "2.3.0",
     "@starknet-io/get-starknet-discovery": "6.0.2",
     "@starknet-io/get-starknet-wallet-standard": "6.0.2",
+    "drizzle-orm": "0.45.2",
     "next": "16.3.3",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "sharp": "0.35.4",
     "starknet": "10.4.0",
+    "zod": "4.4.3",
     "zustand": "5.0.9"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@starknet-io/types-js": "0.10.3",
     "@types/node": "24.10.2",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
+    "drizzle-kit": "0.31.10",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
-    "typescript": "5.9.3"
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
   }
 }
