@@ -1,0 +1,158 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+
+import { connectSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
+import { useDiscoveredWallets } from "@/lib/wallet/wallet-store";
+import type { AuthChallenge } from "@/server/auth/challenge";
+
+import { WalletPicker } from "./wallet-picker";
+
+type FlowState =
+  | "idle"
+  | "connecting"
+  | "awaiting-signature"
+  | "verifying"
+  | "unsupported"
+  | "wrong-network"
+  | "authenticated"
+  | "error";
+
+function signatureStrings(signature: unknown): string[] {
+  if (Array.isArray(signature)) return signature.map(String);
+  if (signature && typeof signature === "object") {
+    const value = signature as { r?: unknown; s?: unknown };
+    if (value.r !== undefined && value.s !== undefined) {
+      return [String(value.r), String(value.s)];
+    }
+  }
+  throw new Error("SIGNATURE_FORMAT_UNSUPPORTED");
+}
+
+function messageFor(code: string): string {
+  if (code === "AUTH_STORE_NOT_DURABLE") {
+    return "Wallet sign-in is intentionally paused until the durable session store is installed.";
+  }
+  if (code === "RPC_NOT_CONFIGURED") {
+    return "Mainnet verification is not configured yet. Add the server RPC setting and retry.";
+  }
+  return "The wallet session could not be verified. Nothing was signed beyond this sign-in request.";
+}
+
+export function WalletSessionButton() {
+  const wallets = useDiscoveredWallets();
+  const [flow, setFlow] = useState<FlowState>("idle");
+  const [message, setMessage] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
+
+  async function authenticate(wallet: WalletStandardWallet) {
+    setMessage("");
+    setFlow("connecting");
+    let connected: Awaited<ReturnType<typeof connectSessionWallet>> | undefined;
+    try {
+      connected = await connectSessionWallet(wallet);
+      if (connected.kind === "unsupported") {
+        setFlow("unsupported");
+        setMessage(`This wallet needs STRK20 Wallet API ${connected.minimum} or newer.`);
+        return;
+      }
+      if (connected.kind === "wrong-network") {
+        setFlow("wrong-network");
+        setMessage("Switch this wallet to Starknet Mainnet, then try again.");
+        return;
+      }
+
+      const walletAddress = connected.account.address;
+      const challengeResponse = await fetch("/api/auth/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress, chainId: "SN_MAIN" }),
+      });
+      const challengeBody = (await challengeResponse.json()) as {
+        ok: boolean;
+        code?: string;
+        challenge?: AuthChallenge;
+      };
+      if (!challengeResponse.ok || !challengeBody.challenge) {
+        throw new Error(challengeBody.code ?? "CHALLENGE_FAILED");
+      }
+
+      setFlow("awaiting-signature");
+      const signature = signatureStrings(
+        await connected.account.signMessage(challengeBody.challenge.typedData),
+      );
+      setFlow("verifying");
+      const verifyResponse = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challenge: challengeBody.challenge,
+          walletAddress,
+          signature,
+        }),
+      });
+      const verified = (await verifyResponse.json()) as {
+        ok: boolean;
+        code?: string;
+        walletAddress?: string;
+      };
+      if (!verifyResponse.ok || !verified.walletAddress) {
+        throw new Error(verified.code ?? "VERIFY_FAILED");
+      }
+      setWalletAddress(verified.walletAddress);
+      setFlow("authenticated");
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "AUTH_FAILED";
+      setMessage(messageFor(code));
+      setFlow("error");
+    } finally {
+      if (connected?.kind === "connected") connected.account.unsubscribeChange();
+    }
+  }
+
+  async function logout() {
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) throw new Error("LOGOUT_FAILED");
+      setWalletAddress("");
+      setMessage("");
+      setFlow("idle");
+    } catch {
+      setMessage("The session could not be cleared. Refresh and try again.");
+      setFlow("error");
+    }
+  }
+
+  if (flow === "authenticated") {
+    return (
+      <div className="wallet-authenticated" role="status">
+        <span>SESSION VERIFIED</span>
+        <strong>{walletAddress.slice(0, 10)}…{walletAddress.slice(-6)}</strong>
+        <p>Your wallet proved control. No payment permission was requested.</p>
+        <Link className="sign-in-preview" href="/workspace">Open the proof workspace</Link>
+        <button className="wallet-logout" type="button" onClick={logout}>Sign out</button>
+      </div>
+    );
+  }
+
+  const busy = flow === "connecting" || flow === "awaiting-signature" || flow === "verifying";
+  return (
+    <>
+      <WalletPicker wallets={wallets} disabled={busy} onSelect={authenticate} />
+      <p className="sign-in-status" aria-live="polite">
+        {flow === "connecting" && "Checking STRK20 support before requesting access…"}
+        {flow === "awaiting-signature" && "Review the VeilAP sign-in message in your wallet."}
+        {flow === "verifying" && "Verifying the signed session on Starknet Mainnet…"}
+        {!busy && message}
+        {flow === "idle" && "Choose a wallet. Signing proves control only—it cannot move funds."}
+      </p>
+      {(flow === "error" || flow === "unsupported" || flow === "wrong-network") && (
+        <button className="wallet-retry" type="button" onClick={() => setFlow("idle")}>
+          Try another wallet
+        </button>
+      )}
+      <Link className="sign-in-preview" href="/workspace">Open the synthetic preview</Link>
+    </>
+  );
+}

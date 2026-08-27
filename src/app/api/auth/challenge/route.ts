@@ -1,0 +1,49 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import {
+  expectedOrigin,
+  getAuthChallenges,
+  hasDurableAuthStore,
+  requestOrigin,
+} from "@/server/auth/runtime";
+
+export const runtime = "nodejs";
+
+const requestSchema = z.object({
+  walletAddress: z.string().min(3).max(80),
+  chainId: z.literal("SN_MAIN"),
+});
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+export async function POST(request: Request) {
+  if (!hasDurableAuthStore()) {
+    return json(
+      {
+        ok: false,
+        code: "AUTH_STORE_NOT_DURABLE",
+        message: "Wallet sign-in remains disabled until the durable session store is installed.",
+      },
+      503,
+    );
+  }
+
+  const origin = requestOrigin(request);
+  if (!origin || origin !== expectedOrigin(request)) {
+    return json({ ok: false, code: "ORIGIN_MISMATCH" }, 403);
+  }
+
+  try {
+    const input = requestSchema.parse(await request.json());
+    const challenge = getAuthChallenges().issue({ ...input, origin });
+    return json({ ok: true, challenge });
+  } catch {
+    return json({ ok: false, code: "CHALLENGE_REQUEST_INVALID" }, 400);
+  }
+}

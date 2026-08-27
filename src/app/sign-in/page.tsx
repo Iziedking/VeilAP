@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { VeilLogo } from "@/components/veil-logo";
+import { WalletSessionButton } from "@/components/wallet/wallet-session-button";
 
 export const metadata = {
   title: "Sign in | VeilAP",
@@ -22,11 +23,7 @@ export default function SignInPage() {
         </div>
         <section className="sign-in-panel" aria-labelledby="sign-in-title">
           <header><span>VEILAP ACCESS</span><h2 id="sign-in-title">Continue with a wallet</h2></header>
-          <div className="sign-in-options">
-            <button className="sign-in-wallet" type="button" disabled>Wallet sign-in is next</button>
-            <p className="sign-in-status">The current build is a safe project preview. It will not request wallet access.</p>
-            <Link className="sign-in-preview" href="/workspace">Open the proof workspace</Link>
-          </div>
+          <div className="sign-in-options"><WalletSessionButton /></div>
           <p className="sign-in-boundary">VeilAP will never ask for a private key or viewing key.</p>
         </section>
       </main>

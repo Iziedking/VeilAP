@@ -192,8 +192,46 @@
 .sign-in-panel header span { font-family: var(--mono); font-size: 7px; letter-spacing: 1px; }
 .sign-in-panel header h2 { margin: 12px 0 0; font-size: 25px; font-weight: 620; }
 .sign-in-options { padding: 22px; }
-.sign-in-wallet { width: 100%; min-height: 56px; padding: 0 18px; border: 0; background: var(--signal); color: var(--ink); font-weight: 760; cursor: not-allowed; opacity: .72; }
-.sign-in-status { margin: 14px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
+.wallet-picker { display: grid; gap: 10px; }
+.wallet-option {
+  width: 100%;
+  min-height: 58px;
+  padding: 9px 13px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  border: 1px solid var(--ink);
+  background: var(--paper-light);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.wallet-option > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: var(--paper-light);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+.wallet-option strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-option small { color: var(--signal-dark); font-family: var(--mono); font-size: 7px; letter-spacing: .6px; }
+.wallet-option:hover { background: var(--signal); }
+.wallet-option:disabled { cursor: wait; opacity: .55; }
+.wallet-empty { min-height: 84px; padding: 16px; border: 1px dashed var(--rule); }
+.wallet-empty strong,
+.wallet-empty span { display: block; }
+.wallet-empty strong { font-size: 11px; }
+.wallet-empty span { margin-top: 8px; color: var(--ink-soft); font-size: 9px; line-height: 1.55; }
+.sign-in-status { min-height: 32px; margin: 14px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
+.wallet-retry { min-height: 44px; margin-top: 8px; padding: 0; border: 0; border-bottom: 1px solid var(--ink); background: transparent; color: var(--ink); font-size: 9px; font-weight: 720; cursor: pointer; }
+.wallet-authenticated > span { color: var(--green); font-family: var(--mono); font-size: 7px; letter-spacing: 1px; }
+.wallet-authenticated > strong { margin-top: 12px; display: block; font-family: var(--mono); font-size: 13px; }
+.wallet-authenticated > p { margin: 13px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
+.wallet-logout { width: 100%; min-height: 44px; margin-top: 10px; border: 0; background: transparent; color: var(--ink); font-size: 9px; font-weight: 720; cursor: pointer; }
 .sign-in-preview { min-height: 50px; margin-top: 28px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--ink); font-size: 10px; font-weight: 720; }
 .sign-in-boundary { padding: 18px 22px; border-top: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); font-size: 9px; line-height: 1.55; }
 
