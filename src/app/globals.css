@@ -303,7 +303,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .network-register div span { color: var(--ink-soft); font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
 .network-register strong { margin-top: 4px; font-family: var(--mono); font-size: 11px; }
 
-.folio-nav { min-height: 42px; display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); }
+.folio-nav { min-height: 44px; display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); }
 .folio-nav a { min-width: 155px; padding: 0 20px; display: flex; align-items: center; border-right: 1px solid #525047; color: #aaa597; font-family: var(--mono); font-size: 8px; letter-spacing: .7px; }
 .folio-nav a.current { background: var(--paper); color: var(--ink); }
 .folio-nav button { margin-left: auto; padding: 0 24px; border: 0; border-left: 1px solid #525047; background: var(--signal); color: white; cursor: pointer; font-family: var(--condensed); font-size: 10px; font-weight: 900; letter-spacing: 1.1px; }
@@ -318,6 +318,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .run-kicker strong { margin-top: 10px; font-family: var(--condensed); font-size: 28px; letter-spacing: 1px; }
 .run-title-block > p:first-child { margin: 0 0 11px; font-family: var(--mono); font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; }
 .run-title-block h1 { margin: 0; font-family: var(--display); font-size: clamp(64px, 8vw, 116px); font-weight: 400; line-height: .76; letter-spacing: -5px; }
+.run-title-block h1.workspace-project-title { max-width: 760px; font-size: clamp(58px, 6.8vw, 96px); line-height: .84; }
 .run-description { max-width: 680px; margin: 26px 0 0; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
 .run-totals { margin: 0; border-top: 1px solid var(--ink); }
 .run-totals div { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--rule); }
@@ -326,6 +327,11 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .run-totals .total-line { min-height: 55px; border-bottom-color: var(--ink); }
 .run-totals .total-line dd { font-family: var(--display); font-size: 24px; font-weight: 500; }
 .run-totals small { font-family: var(--mono); font-size: 8px; }
+
+.proof-summary { min-height: 86px; padding: 18px 0; display: grid; grid-template-columns: 150px minmax(220px, .8fr) minmax(280px, 1.2fr); gap: 34px; align-items: center; border-bottom: 1px solid var(--ink); }
+.proof-summary span { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
+.proof-summary strong { font-family: var(--display); font-size: 18px; font-weight: 600; }
+.proof-summary p { margin: 0; color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
 
 .document-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; border-bottom: 2px solid var(--ink); }
 .register-sheet { min-width: 0; border-right: 2px solid var(--ink); }
@@ -348,6 +354,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .ledger-check > span:not(.sr-only) { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--ink); background: transparent; cursor: pointer; font-family: var(--display); font-size: 24px; line-height: 1; }
 .ledger-check input:checked + span { color: var(--signal); border: 2px solid var(--signal); transform: rotate(-2deg); }
 .ledger-check input:disabled + span { cursor: not-allowed; border-style: dashed; opacity: .45; }
+.checkpoint-open { width: 44px; min-height: 44px; display: grid; place-items: center; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 12px; font-weight: 900; transition: transform 150ms ease, background-color 150ms ease, color 150ms ease; }
+.checkpoint-open:hover { transform: translate(2px, 2px); }
+.checkpoint-open.is-ready { border-color: var(--green); background: var(--green); color: var(--paper-light); }
+.checkpoint-open.is-invalid { border-color: var(--signal-dark); color: var(--signal-dark); }
 .counterparty strong, .counterparty small, .reference strong, .reference small, .ledger-amount strong, .ledger-amount small { display: block; }
 .counterparty strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--display); font-size: 19px; font-weight: 600; }
 .counterparty small { margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 10px; }
@@ -357,6 +367,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .ledger-amount { text-align: right; }
 .ledger-amount strong { font-family: var(--display); font-size: 21px; font-weight: 600; }
 .ledger-amount small { margin-top: 3px; font-family: var(--mono); font-size: 7px; letter-spacing: .7px; }
+.checkpoint-result strong { font-family: var(--condensed); font-size: 12px; letter-spacing: .5px; }
+.checkpoint-result.is-invalid strong { color: var(--signal-dark); }
+.checkpoint-result.is-ready strong { color: var(--green); }
 .register-total { min-height: 74px; display: flex; align-items: center; justify-content: flex-end; gap: 40px; padding: 14px 20px; border-bottom: 2px solid var(--ink); }
 .register-total span { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
 .register-total strong { min-width: 180px; text-align: right; font-family: var(--display); font-size: 27px; font-weight: 600; }
@@ -420,7 +433,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .authorization-sheet header span, .authorization-sheet header strong { display: block; }
 .authorization-sheet header span { color: var(--signal); font-family: var(--mono); font-size: 7px; letter-spacing: 1px; }
 .authorization-sheet header strong { margin-top: 5px; font-family: var(--condensed); font-size: 12px; letter-spacing: .8px; }
-.authorization-sheet header button { padding: 9px 0 9px 12px; border: 0; background: transparent; color: var(--paper-light); cursor: pointer; font-family: var(--mono); font-size: 8px; }
+.authorization-sheet header button { min-height: 44px; padding: 9px 0 9px 12px; border: 0; background: transparent; color: var(--paper-light); cursor: pointer; font-family: var(--mono); font-size: 8px; }
 .authorization-title { padding: 30px 32px 26px; border-bottom: 1px solid var(--ink); }
 .authorization-title p { margin: 0; color: var(--signal-dark); font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
 .authorization-title h2 { max-width: 560px; margin: 14px 0 0; font-family: var(--display); font-size: clamp(35px, 5vw, 51px); line-height: .98; font-weight: 500; }
@@ -441,6 +454,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .wallet-boundary { margin: 0 32px; padding: 16px; border-left: 5px solid var(--signal); background: #ded6c5; }
 .wallet-boundary span { font-family: var(--mono); font-size: 7px; letter-spacing: 1px; }
 .wallet-boundary p { margin: 7px 0 0; font-size: 10px; line-height: 1.55; }
+.wallet-boundary.refusal-boundary { border-left-color: var(--signal-dark); background: #ead4c9; }
 .authorization-actions { padding: 24px 32px 12px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 12px; }
 .authorization-actions button { min-height: 48px; padding: 0 16px; cursor: pointer; font-family: var(--condensed); font-size: 10px; font-weight: 900; letter-spacing: .8px; }
 .back-button { border: 1px solid var(--ink); background: transparent; color: var(--ink); }
@@ -456,6 +470,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .folio-nav a { min-width: 0; flex: 1; }
   .run-heading { grid-template-columns: 100px 1fr; }
   .run-totals { grid-column: 2; }
+  .proof-summary { grid-template-columns: 100px 1fr 1.25fr; }
   .document-grid { grid-template-columns: 1fr; }
   .register-sheet { border-right: 0; }
   .disclosure-sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; border-top: 2px solid var(--ink); }
@@ -484,8 +499,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .run-kicker { min-height: 0; display: flex; align-items: baseline; gap: 12px; }
   .run-kicker strong { margin-top: 0; font-size: 20px; }
   .run-title-block h1 { font-size: clamp(58px, 19vw, 86px); letter-spacing: -3px; }
+  .run-title-block h1.workspace-project-title { font-size: clamp(52px, 15vw, 72px); line-height: .88; }
   .run-description { font-size: 12px; }
   .run-totals { grid-column: 1; }
+  .proof-summary { grid-template-columns: 1fr; gap: 9px; padding: 20px 0; }
   .sheet-caption { padding-right: 0; }
   .register-columns { display: none; }
   .register-row { min-height: 132px; padding: 15px 0; grid-template-columns: 38px 47px 1fr 104px; grid-template-rows: auto auto; align-items: center; }
@@ -522,6 +539,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .office-title span { display: none; }
   .office-title strong { margin-top: 0; font-size: 13px; }
   .run-title-block h1 { font-size: 55px; }
+  .run-title-block h1.workspace-project-title { font-size: 48px; }
   .sheet-caption { align-items: flex-start; }
   .sheet-caption p { text-align: right; }
   .register-row { grid-template-columns: 32px 40px 1fr 88px; }
