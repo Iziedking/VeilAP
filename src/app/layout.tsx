@@ -6,9 +6,9 @@ import "@fontsource-variable/newsreader";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VeilAP | Private global payroll",
+  title: "VeilAP | Private proof-backed settlement",
   description:
-    "Prepare, approve, and reconcile private USDC payroll and supplier payments on Starknet.",
+    "Bind sensitive work to verifiable delivery and human-approved private STRK20 settlement.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

@@ -7,22 +7,22 @@ import { VeilLogo } from "@/components/veil-logo";
 
 const storyFrames = [
   {
-    id: "private-payroll",
-    label: "PRIVATE PAYROLL / STARKNET",
-    title: <>Pay your team.<br />Keep payroll <em>private.</em></>,
-    body: "Pay employees and suppliers in USDC without putting names, salaries, or invoice values on public display.",
+    id: "private-proof",
+    label: "PRIVATE PROOF / STARKNET",
+    title: <>Private proof.<br />Verifiable delivery.<br /><em>Protected payment.</em></>,
+    body: "Bind sensitive work to an exact delivery, approve it with a human decision, and settle privately through your Starknet wallet.",
   },
   {
-    id: "one-run",
-    label: "ONE CONTROLLED RUN",
-    title: <>One payment run.<br />Every recipient.</>,
-    body: "Check each payee and the total before release. Nothing moves until you confirm it in your wallet.",
+    id: "exact-checkpoint",
+    label: "ONE BOUND DELIVERY",
+    title: <>One agreement.<br />One exact <em>checkpoint.</em></>,
+    body: "Each proof stream is append-only. Changed evidence is refused before it can reach human acceptance or payment preparation.",
   },
   {
-    id: "clear-records",
-    label: "PRIVATE ROUTE / CLEAR RECORD",
-    title: <>Private payments.<br /><em>Clear records.</em></>,
-    body: "Payment details stay concealed while your finance team keeps the approval trail and receipt it needs.",
+    id: "human-release",
+    label: "HUMAN CONTROL / PRIVATE SETTLEMENT",
+    title: <>Verify delivery.<br />Release <em>privately.</em></>,
+    body: "Verification informs the decision. Your company accepts the work, reviews the live pool fee, and signs the private STRK20 release.",
   },
 ] as const;
 
@@ -62,29 +62,28 @@ export function VeilApLanding() {
                 <div className="ad-register-top"><span>VEILAP</span><strong>AP-0827</strong></div>
 
                 <div className={`ad-register-screen ${activeFrame === 0 ? "active" : ""}`}>
-                  <span className="ad-screen-label">AUGUST PAYMENT RUN</span>
+                  <span className="ad-screen-label">ZK COMPLIANCE MODULE</span>
                   <div className="ad-screen-total"><strong>47,850</strong><small>USDC</small></div>
-                  <div className="ad-screen-facts"><span>3 recipients</span><span>4 countries</span></div>
-                  <div className="ad-ready-line"><span>CONTROL CHECK</span><strong>READY</strong></div>
-                  <div className="ad-release-button">REVIEW FOR RELEASE <span>→</span></div>
+                  <div className="ad-screen-facts"><span>Agreement v2</span><span>2 checkpoints</span></div>
+                  <div className="ad-ready-line"><span>PROOF CONTROL</span><strong>READY</strong></div>
+                  <div className="ad-release-button">REVIEW CHECKPOINT <span>→</span></div>
                 </div>
 
                 <div className={`ad-register-screen ${activeFrame === 1 ? "active" : ""}`}>
-                  <span className="ad-screen-label">APPROVED PAYEES / 03</span>
-                  <div className="ad-payee-row"><i>01</i><span><strong>Kora Systems</strong><small>LAGOS / NG</small></span><b>18,400</b></div>
-                  <div className="ad-payee-row"><i>02</i><span><strong>Estudio Norte</strong><small>BUENOS AIRES / AR</small></span><b>12,650</b></div>
-                  <div className="ad-payee-row"><i>03</i><span><strong>Pacifica Labs</strong><small>MANILA / PH</small></span><b>16,800</b></div>
-                  <div className="ad-control-total"><span>CONTROL TOTAL</span><strong>47,850 USDC</strong></div>
+                  <span className="ad-screen-label">APPEND-ONLY PROOF STREAM / 02</span>
+                  <div className="ad-payee-row"><i>01</i><span><strong>Circuit package / r1</strong><small>DIGEST CHANGED</small></span><b>REFUSED</b></div>
+                  <div className="ad-payee-row"><i>02</i><span><strong>Circuit package / r2</strong><small>AGREEMENT V2 MATCH</small></span><b>READY</b></div>
+                  <div className="ad-control-total"><span>HUMAN DECISION</span><strong>REQUIRED</strong></div>
                 </div>
 
                 <div className={`ad-register-screen ad-private-screen ${activeFrame === 2 ? "active" : ""}`}>
                   <span className="ad-screen-label">CONTROLLED DISCLOSURE</span>
-                  <h3>Payment details stay under the veil.</h3>
-                  <div className="ad-redacted-line"><span>PAYEE</span><i /></div>
-                  <div className="ad-redacted-line"><span>VALUE</span><i className="short" /></div>
-                  <div className="ad-redacted-line"><span>ASSET</span><i /></div>
+                  <h3>Sensitive work stays under the veil.</h3>
+                  <div className="ad-redacted-line"><span>TERMS</span><i /></div>
+                  <div className="ad-redacted-line"><span>PROOF</span><i className="short" /></div>
+                  <div className="ad-redacted-line"><span>VALUE</span><i /></div>
                   <div className="ad-wallet-boundary"><span>WALLET BOUNDARY</span><strong>Proof stays in the wallet</strong></div>
-                  <div className="ad-receipt-ready">RECEIPT READY <span>✓</span></div>
+                  <div className="ad-receipt-ready">RELEASE BOUND <span>✓</span></div>
                 </div>
               </div>
             </div>
@@ -118,13 +117,13 @@ export function VeilApLanding() {
         <section className="ad-boundary" id="privacy" aria-labelledby="privacy-boundary-title">
           <div>
             <p>WHAT PRIVATE MEANS</p>
-            <h2 id="privacy-boundary-title">The payment is private.<br />The limits are clear.</h2>
+            <h2 id="privacy-boundary-title">The work stays private.<br />The limits stay clear.</h2>
           </div>
           <div className="ad-boundary-list">
-            <article><span>A / CONCEALED</span><strong>Payees, values, and payment relationships</strong></article>
+            <article><span>A / ENCRYPTED IN VEILAP</span><strong>Terms, evidence, contributor relationship, review, and release values</strong></article>
             <article><span>B / STILL VISIBLE</span><strong>Pool activity, timing, and public deposit or withdrawal legs</strong></article>
           </div>
-          <p className="ad-boundary-note">VeilAP never asks for your private key or viewing key. A compatible wallet prepares the proof and shows every signature.</p>
+          <p className="ad-boundary-note">Authorized reviewers may receive decrypted evidence. VeilAP never receives your wallet signing key or STRK20 viewing key.</p>
         </section>
 
       </main>
@@ -133,7 +132,7 @@ export function VeilApLanding() {
         <div className="veil-footer-top">
           <div className="veil-footer-brand">
             <VeilLogo />
-            <p>Private payment control for global teams.</p>
+            <p>Private proof-backed settlement for sensitive work.</p>
           </div>
           <nav className="veil-footer-links" aria-label="Footer navigation">
             <a href="#top">How it works</a>
@@ -143,12 +142,12 @@ export function VeilApLanding() {
           </nav>
           <div className="veil-footer-meta">
             <span>STARKNET / STRK20</span>
-            <span>PRIVATE BY DEFAULT</span>
+            <span>HUMAN-APPROVED RELEASE</span>
           </div>
         </div>
         <div className="veil-footer-bottom">
-          <p>VeilAP is preview software. Payment details are concealed, while compatible wallets keep the proof and signature flow visible.</p>
-          <small>© 2026 VeilAP. Built for private finance.</small>
+          <p>VeilAP is preview software. It proves its recorded process, not legal ownership or defect-free work.</p>
+          <small>© 2026 VeilAP. Veil Attested Payments.</small>
         </div>
       </footer>
     </div>
