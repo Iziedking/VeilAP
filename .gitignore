@@ -1,0 +1,33 @@
+# Installed packages are restored from the tracked lockfile.
+node_modules/
+
+# Next.js build output and host metadata are generated.
+.next/
+out/
+.vercel/
+
+# Local secrets and provider credentials never enter the public repository.
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+id_*
+
+# Internal product planning and operating notes stay private.
+/PLAN*.md
+/RESEARCH.md
+/todo.md
+/OPERATIONS.md
+
+# Test output is reproducible from tracked tests.
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local editor and operating-system files do not describe the product.
+.DS_Store
+Thumbs.db
+*.log
