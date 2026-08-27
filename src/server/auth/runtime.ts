@@ -1,19 +1,69 @@
 import { randomBytes } from "node:crypto";
 
-import { createAuthChallengeService } from "./challenge";
+import { createAuthChallengeService, type ChallengePersistence } from "./challenge";
+import { getDatabase } from "@/server/db/client";
+import { createMemoryRepositories, createPostgresRepositories } from "@/server/db/repositories";
+import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
+import { readServerConfig, requirePersistedConfig } from "@/server/env";
 
 export const SESSION_COOKIE = "veilap_session";
 export const SESSION_TTL_MS = 8 * 60 * 60_000;
 
 const authChallenges = createAuthChallengeService();
+const memoryRepositories = createMemoryRepositories();
+let durableChallenges: ReturnType<typeof createAuthChallengeService> | undefined;
+let durableRepositories: ReturnType<typeof createPostgresRepositories> | undefined;
 const developmentSecret = randomBytes(32).toString("hex");
 
 export function hasDurableAuthStore(): boolean {
-  return process.env.NODE_ENV !== "production";
+  const config = readServerConfig();
+  return config.mode === "persisted" && config.missing.length === 0;
 }
 
 export function getAuthChallenges() {
+  if (hasDurableAuthStore()) {
+    const config = requirePersistedConfig();
+    const repositories = ensureDurableRepositories(config);
+    if (!durableChallenges) {
+      const persistence: ChallengePersistence = {
+        async save(record) {
+          await repositories.nonces.saveNonce({
+            nonce: record.challenge.nonce,
+            walletFingerprint: fingerprintWallet(
+              record.challenge.walletAddress,
+              config.walletHashPepper!,
+            ),
+            challenge: record.challenge,
+            digest: record.digest,
+            expiresAt: new Date(record.challenge.expiresAt),
+          });
+        },
+        async get(nonce) {
+          const record = await repositories.nonces.getNonce(nonce);
+          return record ? { challenge: record.challenge, digest: record.digest, consumedAt: record.consumedAt } : undefined;
+        },
+        async consume(nonce, now) {
+          const record = await repositories.nonces.consumeNonce(nonce, now);
+          if (record === "REPLAYED") return "REPLAYED";
+          return record ? { challenge: record.challenge, digest: record.digest } : undefined;
+        },
+      };
+      durableChallenges = createAuthChallengeService({ persistence });
+    }
+    return durableChallenges;
+  }
   return authChallenges;
+}
+
+export function getAuthRepositories() {
+  return hasDurableAuthStore() ? ensureDurableRepositories(requirePersistedConfig()) : memoryRepositories;
+}
+
+function ensureDurableRepositories(config: ReturnType<typeof requirePersistedConfig>) {
+  if (!durableRepositories) {
+    durableRepositories = createPostgresRepositories(getDatabase(config.databaseUrl));
+  }
+  return durableRepositories;
 }
 
 export function getSessionSecret(): string {

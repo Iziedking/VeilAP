@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { AuthChallenge } from "@/server/auth/challenge";
 import {
   expectedOrigin,
+  getAuthRepositories,
   getAuthChallenges,
   getSessionSecret,
   hasDurableAuthStore,
@@ -13,7 +14,10 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_MS,
 } from "@/server/auth/runtime";
+import { requirePersistedConfig } from "@/server/env";
 import { createSessionToken } from "@/server/auth/session";
+import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
+import { randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -40,7 +44,7 @@ function json(body: unknown, status = 200) {
 
 export async function POST(request: Request) {
   if (!hasDurableAuthStore()) {
-    return json({ ok: false, code: "AUTH_STORE_NOT_DURABLE" }, 503);
+    return json({ ok: false, code: "CONFIGURATION_MISSING" }, 503);
   }
   const origin = requestOrigin(request);
   if (!origin || origin !== expectedOrigin(request)) {
@@ -66,14 +70,23 @@ export async function POST(request: Request) {
     if (!result.ok) return json(result, 401);
 
     const now = Date.now();
+    const sessionId = randomBytes(16).toString("hex");
+    const config = requirePersistedConfig();
     const token = createSessionToken(
       {
+        sessionId,
         walletAddress: result.walletAddress,
         issuedAt: new Date(now).toISOString(),
         expiresAt: new Date(now + SESSION_TTL_MS).toISOString(),
       },
       getSessionSecret(),
     );
+    await getAuthRepositories().sessions.saveSession({
+      id: sessionId,
+      walletFingerprint: fingerprintWallet(result.walletAddress, config.walletHashPepper!),
+      issuedAt: new Date(now),
+      expiresAt: new Date(now + SESSION_TTL_MS),
+    });
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, token, {
       httpOnly: true,

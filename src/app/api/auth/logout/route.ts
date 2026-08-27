@@ -1,7 +1,15 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { expectedOrigin, requestOrigin, SESSION_COOKIE } from "@/server/auth/runtime";
+import {
+  expectedOrigin,
+  getAuthRepositories,
+  getSessionSecret,
+  hasDurableAuthStore,
+  requestOrigin,
+  SESSION_COOKIE,
+} from "@/server/auth/runtime";
+import { verifySessionToken } from "@/server/auth/session";
 
 export const runtime = "nodejs";
 
@@ -11,6 +19,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: "ORIGIN_MISMATCH" }, { status: 403 });
   }
   const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (token && hasDurableAuthStore()) {
+    const verified = verifySessionToken(token, getSessionSecret());
+    if (verified.ok && verified.session.sessionId) {
+      await getAuthRepositories().sessions.revokeSession(verified.session.sessionId, new Date());
+    }
+  }
   cookieStore.delete(SESSION_COOKIE);
   return NextResponse.json(
     { ok: true },

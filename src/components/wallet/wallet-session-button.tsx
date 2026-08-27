@@ -31,8 +31,8 @@ function signatureStrings(signature: unknown): string[] {
 }
 
 function messageFor(code: string): string {
-  if (code === "AUTH_STORE_NOT_DURABLE") {
-    return "Wallet sign-in is intentionally paused until the durable session store is installed.";
+  if (code === "CONFIGURATION_MISSING") {
+    return "Wallet sign-in is unavailable until persisted security configuration is installed.";
   }
   if (code === "RPC_NOT_CONFIGURED") {
     return "Mainnet verification is not configured yet. Add the server RPC setting and retry.";
@@ -152,7 +152,6 @@ export function WalletSessionButton() {
           Try another wallet
         </button>
       )}
-      <Link className="sign-in-preview" href="/workspace">Open the synthetic preview</Link>
     </>
   );
 }

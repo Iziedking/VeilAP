@@ -27,8 +27,8 @@ export async function POST(request: Request) {
     return json(
       {
         ok: false,
-        code: "AUTH_STORE_NOT_DURABLE",
-        message: "Wallet sign-in remains disabled until the durable session store is installed.",
+        code: "CONFIGURATION_MISSING",
+        message: "Wallet sign-in is unavailable until persisted security configuration is installed.",
       },
       503,
     );
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   try {
     const input = requestSchema.parse(await request.json());
-    const challenge = getAuthChallenges().issue({ ...input, origin });
+    const challenge = await getAuthChallenges().issue({ ...input, origin });
     return json({ ok: true, challenge });
   } catch {
     return json({ ok: false, code: "CHALLENGE_REQUEST_INVALID" }, 400);

@@ -46,6 +46,13 @@ type VerifySignature = (
 interface ChallengeServiceOptions {
   now?: () => number;
   nonce?: () => string;
+  persistence?: ChallengePersistence;
+}
+
+export interface ChallengePersistence {
+  save(record: StoredChallenge): Promise<void>;
+  get(nonce: string): Promise<StoredChallenge | undefined>;
+  consume(nonce: string, now: Date): Promise<StoredChallenge | "REPLAYED" | undefined>;
 }
 
 function normalizeChainId(chainId: string): string {
@@ -86,11 +93,12 @@ function buildTypedData(challenge: Omit<AuthChallenge, "typedData">): AuthTypedD
   };
 }
 
-type StoredChallenge = { challenge: AuthChallenge; digest: string };
+export type StoredChallenge = { challenge: AuthChallenge; digest: string; consumedAt?: Date };
 
 export function createAuthChallengeService(options: ChallengeServiceOptions = {}) {
   let clock = options.now ?? Date.now;
   const makeNonce = options.nonce ?? (() => `0x${randomBytes(32).toString("hex")}`);
+  const persistence = options.persistence;
   const active = new Map<string, StoredChallenge>();
   const consumed = new Map<string, number>();
 
@@ -113,7 +121,9 @@ export function createAuthChallengeService(options: ChallengeServiceOptions = {}
     };
     const challenge: AuthChallenge = { ...plain, typedData: buildTypedData(plain) };
     active.set(challenge.nonce, { challenge, digest: commitment(challenge) });
-    return structuredClone(challenge);
+    const copy = structuredClone(challenge);
+    if (!persistence) return copy;
+    return persistence.save({ challenge, digest: commitment(challenge) }).then(() => copy) as unknown as AuthChallenge;
   }
 
   return {
@@ -134,9 +144,12 @@ export function createAuthChallengeService(options: ChallengeServiceOptions = {}
       if (consumed.has(nonce)) {
         return { ok: false as const, code: "CHALLENGE_REPLAYED" as const };
       }
-      const stored = active.get(nonce);
+      const stored = persistence ? await persistence.get(nonce) : active.get(nonce);
       if (!stored) {
         return { ok: false as const, code: "CHALLENGE_NOT_FOUND" as const };
+      }
+      if (stored.consumedAt) {
+        return { ok: false as const, code: "CHALLENGE_REPLAYED" as const };
       }
       if (normalizeOrigin(input.requestOrigin) !== stored.challenge.origin) {
         return { ok: false as const, code: "ORIGIN_MISMATCH" as const };
@@ -152,8 +165,18 @@ export function createAuthChallengeService(options: ChallengeServiceOptions = {}
         return { ok: false as const, code: "CHALLENGE_ALTERED" as const };
       }
 
-      active.delete(nonce);
-      consumed.set(nonce, Date.parse(stored.challenge.expiresAt));
+      if (persistence) {
+        const consumedRecord = await persistence.consume(nonce, new Date(now));
+        if (consumedRecord === "REPLAYED") {
+          return { ok: false as const, code: "CHALLENGE_REPLAYED" as const };
+        }
+        if (!consumedRecord) {
+          return { ok: false as const, code: "CHALLENGE_NOT_FOUND" as const };
+        }
+      } else {
+        active.delete(nonce);
+        consumed.set(nonce, Date.parse(stored.challenge.expiresAt));
+      }
       try {
         const valid = await input.verifySignature(
           stored.challenge.typedData,

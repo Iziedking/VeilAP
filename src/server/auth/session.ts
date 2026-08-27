@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { validateAndParseAddress } from "starknet";
 
 export interface WalletSession {
+  sessionId?: string;
   walletAddress: string;
   issuedAt: string;
   expiresAt: string;
@@ -31,6 +32,7 @@ function parsePayload(payload: string): WalletSession | undefined {
       return undefined;
     }
     return {
+      sessionId: typeof record.sessionId === "string" ? record.sessionId : undefined,
       walletAddress: validateAndParseAddress(record.walletAddress),
       issuedAt: record.issuedAt,
       expiresAt: record.expiresAt,

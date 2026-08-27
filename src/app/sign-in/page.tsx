@@ -18,8 +18,8 @@ export default function SignInPage() {
       <main className="sign-in-main">
         <div className="sign-in-copy">
           <span>PRIVATE DELIVERY DESK</span>
-          <h1>Sign in without handing over your keys.</h1>
-          <p>A compatible Starknet wallet will confirm your role while keeping signing and STRK20 proof generation under your control.</p>
+          <h1>Sign in securely. Keep your keys.</h1>
+          <p>Use a compatible Starknet wallet to confirm your role. Your keys stay with you while VeilAP protects your private work.</p>
         </div>
         <section className="sign-in-panel" aria-labelledby="sign-in-title">
           <header><span>VEILAP ACCESS</span><h2 id="sign-in-title">Continue with a wallet</h2></header>
