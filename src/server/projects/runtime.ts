@@ -10,6 +10,8 @@ import { DecisionService } from "@/server/decisions/decision-service";
 import { ReleaseService } from "@/server/releases/release-service";
 import { ReconciliationService } from "@/server/releases/reconciliation-service";
 import { createMainnetReceiptProvider } from "@/server/strk20/rpc-receipt-provider";
+import { ReceiptService } from "@/server/receipts/receipt-service";
+import { createReceiptSigner } from "@/server/receipts/signing";
 import { ProjectService } from "./project-service";
 
 const previewKeyProvider = createPreviewKeyProvider();
@@ -78,4 +80,24 @@ export function getReconciliationService(): ReconciliationService {
     walletHashPepper: config.walletHashPepper!,
     poolAddress,
   });
+}
+
+function getReceiptSigner() {
+  const config = requirePersistedConfig();
+  if (!config.receiptSigningPrivateKey || !config.receiptSigningPublicKey) throw new Error("CONFIGURATION_MISSING");
+  return createReceiptSigner({
+    privateKeyBase64: config.receiptSigningPrivateKey,
+    publicKeyBase64: config.receiptSigningPublicKey,
+  });
+}
+
+export function getReceiptService(): ReceiptService {
+  return new ReceiptService({
+    ...dependencies(),
+    signer: getReceiptSigner(),
+  });
+}
+
+export function getReceiptPublicKey() {
+  return getReceiptSigner().publicKey();
 }

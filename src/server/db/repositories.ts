@@ -15,6 +15,7 @@ import {
   projects,
   releases,
   revenueEvents,
+  selectiveReceipts,
   verificationRuns,
 } from "./schema";
 
@@ -174,6 +175,17 @@ export interface RevenueEventRecord {
   createdAt: Date;
 }
 
+export interface SelectiveReceiptRecord {
+  id: string;
+  projectId: string;
+  checkpointId?: string;
+  receiptType: "company" | "contributor" | "auditor";
+  encryptedPayload: EncryptedField;
+  proof: unknown;
+  revoked: boolean;
+  createdAt: Date;
+}
+
 export interface ProjectRepository extends ProjectKeyRepository {
   saveMember(record: ProjectMemberRecord): Promise<void>;
   getMemberRoles(projectId: string, walletFingerprint: string): Promise<ProjectRole[]>;
@@ -206,6 +218,8 @@ export interface ProjectRepository extends ProjectKeyRepository {
   updateChainOperation(record: ChainOperationRecord): Promise<void>;
   saveRevenueEvent(record: RevenueEventRecord): Promise<void>;
   getRevenueEvent(id: string): Promise<RevenueEventRecord | undefined>;
+  saveSelectiveReceipt(record: SelectiveReceiptRecord): Promise<void>;
+  getSelectiveReceipt(id: string): Promise<SelectiveReceiptRecord | undefined>;
 }
 
 function projectRole(value: string): ProjectRole {
@@ -352,6 +366,24 @@ function toRevenueEventRecord(row: typeof revenueEvents.$inferSelect): RevenueEv
     eventType: row.eventType as RevenueEventRecord["eventType"],
     encryptedAmount,
     currency: row.currency as RevenueEventRecord["currency"],
+    createdAt: row.createdAt,
+  };
+}
+
+function receiptType(value: string): SelectiveReceiptRecord["receiptType"] {
+  if (value === "company" || value === "contributor" || value === "auditor") return value;
+  throw new Error("RECEIPT_TYPE_INVALID");
+}
+
+function toSelectiveReceiptRecord(row: typeof selectiveReceipts.$inferSelect): SelectiveReceiptRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    checkpointId: row.checkpointId ?? undefined,
+    receiptType: receiptType(row.receiptType),
+    encryptedPayload: row.encryptedPayload as EncryptedField,
+    proof: row.proof,
+    revoked: row.revoked,
     createdAt: row.createdAt,
   };
 }
@@ -577,6 +609,22 @@ export function createPostgresRepositories(db: VeilapDatabase): {
         const rows = await db.select().from(revenueEvents).where(eq(revenueEvents.id, id)).limit(1);
         return rows[0] ? toRevenueEventRecord(rows[0]) : undefined;
       },
+      async saveSelectiveReceipt(record) {
+        await db.insert(selectiveReceipts).values({
+          id: record.id,
+          projectId: record.projectId,
+          checkpointId: record.checkpointId ?? null,
+          receiptType: record.receiptType,
+          encryptedPayload: record.encryptedPayload,
+          proof: record.proof,
+          revoked: record.revoked,
+          createdAt: record.createdAt,
+        });
+      },
+      async getSelectiveReceipt(id) {
+        const rows = await db.select().from(selectiveReceipts).where(eq(selectiveReceipts.id, id)).limit(1);
+        return rows[0] ? toSelectiveReceiptRecord(rows[0]) : undefined;
+      },
     },
   };
 }
@@ -598,6 +646,7 @@ export function createMemoryRepositories(): {
   const releaseRows = new Map<string, ReleaseRecord>();
   const chainOperationRows = new Map<string, ChainOperationRecord>();
   const revenueEventRows = new Map<string, RevenueEventRecord>();
+  const selectiveReceiptRows = new Map<string, SelectiveReceiptRecord>();
   return {
     nonces: {
       async saveNonce(record) {
@@ -783,6 +832,14 @@ export function createMemoryRepositories(): {
       },
       async getRevenueEvent(id) {
         const record = revenueEventRows.get(id);
+        return record ? structuredClone(record) : undefined;
+      },
+      async saveSelectiveReceipt(record) {
+        if (selectiveReceiptRows.has(record.id)) throw new Error("SELECTIVE_RECEIPT_ALREADY_EXISTS");
+        selectiveReceiptRows.set(record.id, structuredClone(record));
+      },
+      async getSelectiveReceipt(id) {
+        const record = selectiveReceiptRows.get(id);
         return record ? structuredClone(record) : undefined;
       },
     },

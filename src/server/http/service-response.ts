@@ -7,6 +7,7 @@ const notFoundCodes = new Set([
   "DECISION_NOT_FOUND",
   "RELEASE_NOT_FOUND",
   "REVENUE_EVENT_NOT_FOUND",
+  "RECEIPT_NOT_FOUND",
 ]);
 const forbiddenCodes = new Set([
   "PROJECT_ACCESS_REQUIRED",
@@ -23,7 +24,7 @@ export function serviceResponse(result: { ok: true; value: unknown } | { ok: fal
   if (notFoundCodes.has(result.code)) status = 404;
   else if (forbiddenCodes.has(result.code)) status = 403;
   else if (result.code === "AUTH_REQUIRED") status = 401;
-  else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING") status = 503;
+  else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING" || result.code === "SIGNING_UNAVAILABLE") status = 503;
   return NextResponse.json(result, {
     status,
     headers: { "Cache-Control": "no-store" },
