@@ -17,6 +17,7 @@ const READ_ONLY_METHODS = new Set([
   "starknet_getStorageAt",
   "starknet_getTransactionByHash",
   "starknet_getTransactionReceipt",
+  "starknet_traceTransaction",
   "starknet_specVersion",
   "starknet_syncing",
 ]);
