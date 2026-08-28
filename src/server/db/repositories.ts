@@ -11,6 +11,7 @@ import {
   checkpoints,
   projectMembers,
   projects,
+  verificationRuns,
 } from "./schema";
 
 export interface AuthNonceRecord {
@@ -99,6 +100,17 @@ export interface AuditEventRecord {
   createdAt: Date;
 }
 
+export type VerificationRunStatus = "completed" | "unavailable" | "rejected";
+
+export interface VerificationRunRecord {
+  id: string;
+  checkpointId: string;
+  verifierFingerprint: string;
+  status: VerificationRunStatus;
+  result?: unknown;
+  createdAt: Date;
+}
+
 export interface ProjectRepository extends ProjectKeyRepository {
   saveMember(record: ProjectMemberRecord): Promise<void>;
   getMemberRoles(projectId: string, walletFingerprint: string): Promise<ProjectRole[]>;
@@ -109,6 +121,8 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getCheckpoint(id: string): Promise<CheckpointRecord | undefined>;
   listCheckpoints(projectId: string): Promise<CheckpointRecord[]>;
   saveAuditEvent(record: AuditEventRecord): Promise<void>;
+  saveVerificationRun(record: VerificationRunRecord): Promise<void>;
+  listVerificationRuns(checkpointId: string): Promise<VerificationRunRecord[]>;
 }
 
 function projectRole(value: string): ProjectRole {
@@ -152,6 +166,22 @@ function toCheckpointRecord(row: typeof checkpoints.$inferSelect): CheckpointRec
     status: row.status as CheckpointRecord["status"],
     createdBy: row.createdBy,
     assignedReviewerFingerprint: row.assignedReviewerFingerprint ?? undefined,
+    createdAt: row.createdAt,
+  };
+}
+
+function verificationRunStatus(value: string): VerificationRunStatus {
+  if (value === "completed" || value === "unavailable" || value === "rejected") return value;
+  throw new Error("VERIFICATION_RUN_STATUS_INVALID");
+}
+
+function toVerificationRunRecord(row: typeof verificationRuns.$inferSelect): VerificationRunRecord {
+  return {
+    id: row.id,
+    checkpointId: row.checkpointId,
+    verifierFingerprint: row.verifierFingerprint,
+    status: verificationRunStatus(row.status),
+    result: row.result ?? undefined,
     createdAt: row.createdAt,
   };
 }
@@ -263,6 +293,20 @@ export function createPostgresRepositories(db: VeilapDatabase): {
       async saveAuditEvent(record) {
         await db.insert(auditEvents).values(record);
       },
+      async saveVerificationRun(record) {
+        await db.insert(verificationRuns).values({
+          ...record,
+          result: record.result ?? null,
+        });
+      },
+      async listVerificationRuns(checkpointId) {
+        const rows = await db
+          .select()
+          .from(verificationRuns)
+          .where(eq(verificationRuns.checkpointId, checkpointId))
+          .orderBy(asc(verificationRuns.createdAt));
+        return rows.map(toVerificationRunRecord);
+      },
     },
   };
 }
@@ -279,6 +323,7 @@ export function createMemoryRepositories(): {
   const agreementRows = new Map<string, AgreementVersionRecord>();
   const checkpointRows = new Map<string, CheckpointRecord>();
   const auditRows: AuditEventRecord[] = [];
+  const verificationRunRows: VerificationRunRecord[] = [];
   return {
     nonces: {
       async saveNonce(record) {
@@ -362,6 +407,15 @@ export function createMemoryRepositories(): {
       async saveAuditEvent(record) {
         if (auditRows.some((row) => row.id === record.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
         auditRows.push(structuredClone(record));
+      },
+      async saveVerificationRun(record) {
+        verificationRunRows.push(structuredClone(record));
+      },
+      async listVerificationRuns(checkpointId) {
+        return verificationRunRows
+          .filter((record) => record.checkpointId === checkpointId)
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
       },
     },
   };

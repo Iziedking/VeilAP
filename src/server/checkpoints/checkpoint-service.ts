@@ -66,9 +66,9 @@ export interface CheckpointView {
   artifactBase64?: string;
 }
 
-const MAX_ARTIFACT_BYTES = 1_048_576;
+export const MAX_ARTIFACT_BYTES = 1_048_576;
 
-function decodeBase64(value: string): Uint8Array | undefined {
+export function decodeArtifactBase64(value: string): Uint8Array | undefined {
   if (value.length === 0 || value.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
     return undefined;
   }
@@ -109,7 +109,7 @@ export class CheckpointService {
     const parsed = createCheckpointInputSchema.safeParse(input.checkpoint);
     if (!parsed.success) return { ok: false, code: "INVALID_INPUT" };
     if (parsed.data.sourceUrl) return { ok: false, code: "URL_EVIDENCE_REFUSED" };
-    const bytes = decodeBase64(parsed.data.artifactBase64);
+    const bytes = decodeArtifactBase64(parsed.data.artifactBase64);
     if (!bytes) return { ok: false, code: "ARTIFACT_ENCODING_INVALID" };
     if (bytes.byteLength === 0) return { ok: false, code: "ARTIFACT_EMPTY" };
     if (bytes.byteLength > MAX_ARTIFACT_BYTES) return { ok: false, code: "ARTIFACT_TOO_LARGE" };
@@ -228,7 +228,7 @@ export class CheckpointService {
         { projectId: record.projectId, recordType: "checkpoint", recordId: record.id, fieldName: "metadata" },
         dataKey,
       )) as { mediaType: "application/zip"; note: string; byteLength: number; agreementVersion: number };
-      const bytes = decodeBase64(artifactBase64);
+      const bytes = decodeArtifactBase64(artifactBase64);
       if (!bytes || digestArtifact(bytes) !== record.payloadDigest) {
         return { ok: false, code: "ARTIFACT_TAMPERED" };
       }

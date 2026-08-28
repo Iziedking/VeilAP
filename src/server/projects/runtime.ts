@@ -3,6 +3,8 @@ import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
 import { getAuthRepositories } from "@/server/auth/runtime";
 import { readServerConfig, requirePersistedConfig } from "@/server/env";
 import { CheckpointService } from "@/server/checkpoints/checkpoint-service";
+import { VerificationService } from "@/server/verification/verification-service";
+import { createNoopModelAdapter } from "@/server/verification/model-adapter";
 import { ProjectService } from "./project-service";
 
 const previewKeyProvider = createPreviewKeyProvider();
@@ -36,4 +38,11 @@ export function getProjectService(): ProjectService {
 
 export function getCheckpointService(): CheckpointService {
   return new CheckpointService(dependencies());
+}
+
+export function getVerificationService(): VerificationService {
+  return new VerificationService({
+    ...dependencies(),
+    modelAdapter: createNoopModelAdapter(),
+  });
 }
