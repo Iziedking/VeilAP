@@ -50,6 +50,16 @@ VeilAP uses the wallet-first integration route:
 - VeilAP never stores a Starknet signing key or STRK20 viewing key;
 - a transaction is not marked paid from a hash alone.
 
+## Selective receipts
+
+VeilAP creates a different signed receipt for each audience:
+
+- the company can see the project binding, approved amount and release state;
+- the contributor can see an opaque project alias, their checkpoint and release state;
+- an auditor can see opaque project and agreement commitments plus a calculation commitment, without project names, recipients or private amounts.
+
+Receipt payloads are signed with Ed25519 and encrypted at rest. The public verification key is exposed at `/api/receipts/public-key` only when persisted signing configuration is installed. Preview mode intentionally issues no signed receipt and exposes no signing key.
+
 ## Repository-agnostic evidence
 
 The repository is an evidence source, not a platform dependency. The same checkpoint envelope can bind:
@@ -95,6 +105,17 @@ All routes currently open without a wallet or RPC key in preview mode.
 - STRK20 Wallet API through WalletAccountV6
 - exact dependency pins
 
+## Security setup
+
+Persisted mode requires:
+
+- Neon Postgres for sessions, project records, append-only checkpoints, releases and receipts;
+- one AWS KMS key restricted to Encrypt and Decrypt for the deployment role;
+- an Alchemy Starknet Mainnet RPC URL held only in `STARKNET_RPC_URL`;
+- Ed25519 receipt keys held only in `VEILAP_RECEIPT_SIGNING_PRIVATE_KEY` and `VEILAP_RECEIPT_SIGNING_PUBLIC_KEY`.
+
+The backend unwraps each project's data key only for an authorized request. Preview mode uses memory-only keys and does not contact Neon, KMS, Alchemy or a wallet.
+
 ## Start locally
 
 ~~~bash
@@ -115,8 +136,12 @@ Before wallet integration, replace YOUR_ALCHEMY_KEY in .env.local. Keep the RPC 
 
 ~~~bash
 npm run check
+npm run prove
+npm run test:e2e
 npm run build
 ~~~
+
+`npm run prove` rebuilds the same domain functions used by the application and refuses a non-deterministic report. `npm run test:e2e` uses a Playwright-only fake wallet fixture for capability and rejection paths. That fixture is not available to production code.
 
 ## STRK20 sprint record
 
@@ -154,6 +179,14 @@ Version one provides trusted application privacy, not end-to-end encryption. The
 Public or potentially observable information includes pool interaction, timing, viewing-key registration, public deposit and withdrawal legs, network metadata and correlation from distinctive behavior.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md) for the detailed claim boundary.
+
+## What is synthetic
+
+The local workspace contains synthetic project, agreement, checkpoint, amount and transaction fixtures. Preview acceptance reserves an in-memory release intent only. It does not call a wallet, move funds, create a server record or touch Starknet Mainnet.
+
+## What VeilAP does not prove
+
+VeilAP does not prove that delivered work is legally owned by a party, that code is universally correct, that a security report found every vulnerability, that a contributor is trustworthy outside the recorded engagement, or that a private payment is immune to timing or metadata correlation. It proves only the signed and persisted records described above, subject to the trusted backend and configured key custody.
 
 ## License
 

@@ -8,7 +8,7 @@ test("wallet sign-in keeps the security boundary visible", async ({ page }) => {
 
   await page.goto("/sign-in");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Sign in without handing over your keys.",
+    "Sign in securely. Keep your keys.",
   );
   await expect(page.getByText("No Starknet wallet found")).toBeVisible();
   await expect(page.getByText(/Signing proves control only/)).toBeVisible();

@@ -17,9 +17,9 @@ test("refuses tampered evidence and prepares only a preview release", async ({ p
   await expect(page.getByRole("dialog")).toContainText("Accept the exact checkpoint");
   await page.getByRole("button", { name: /accept.*prepare/i }).click();
 
-  await expect(page.getByRole("dialog")).toContainText("The milestone release is prepared, not paid.");
+  await expect(page.getByRole("dialog")).toContainText("The release intent is prepared, not paid.");
   await expect(page.getByRole("dialog")).toContainText("Synthetic project and values. No wallet connected. No funds moved.");
-  await expect(page.getByText("RELEASE INTENT / PREPARED")).toBeVisible();
+  await expect(page.getByText("RELEASE INTENT / RECEIPT PENDING")).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/transaction hash|payment complete/i);
   await page.getByRole("button", { name: "Close review" }).click();
   await page.screenshot({
