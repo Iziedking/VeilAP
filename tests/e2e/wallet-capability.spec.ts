@@ -17,7 +17,7 @@ async function stubPreviewAuth(page: Parameters<typeof installFakeWallet>[0]): P
           nonce: "playwright-nonce",
           issuedAt: "2026-08-28T10:00:00.000Z",
           expiresAt: "2026-08-28T10:05:00.000Z",
-          typedData: { domain: {}, types: {}, primaryType: "VeilAPSignIn", message: {} },
+          typedData: { domain: {}, types: {}, primaryType: "VeilArenaSession", message: {} },
         },
       }),
     });
@@ -39,8 +39,8 @@ test("connects a compatible test wallet without requesting payment permission", 
   await stubPreviewAuth(page);
   await page.goto("/sign-in");
 
-  await expect(page.getByRole("button", { name: "VeilAP test wallet" })).toBeVisible();
-  await page.getByRole("button", { name: "VeilAP test wallet" }).click();
+  await expect(page.getByRole("button", { name: "Veil Arena test wallet" })).toBeVisible();
+  await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText("SESSION VERIFIED")).toBeVisible();
   await expect(page.getByText("Your wallet proved control. No payment permission was requested.")).toBeVisible();
 });
@@ -49,7 +49,7 @@ test("refuses an unsupported wallet before sign-in", async ({ page }) => {
   await installFakeWallet(page, "unsupported");
   await page.goto("/sign-in");
 
-  await page.getByRole("button", { name: "VeilAP test wallet" }).click();
+  await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText("This wallet needs STRK20 Wallet API 0.10.3 or newer.")).toBeVisible();
   await expect(page.getByText("SESSION VERIFIED")).toHaveCount(0);
 });
@@ -58,7 +58,7 @@ test("shows a recoverable message when a wallet rejects connection", async ({ pa
   await installFakeWallet(page, "reject-connect");
   await page.goto("/sign-in");
 
-  await page.getByRole("button", { name: "VeilAP test wallet" }).click();
+  await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText("The wallet session could not be verified. Nothing was signed beyond this sign-in request.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try another wallet" })).toBeVisible();
 });
@@ -68,7 +68,7 @@ test("shows a recoverable message when a wallet rejects signing", async ({ page 
   await stubPreviewAuth(page);
   await page.goto("/sign-in");
 
-  await page.getByRole("button", { name: "VeilAP test wallet" }).click();
+  await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText("The wallet session could not be verified. Nothing was signed beyond this sign-in request.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try another wallet" })).toBeVisible();
 });

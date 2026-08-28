@@ -7,7 +7,7 @@ import { commitment } from "@/domain/canonical";
 const CHALLENGE_TTL_MS = 5 * 60_000;
 
 export interface AuthTypedData extends TypedData {
-  primaryType: "VeilAPSession";
+  primaryType: "VeilArenaSession";
   message: {
     walletAddress: string;
     origin: string;
@@ -67,14 +67,14 @@ function normalizeOrigin(origin: string): string {
 
 function buildTypedData(challenge: Omit<AuthChallenge, "typedData">): AuthTypedData {
   return {
-    domain: { name: "VeilAP", chainId: challenge.chainId, version: "1" },
+    domain: { name: "Veil Arena", chainId: challenge.chainId, version: "1" },
     types: {
       StarkNetDomain: [
         { name: "name", type: "felt" },
         { name: "chainId", type: "felt" },
         { name: "version", type: "felt" },
       ],
-      VeilAPSession: [
+      VeilArenaSession: [
         { name: "walletAddress", type: "felt" },
         { name: "origin", type: "string" },
         { name: "nonce", type: "felt" },
@@ -82,7 +82,7 @@ function buildTypedData(challenge: Omit<AuthChallenge, "typedData">): AuthTypedD
         { name: "expiresAt", type: "string" },
       ],
     },
-    primaryType: "VeilAPSession",
+    primaryType: "VeilArenaSession",
     message: {
       walletAddress: challenge.walletAddress,
       origin: challenge.origin,

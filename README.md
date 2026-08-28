@@ -1,192 +1,191 @@
-# VeilAP
+# Veil Arena
 
-Private proof. Verifiable delivery. Protected payment.
+Sealed AI agents compete. Results stay verifiable. Winners settle privately through STRK20.
 
-VeilAP is a private proof-backed settlement workspace for sensitive work. It binds an exact agreement and delivery checkpoint to a human approval, then lets the company settle the approved release privately through STRK20 on Starknet.
+Veil Arena is a confidential competition protocol for deterministic agents. Builders submit encrypted strategy policies, every agent faces reproducible seeded poker scenarios, and a public leaderboard shows the result without publishing the code, policy, reasoning, wallet identity, or prize amount behind it.
 
-The work does not need to be a crypto project. VeilAP is designed for sensitive engineering, security, research, data, automation and other technical engagements. Its evidence model is repository-agnostic: a checkpoint can be bound to any code repository or approved artifact source without making the code host part of the payment system.
+The first arena is a heads-up poker decision benchmark. It is an agent evaluation product, not a human casino or a token prediction market.
 
-## The problem
+## Why privacy belongs in the game
 
-Sensitive external work usually forces a company to choose between two weak options:
+An agent strategy is valuable intellectual property. Public tournaments force builders to choose between proving their agent works and exposing how it works.
 
-- expose the relationship, scope and payment on a public payment rail;
-- keep everything off-chain and lose a durable connection between the reviewed delivery and its settlement.
+Veil Arena separates those concerns:
 
-VeilAP connects those records without publishing the private brief, repository, contributor relationship, review discussion or payment details.
+- the competition remains visible;
+- the submitted strategy remains sealed from competitors and public APIs;
+- fixed rules and seeded scenarios make evaluation reproducible;
+- a signed receipt binds the artifact commitment, engine, seed, transcript root, and score;
+- STRK20 privately settles sponsor funding and winner payouts.
 
-## How it works
+## Signature demo
 
-1. A company creates a private agreement with versioned acceptance criteria.
-2. An invited contributor submits a delivery checkpoint from the agreed repository or artifact source.
-3. VeilAP binds the checkpoint to its exact agreement version and artifact digest.
-4. Deterministic checks run first; an optional AI assessment can advise the reviewer.
-5. An authorized human accepts or rejects the checkpoint.
-6. The company wallet gives the final signature for a private STRK20 milestone payment.
-7. VeilAP reconciles the transaction and issues audience-specific receipts.
+The public broadcast switches between two views:
 
-The model also supports a later royalty release calculated from an agreed rate and a recorded revenue event.
+- **Arena** shows several agent pairs evaluating simultaneously;
+- **Leaderboard** shows rank, win and loss record, match points, evaluation volume, and artifact commitments.
 
-## What VeilAP proves
+Nothing on either view exposes a strategy.
 
-VeilAP can prove that:
+After a settled match, Veil Arena can reveal one decisive losing action with its transcript inclusion proof. The winner's policy stays hidden from competitors and public APIs. This demonstrates selective disclosure without publishing the losing agent's full policy or transcript.
 
-- the parties recorded a specific version of the work terms;
-- a specific delivery checkpoint was submitted against those terms;
-- an authorized reviewer recorded a decision;
-- an approved release was submitted and reconciled through the STRK20 pool.
+## What is public
 
-VeilAP does not prove legal ownership, inventorship, patentability, universal code correctness, absence of vulnerabilities or global uniqueness.
+- agent alias;
+- artifact commitment;
+- arena and ruleset version;
+- wins, losses, match points, and hands evaluated;
+- seed commitment, engine hash, transcript root, and signed result receipt;
+- one selected losing action after settlement;
+- settlement confirmation without the private recipient or amount.
+
+## What stays hidden from competitors and the public
+
+- the complete strategy policy;
+- prompts, private notes, and reasoning;
+- builder wallet identity;
+- the full action transcript before selective disclosure;
+- prize recipient and amount.
+
+## Honest operator boundary
+
+Version one uses a trusted encrypted backend. The runner can decrypt a strategy during isolated execution and can observe the full match transcript. The public and other competitors cannot.
+
+This is not operator-blind or end-to-end privacy. A later version can move execution into confidential compute with remote attestation. Veil Arena does not claim that capability until it exists and can be verified.
 
 ## Why STRK20
 
-Private transfers inside the STRK20 pool can conceal the sender, recipient, token, amount and private note graph from public observers. Deposits, withdrawals, pool interaction and timing remain public or potentially correlatable.
+STRK20 private in-pool transfers are designed to hide sender, receiver, token, amount, and spent notes from public observers. Deposits, withdrawals, pool interaction, timing, and network behavior can remain visible or correlatable.
 
-VeilAP uses the wallet-first integration route:
+Veil Arena uses STRK20 for the financial layer:
 
-- the user's privacy-enabled wallet owns viewing keys;
-- the wallet discovers private notes and prepares the proof;
-- the company wallet signs every release;
-- VeilAP never stores a Starknet signing key or STRK20 viewing key;
-- a transaction is not marked paid from a hash alone.
+1. a sponsor shields the season prize pool;
+2. the winner receives a private payout;
+3. another finalist, verifier, or season recipient receives a private payout when the product flow requires it.
 
-## Selective receipts
+Strategy encryption is an application responsibility. STRK20 does not hide arbitrary strategy files or reasoning.
 
-VeilAP creates a different signed receipt for each audience:
+## Evaluation model
 
-- the company can see the project binding, approved amount and release state;
-- the contributor can see an opaque project alias, their checkpoint and release state;
-- an auditor can see opaque project and agreement commitments plus a calculation commitment, without project names, recipients or private amounts.
+The MVP accepts a constrained, versioned strategy policy rather than arbitrary repositories or live model calls.
 
-Receipt payloads are signed with Ed25519 and encrypted at rest. The public verification key is exposed at `/api/receipts/public-key` only when persisted signing configuration is installed. Preview mode intentionally issues no signed receipt and exposes no signing key.
+Each policy maps public game state and private hand information to a legal action. A seeded random source can support weighted choices while keeping the run reproducible. Matches use duplicate deals with seats swapped to reduce deal luck.
 
-## Repository-agnostic evidence
+The intended receipt binds:
 
-The repository is an evidence source, not a platform dependency. The same checkpoint envelope can bind:
-
-- a GitHub, GitLab or self-hosted repository commit;
-- a reviewed archive or build artifact;
-- a security report;
-- a research or data delivery;
-- an API or automation package.
-
-Every correction creates a new checkpoint. Existing checkpoints remain append-only and tied to the agreement version under which they were reviewed.
+```text
+artifact commitment
+ruleset and engine hash
+dataset and seed commitment
+transcript Merkle root
+score and rank
+settlement commitment
+```
 
 ## Current status
 
-The current public commit contains the accepted responsive VeilAP interface and a synthetic no-key preview. It performs no payment and does not claim that a preview release was sent.
+The root landing page now contains the first Veil Arena broadcast slice:
 
-The active implementation path is:
+- simultaneous synthetic preview matches;
+- Arena and Leaderboard views;
+- live evaluation progress;
+- selective losing-action reveal;
+- explicit public, private, and trusted-operator boundaries;
+- responsive and reduced-motion behavior.
 
-- repository-bound agreement and checkpoint records;
-- wallet capability detection and signed sessions;
-- encrypted evidence persistence;
-- deterministic verification and human acceptance;
-- STRK20 shield, private transfer and reconciliation;
-- milestone, royalty and selective-receipt flows.
+The preview numbers are synthetic and labelled in the interface. They are not tournament results, user counts, prize payments, or mainnet evidence.
 
-The required path is wallet-first and noncustodial. A Cairo helper is optional and will not be added unless the complete wallet flow is already proven safely.
+The repository also contains tested infrastructure from the earlier VeilAP direction. Wallet sessions, encrypted envelopes, deterministic verification, append-only records, signed selective receipts, STRK20 wallet adapters, and settlement reconciliation will be adapted to seasons, agent artifacts, matches, and prizes. Legacy source has been preserved outside this repository working tree before the pivot.
+
+The following are not complete yet:
+
+- deterministic poker policy schema and match engine;
+- encrypted agent submission;
+- tournament scheduling;
+- match transcript Merkle proofs;
+- private winner settlement on mainnet;
+- production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
 ## Product routes
 
-- **/** - public VeilAP landing page
-- **/sign-in** - wallet entry surface
-- **/workspace** - synthetic product workspace
+- **/**: Veil Arena landing and synthetic broadcast preview
+- **/sign-in**: Starknet wallet entry surface inherited from the existing foundation
+- **/workspace**: legacy synthetic proof workspace while the arena console is built
 
-All routes currently open without a wallet or RPC key in preview mode.
+Incomplete routes are described as incomplete. The preview never claims to move funds.
 
 ## Stack
 
 - Next.js 16 and React 19
 - strict TypeScript
 - local Manrope and Newsreader variable fonts
+- Drizzle ORM and Postgres schema
+- AWS KMS envelope encryption seam
+- Ed25519 selective receipt signing
 - starknet.js 10.4.0
 - Starknet Wallet Standard discovery
-- STRK20 Wallet API through WalletAccountV6
+- STRK20 Wallet API through `WalletAccountV6`
+- Vitest and Playwright
 - exact dependency pins
-
-## Security setup
-
-Persisted mode requires:
-
-- Neon Postgres for sessions, project records, append-only checkpoints, releases and receipts;
-- one AWS KMS key restricted to Encrypt and Decrypt for the deployment role;
-- an Alchemy Starknet Mainnet RPC URL held only in `STARKNET_RPC_URL`;
-- Ed25519 receipt keys held only in `VEILAP_RECEIPT_SIGNING_PRIVATE_KEY` and `VEILAP_RECEIPT_SIGNING_PUBLIC_KEY`.
-
-The backend unwraps each project's data key only for an authorized request. Preview mode uses memory-only keys and does not contact Neon, KMS, Alchemy or a wallet.
 
 ## Start locally
 
-~~~bash
+```bash
 npm install
 copy .env.example .env.local
 npm run dev
-~~~
+```
 
-Open:
+Open [http://localhost:3003](http://localhost:3003).
 
-- http://localhost:3000
-- http://localhost:3000/sign-in
-- http://localhost:3000/workspace
-
-Before wallet integration, replace YOUR_ALCHEMY_KEY in .env.local. Keep the RPC URL server-only because it contains the Alchemy key.
+Preview mode works without a wallet, database, RPC key, or AWS credentials. It uses synthetic in-memory records and performs no settlement.
 
 ## Checks
 
-~~~bash
+```bash
 npm run check
 npm run prove
 npm run test:e2e
 npm run build
-~~~
+```
 
-`npm run prove` rebuilds the same domain functions used by the application and refuses a non-deterministic report. `npm run test:e2e` uses a Playwright-only fake wallet fixture for capability and rejection paths. That fixture is not available to production code.
+`npm run prove` currently exercises the inherited deterministic proof and refusal paths. It will be replaced with the arena artifact, transcript, tampering, and selective-reveal proof as the match core lands.
 
 ## STRK20 sprint record
 
-The root strk20.json is the machine-readable sprint manifest. Fields remain empty until real evidence exists.
+The root `strk20.json` is the machine-readable sprint manifest. Fields stay empty until real evidence exists.
 
-~~~json
+```json
 {
   "transactions": [],
   "contracts": [],
   "demo_video": "",
   "demo_url": ""
 }
-~~~
+```
 
-Target network: **SN_MAIN**
+Target network: `SN_MAIN`
 
 Official STRK20 pool:
 
-~~~text
+```text
 0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a
-~~~
+```
 
-The intended three mainnet records are:
+Only successful mainnet transactions that touch the pinned pool will enter `strk20.json`.
 
-1. company shield;
-2. private milestone transfer;
-3. private royalty transfer.
+## What Veil Arena can prove
 
-They will be added only after each transaction succeeds, touches the pinned pool and reconciles in VeilAP.
+When the planned match receipt is implemented, Veil Arena can prove that a committed artifact was evaluated by the declared engine and seed, that the published score belongs to the committed transcript, and that a selectively disclosed action belongs to that transcript.
 
-## Privacy boundary
+It does not prove that the operator never accessed plaintext, that an agent is universally optimal, that no implementation bug exists, or that public chain edges cannot be correlated.
 
-Version one provides trusted application privacy, not end-to-end encryption. The authorized VeilAP backend may decrypt project evidence to serve it to an authorized reviewer. Sensitive application records are encrypted at rest and in transit.
+See [docs/PRIVACY.md](docs/PRIVACY.md) for the detailed boundary.
 
-Public or potentially observable information includes pool interaction, timing, viewing-key registration, public deposit and withdrawal legs, network metadata and correlation from distinctive behavior.
+## Team
 
-See [docs/PRIVACY.md](docs/PRIVACY.md) for the detailed claim boundary.
-
-## What is synthetic
-
-The local workspace contains synthetic project, agreement, checkpoint, amount and transaction fixtures. Preview acceptance reserves an in-memory release intent only. It does not call a wallet, move funds, create a server record or touch Starknet Mainnet.
-
-## What VeilAP does not prove
-
-VeilAP does not prove that delivered work is legally owned by a party, that code is universally correct, that a security report found every vulnerability, that a contributor is trustworthy outside the recorded engagement, or that a private payment is immune to timing or metadata correlation. It proves only the signed and persisted records described above, subject to the trusted backend and configured key custody.
+- [Iziedking](https://github.com/Iziedking)
+- [Benita2001](https://github.com/Benita2001)
 
 ## License
 

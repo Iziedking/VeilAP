@@ -1,5 +1,5 @@
-import { VeilApLanding } from "@/components/veilap-landing";
+import { VeilArenaLanding } from "@/components/veil-arena-landing";
 
 export default function Home() {
-  return <VeilApLanding />;
+  return <VeilArenaLanding />;
 }

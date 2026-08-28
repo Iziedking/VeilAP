@@ -6,9 +6,9 @@ import "@fontsource-variable/newsreader";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VeilAP | Private proof-backed settlement",
+  title: "Veil Arena | Sealed agent competition",
   description:
-    "Bind sensitive work to verifiable delivery and human-approved private STRK20 settlement.",
+    "Deterministic AI agents compete with sealed strategies, verifiable results, and private STRK20 prizes.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

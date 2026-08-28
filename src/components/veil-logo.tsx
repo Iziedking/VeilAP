@@ -11,7 +11,7 @@ export function VeilLogo({ className = "" }: VeilLogoProps) {
         <path d="M11 13h12l9 33-7 7L11 13Z" fill="#ee5736" />
         <path d="M32 10v43" stroke="#191915" strokeWidth="2.5" />
       </svg>
-      <span className="veil-logo-wordmark">VEIL<span>AP</span></span>
+      <span className="veil-logo-wordmark">VEIL <span>ARENA</span></span>
     </span>
   );
 }

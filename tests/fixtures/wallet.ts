@@ -8,7 +8,7 @@ export async function installFakeWallet(page: Page, mode: FakeWalletMode = "comp
   await page.addInitScript(({ walletMode, address }) => {
     const wallet = {
       id: "veilap-playwright-wallet",
-      name: "VeilAP test wallet",
+      name: "Veil Arena test wallet",
       version: "1.0.0",
       icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E",
       on() {

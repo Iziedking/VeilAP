@@ -142,7 +142,7 @@ export function WalletSessionButton() {
       <WalletPicker wallets={wallets} disabled={busy} onSelect={authenticate} />
       <p className="sign-in-status" aria-live="polite">
         {flow === "connecting" && "Checking STRK20 support before requesting access…"}
-        {flow === "awaiting-signature" && "Review the VeilAP sign-in message in your wallet."}
+        {flow === "awaiting-signature" && "Review the Veil Arena sign-in message in your wallet."}
         {flow === "verifying" && "Verifying the signed session on Starknet Mainnet…"}
         {!busy && message}
         {flow === "idle" && "Choose a wallet. Signing proves control only. It cannot move funds."}
