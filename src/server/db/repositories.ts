@@ -8,9 +8,13 @@ import {
   auditEvents,
   authNonces,
   authSessions,
+  chainOperations,
   checkpoints,
+  decisions,
   projectMembers,
   projects,
+  releases,
+  revenueEvents,
   verificationRuns,
 } from "./schema";
 
@@ -111,6 +115,65 @@ export interface VerificationRunRecord {
   createdAt: Date;
 }
 
+export type DecisionKind = "accept" | "reject";
+
+export interface DecisionRecord {
+  id: string;
+  checkpointId: string;
+  schemaVersion: 1;
+  projectId: string;
+  agreementVersion: number;
+  agreementDigest: string;
+  checkpointDigest: string;
+  verificationDigest: string;
+  decision: DecisionKind;
+  releaseAmountMinor?: string;
+  nonce: string;
+  issuedAt: Date;
+  expiresAt: Date;
+  signature: string[];
+  decidedBy: string;
+  createdAt: Date;
+}
+
+export type ReleaseKind = "milestone" | "royalty";
+export type ReleaseStatus = "prepared" | "wallet_prompted" | "submitted" | "unknown" | "confirmed" | "reverted";
+
+export interface ReleaseRecord {
+  id: string;
+  kind: ReleaseKind;
+  sourceId: string;
+  projectId: string;
+  decisionId: string;
+  amountMinor: string;
+  idempotencyKey: string;
+  status: ReleaseStatus;
+  createdAt: Date;
+}
+
+export type ChainOperationStatus = ReleaseStatus;
+
+export interface ChainOperationRecord {
+  id: string;
+  releaseId: string;
+  operationType: "private_transfer";
+  status: ChainOperationStatus;
+  transactionHash?: string;
+  receiptDigest?: string;
+  reason?: string;
+  updatedAt: Date;
+  createdAt: Date;
+}
+
+export interface RevenueEventRecord {
+  id: string;
+  projectId: string;
+  eventType: "synthetic_revenue";
+  encryptedAmount: EncryptedField;
+  currency: "USDC";
+  createdAt: Date;
+}
+
 export interface ProjectRepository extends ProjectKeyRepository {
   saveMember(record: ProjectMemberRecord): Promise<void>;
   getMemberRoles(projectId: string, walletFingerprint: string): Promise<ProjectRole[]>;
@@ -123,6 +186,26 @@ export interface ProjectRepository extends ProjectKeyRepository {
   saveAuditEvent(record: AuditEventRecord): Promise<void>;
   saveVerificationRun(record: VerificationRunRecord): Promise<void>;
   listVerificationRuns(checkpointId: string): Promise<VerificationRunRecord[]>;
+  saveDecision(record: DecisionRecord): Promise<void>;
+  getDecision(id: string): Promise<DecisionRecord | undefined>;
+  getDecisionByCheckpoint(checkpointId: string): Promise<DecisionRecord | undefined>;
+  getDecisionByNonce(nonce: string): Promise<DecisionRecord | undefined>;
+  saveRelease(record: ReleaseRecord): Promise<void>;
+  getRelease(id: string): Promise<ReleaseRecord | undefined>;
+  listReleases(projectId: string): Promise<ReleaseRecord[]>;
+  getReleaseBySource(kind: ReleaseKind, sourceId: string): Promise<ReleaseRecord | undefined>;
+  getReleaseByIdempotencyKey(key: string): Promise<ReleaseRecord | undefined>;
+  reserveReleaseBundle(input: {
+    release: ReleaseRecord;
+    operation: ChainOperationRecord;
+    audit: AuditEventRecord;
+  }): Promise<void>;
+  updateRelease(record: ReleaseRecord): Promise<void>;
+  saveChainOperation(record: ChainOperationRecord): Promise<void>;
+  getChainOperation(releaseId: string): Promise<ChainOperationRecord | undefined>;
+  updateChainOperation(record: ChainOperationRecord): Promise<void>;
+  saveRevenueEvent(record: RevenueEventRecord): Promise<void>;
+  getRevenueEvent(id: string): Promise<RevenueEventRecord | undefined>;
 }
 
 function projectRole(value: string): ProjectRole {
@@ -182,6 +265,93 @@ function toVerificationRunRecord(row: typeof verificationRuns.$inferSelect): Ver
     verifierFingerprint: row.verifierFingerprint,
     status: verificationRunStatus(row.status),
     result: row.result ?? undefined,
+    createdAt: row.createdAt,
+  };
+}
+
+function decisionKind(value: string): DecisionKind {
+  if (value === "accept" || value === "reject") return value;
+  throw new Error("DECISION_KIND_INVALID");
+}
+
+function releaseKind(value: string): ReleaseKind {
+  if (value === "milestone" || value === "royalty") return value;
+  throw new Error("RELEASE_KIND_INVALID");
+}
+
+function releaseStatus(value: string): ReleaseStatus {
+  if (value === "prepared" || value === "wallet_prompted" || value === "submitted" || value === "unknown" || value === "confirmed" || value === "reverted") {
+    return value;
+  }
+  throw new Error("RELEASE_STATUS_INVALID");
+}
+
+function toDecisionRecord(row: typeof decisions.$inferSelect): DecisionRecord {
+  if (row.schemaVersion !== 1) throw new Error("DECISION_SCHEMA_UNSUPPORTED");
+  const signature = row.signature;
+  if (!Array.isArray(signature) || !signature.every((item): item is string => typeof item === "string")) {
+    throw new Error("DECISION_SIGNATURE_INVALID");
+  }
+  return {
+    id: row.id,
+    checkpointId: row.checkpointId,
+    schemaVersion: 1,
+    projectId: row.projectId,
+    agreementVersion: row.agreementVersion,
+    agreementDigest: row.agreementDigest,
+    checkpointDigest: row.checkpointDigest,
+    verificationDigest: row.verificationDigest,
+    decision: decisionKind(row.decision),
+    releaseAmountMinor: row.releaseAmountMinor ?? undefined,
+    nonce: row.nonce,
+    issuedAt: row.issuedAt,
+    expiresAt: row.expiresAt,
+    signature,
+    decidedBy: row.decidedBy,
+    createdAt: row.createdAt,
+  };
+}
+
+function toReleaseRecord(row: typeof releases.$inferSelect): ReleaseRecord {
+  return {
+    id: row.id,
+    kind: releaseKind(row.kind),
+    sourceId: row.sourceId,
+    projectId: row.projectId,
+    decisionId: row.decisionId,
+    amountMinor: row.amountMinor,
+    idempotencyKey: row.idempotencyKey,
+    status: releaseStatus(row.status),
+    createdAt: row.createdAt,
+  };
+}
+
+function chainOperationStatus(value: string): ChainOperationStatus {
+  return releaseStatus(value);
+}
+
+function toChainOperationRecord(row: typeof chainOperations.$inferSelect): ChainOperationRecord {
+  return {
+    id: row.id,
+    releaseId: row.releaseId,
+    operationType: row.operationType as ChainOperationRecord["operationType"],
+    status: chainOperationStatus(row.status),
+    transactionHash: row.transactionHash ?? undefined,
+    receiptDigest: row.receiptDigest ?? undefined,
+    reason: row.reason ?? undefined,
+    updatedAt: row.updatedAt,
+    createdAt: row.createdAt,
+  };
+}
+
+function toRevenueEventRecord(row: typeof revenueEvents.$inferSelect): RevenueEventRecord {
+  const encryptedAmount = JSON.parse(row.amount) as EncryptedField;
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    eventType: row.eventType as RevenueEventRecord["eventType"],
+    encryptedAmount,
+    currency: row.currency as RevenueEventRecord["currency"],
     createdAt: row.createdAt,
   };
 }
@@ -307,6 +477,106 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(asc(verificationRuns.createdAt));
         return rows.map(toVerificationRunRecord);
       },
+      async saveDecision(record) {
+        await db.insert(decisions).values(record);
+      },
+      async getDecision(id) {
+        const rows = await db.select().from(decisions).where(eq(decisions.id, id)).limit(1);
+        return rows[0] ? toDecisionRecord(rows[0]) : undefined;
+      },
+      async getDecisionByCheckpoint(checkpointId) {
+        const rows = await db.select().from(decisions).where(eq(decisions.checkpointId, checkpointId)).limit(1);
+        return rows[0] ? toDecisionRecord(rows[0]) : undefined;
+      },
+      async getDecisionByNonce(nonce) {
+        const rows = await db.select().from(decisions).where(eq(decisions.nonce, nonce)).limit(1);
+        return rows[0] ? toDecisionRecord(rows[0]) : undefined;
+      },
+      async saveRelease(record) {
+        await db.insert(releases).values(record);
+      },
+      async getRelease(id) {
+        const rows = await db.select().from(releases).where(eq(releases.id, id)).limit(1);
+        return rows[0] ? toReleaseRecord(rows[0]) : undefined;
+      },
+      async listReleases(projectId) {
+        const rows = await db.select().from(releases).where(eq(releases.projectId, projectId)).orderBy(asc(releases.createdAt));
+        return rows.map(toReleaseRecord);
+      },
+      async getReleaseBySource(kind, sourceId) {
+        const rows = await db
+          .select()
+          .from(releases)
+          .where(and(eq(releases.kind, kind), eq(releases.sourceId, sourceId)))
+          .limit(1);
+        return rows[0] ? toReleaseRecord(rows[0]) : undefined;
+      },
+      async getReleaseByIdempotencyKey(key) {
+        const rows = await db.select().from(releases).where(eq(releases.idempotencyKey, key)).limit(1);
+        return rows[0] ? toReleaseRecord(rows[0]) : undefined;
+      },
+      async reserveReleaseBundle(input) {
+        await db.transaction(async (tx) => {
+          const existing = await tx
+            .select({ id: releases.id })
+            .from(releases)
+            .where(and(eq(releases.kind, input.release.kind), eq(releases.sourceId, input.release.sourceId)))
+            .limit(1);
+          if (existing[0]) throw new Error("RELEASE_SOURCE_ALREADY_EXISTS");
+          await tx.insert(releases).values(input.release);
+          await tx.insert(chainOperations).values({
+            ...input.operation,
+            transactionHash: input.operation.transactionHash ?? null,
+            receiptDigest: input.operation.receiptDigest ?? null,
+            reason: input.operation.reason ?? null,
+          });
+          await tx.insert(auditEvents).values(input.audit);
+        });
+      },
+      async updateRelease(record) {
+        await db
+          .update(releases)
+          .set({ status: record.status })
+          .where(eq(releases.id, record.id));
+      },
+      async saveChainOperation(record) {
+        await db.insert(chainOperations).values({
+          ...record,
+          transactionHash: record.transactionHash ?? null,
+          receiptDigest: record.receiptDigest ?? null,
+          reason: record.reason ?? null,
+        });
+      },
+      async getChainOperation(releaseId) {
+        const rows = await db.select().from(chainOperations).where(eq(chainOperations.releaseId, releaseId)).limit(1);
+        return rows[0] ? toChainOperationRecord(rows[0]) : undefined;
+      },
+      async updateChainOperation(record) {
+        await db
+          .update(chainOperations)
+          .set({
+            status: record.status,
+            transactionHash: record.transactionHash ?? null,
+            receiptDigest: record.receiptDigest ?? null,
+            reason: record.reason ?? null,
+            updatedAt: record.updatedAt,
+          })
+          .where(eq(chainOperations.id, record.id));
+      },
+      async saveRevenueEvent(record) {
+        await db.insert(revenueEvents).values({
+          id: record.id,
+          projectId: record.projectId,
+          eventType: record.eventType,
+          amount: JSON.stringify(record.encryptedAmount),
+          currency: record.currency,
+          createdAt: record.createdAt,
+        });
+      },
+      async getRevenueEvent(id) {
+        const rows = await db.select().from(revenueEvents).where(eq(revenueEvents.id, id)).limit(1);
+        return rows[0] ? toRevenueEventRecord(rows[0]) : undefined;
+      },
     },
   };
 }
@@ -324,6 +594,10 @@ export function createMemoryRepositories(): {
   const checkpointRows = new Map<string, CheckpointRecord>();
   const auditRows: AuditEventRecord[] = [];
   const verificationRunRows: VerificationRunRecord[] = [];
+  const decisionRows = new Map<string, DecisionRecord>();
+  const releaseRows = new Map<string, ReleaseRecord>();
+  const chainOperationRows = new Map<string, ChainOperationRecord>();
+  const revenueEventRows = new Map<string, RevenueEventRecord>();
   return {
     nonces: {
       async saveNonce(record) {
@@ -416,6 +690,100 @@ export function createMemoryRepositories(): {
           .filter((record) => record.checkpointId === checkpointId)
           .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
           .map((record) => structuredClone(record));
+      },
+      async saveDecision(record) {
+        if (decisionRows.has(record.id)) throw new Error("DECISION_ALREADY_EXISTS");
+        if ([...decisionRows.values()].some((row) => row.nonce === record.nonce)) {
+          throw new Error("DECISION_NONCE_ALREADY_EXISTS");
+        }
+        if ([...decisionRows.values()].some((row) => row.checkpointId === record.checkpointId)) {
+          throw new Error("DECISION_CHECKPOINT_ALREADY_EXISTS");
+        }
+        decisionRows.set(record.id, structuredClone(record));
+      },
+      async getDecision(id) {
+        const record = decisionRows.get(id);
+        return record ? structuredClone(record) : undefined;
+      },
+      async getDecisionByCheckpoint(checkpointId) {
+        const record = [...decisionRows.values()].find((row) => row.checkpointId === checkpointId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async getDecisionByNonce(nonce) {
+        const record = [...decisionRows.values()].find((row) => row.nonce === nonce);
+        return record ? structuredClone(record) : undefined;
+      },
+      async saveRelease(record) {
+        if (releaseRows.has(record.id)) throw new Error("RELEASE_ALREADY_EXISTS");
+        if ([...releaseRows.values()].some((row) => row.kind === record.kind && row.sourceId === record.sourceId)) {
+          throw new Error("RELEASE_SOURCE_ALREADY_EXISTS");
+        }
+        if ([...releaseRows.values()].some((row) => row.idempotencyKey === record.idempotencyKey)) {
+          throw new Error("RELEASE_IDEMPOTENCY_ALREADY_EXISTS");
+        }
+        releaseRows.set(record.id, structuredClone(record));
+      },
+      async getRelease(id) {
+        const record = releaseRows.get(id);
+        return record ? structuredClone(record) : undefined;
+      },
+      async listReleases(projectId) {
+        return [...releaseRows.values()]
+          .filter((record) => record.projectId === projectId)
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async getReleaseBySource(kind, sourceId) {
+        const record = [...releaseRows.values()].find((row) => row.kind === kind && row.sourceId === sourceId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async getReleaseByIdempotencyKey(key) {
+        const record = [...releaseRows.values()].find((row) => row.idempotencyKey === key);
+        return record ? structuredClone(record) : undefined;
+      },
+      async reserveReleaseBundle(input) {
+        if ([...releaseRows.values()].some((row) => row.kind === input.release.kind && row.sourceId === input.release.sourceId)) {
+          throw new Error("RELEASE_SOURCE_ALREADY_EXISTS");
+        }
+        if ([...releaseRows.values()].some((row) => row.idempotencyKey === input.release.idempotencyKey)) {
+          throw new Error("RELEASE_IDEMPOTENCY_ALREADY_EXISTS");
+        }
+        if ([...chainOperationRows.values()].some((row) => row.releaseId === input.operation.releaseId)) {
+          throw new Error("CHAIN_OPERATION_RELEASE_ALREADY_EXISTS");
+        }
+        if (auditRows.some((row) => row.id === input.audit.id)) {
+          throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
+        }
+        releaseRows.set(input.release.id, structuredClone(input.release));
+        chainOperationRows.set(input.operation.id, structuredClone(input.operation));
+        auditRows.push(structuredClone(input.audit));
+      },
+      async updateRelease(record) {
+        if (!releaseRows.has(record.id)) throw new Error("RELEASE_NOT_FOUND");
+        releaseRows.set(record.id, structuredClone(record));
+      },
+      async saveChainOperation(record) {
+        if (chainOperationRows.has(record.id)) throw new Error("CHAIN_OPERATION_ALREADY_EXISTS");
+        if ([...chainOperationRows.values()].some((row) => row.releaseId === record.releaseId)) {
+          throw new Error("CHAIN_OPERATION_RELEASE_ALREADY_EXISTS");
+        }
+        chainOperationRows.set(record.id, structuredClone(record));
+      },
+      async getChainOperation(releaseId) {
+        const record = [...chainOperationRows.values()].find((row) => row.releaseId === releaseId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async updateChainOperation(record) {
+        if (!chainOperationRows.has(record.id)) throw new Error("CHAIN_OPERATION_NOT_FOUND");
+        chainOperationRows.set(record.id, structuredClone(record));
+      },
+      async saveRevenueEvent(record) {
+        if (revenueEventRows.has(record.id)) throw new Error("REVENUE_EVENT_ALREADY_EXISTS");
+        revenueEventRows.set(record.id, structuredClone(record));
+      },
+      async getRevenueEvent(id) {
+        const record = revenueEventRows.get(id);
+        return record ? structuredClone(record) : undefined;
       },
     },
   };

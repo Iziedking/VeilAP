@@ -28,7 +28,7 @@ export function ReleaseReview({
   if (invalid) {
     reviewTitle = "The artifact changed after its checkpoint was recorded.";
   } else if (releasePrepared) {
-    reviewTitle = "The milestone release is prepared, not paid.";
+    reviewTitle = "The release intent is prepared, not paid.";
   }
 
   function acceptCheckpoint() {
@@ -50,7 +50,7 @@ export function ReleaseReview({
                 ? `${formatUsdcMinor(workspace.project.milestoneMinor)} USDC / MILESTONE`
                 : "CHECKPOINT 02 / AGREEMENT V2"}
             </strong>
-            <small>{releasePrepared ? "No transaction exists in preview." : "A company decision is required before release."}</small>
+            <small>{releasePrepared ? "The intent is reserved before any wallet prompt." : "A company decision is required before release."}</small>
           </div>
           <button type="button" onClick={() => workspace.openCheckpoint("CHK-0002")}>
             {releasePrepared ? "INSPECT PREPARED RELEASE" : "REVIEW CHECKPOINT"}
@@ -111,7 +111,8 @@ export function ReleaseReview({
               <p>
                 {invalid
                   ? "VeilAP will not send changed evidence to human acceptance or prepare a release from it."
-                  : "Verification may inform the company. It cannot accept work or release funds. The company wallet remains the final signer."}
+                  : "Verification may inform the company. It cannot accept work or release funds. The company wallet remains the final signer."
+                    + " The preview mirrors this boundary without creating a server record."}
               </p>
             </div>
 

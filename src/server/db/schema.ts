@@ -107,12 +107,25 @@ export const decisions = pgTable(
   {
     id: text("id").primaryKey(),
     checkpointId: text("checkpoint_id").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    projectId: text("project_id").notNull(),
+    agreementVersion: integer("agreement_version").notNull(),
+    agreementDigest: text("agreement_digest").notNull(),
+    checkpointDigest: text("checkpoint_digest").notNull(),
+    verificationDigest: text("verification_digest").notNull(),
     decision: text("decision").notNull(),
-    rationale: jsonb("rationale"),
+    releaseAmountMinor: text("release_amount_minor"),
+    nonce: text("nonce").notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    signature: jsonb("signature").notNull(),
     decidedBy: text("decided_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
-  (table) => ({ checkpoint: uniqueIndex("decisions_checkpoint_idx").on(table.checkpointId) }),
+  (table) => ({
+    checkpoint: uniqueIndex("decisions_checkpoint_idx").on(table.checkpointId),
+    nonce: uniqueIndex("decisions_nonce_idx").on(table.nonce),
+  }),
 );
 
 export const revenueEvents = pgTable("revenue_events", {
@@ -130,6 +143,9 @@ export const releases = pgTable(
     id: text("id").primaryKey(),
     kind: text("kind").notNull(),
     sourceId: text("source_id").notNull(),
+    projectId: text("project_id").notNull(),
+    decisionId: text("decision_id").notNull(),
+    amountMinor: text("amount_minor").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     status: text("status").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -148,6 +164,9 @@ export const chainOperations = pgTable(
     operationType: text("operation_type").notNull(),
     status: text("status").notNull(),
     transactionHash: text("transaction_hash"),
+    receiptDigest: text("receipt_digest"),
+    reason: text("reason"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
