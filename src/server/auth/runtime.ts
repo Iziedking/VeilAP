@@ -4,7 +4,7 @@ import { createAuthChallengeService, type ChallengePersistence } from "./challen
 import { getDatabase } from "@/server/db/client";
 import { createMemoryRepositories, createPostgresRepositories } from "@/server/db/repositories";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
-import { readServerConfig, requirePersistedConfig } from "@/server/env";
+import { canAuthenticate, isLoopbackOrigin, readServerConfig, requirePersistedConfig } from "@/server/env";
 
 export const SESSION_COOKIE = "veilap_session";
 export const SESSION_TTL_MS = 8 * 60 * 60_000;
@@ -18,6 +18,10 @@ const developmentSecret = randomBytes(32).toString("hex");
 export function hasDurableAuthStore(): boolean {
   const config = readServerConfig();
   return config.mode === "persisted" && config.missing.length === 0;
+}
+
+export function hasAuthStore(): boolean {
+  return canAuthenticate();
 }
 
 export function getAuthChallenges() {
@@ -73,10 +77,21 @@ export function getSessionSecret(): string {
   throw new Error("VEILAP_SESSION_SECRET_REQUIRED");
 }
 
+export function getWalletHashPepper(): string {
+  const config = readServerConfig();
+  if (config.walletHashPepper) return config.walletHashPepper;
+  if (config.mode === "preview" && hasAuthStore()) return developmentSecret;
+  throw new Error("VEILAP_WALLET_HASH_PEPPER_REQUIRED");
+}
+
 export function expectedOrigin(request: Request): string {
   const candidate = process.env.VEILAP_APP_ORIGIN ?? new URL(request.url).origin;
   const parsed = new URL(candidate);
   if (parsed.origin !== candidate) throw new Error("VEILAP_APP_ORIGIN_INVALID");
+  const incoming = requestOrigin(request);
+  if (readServerConfig().mode === "preview" && incoming && isLoopbackOrigin(parsed.origin) && isLoopbackOrigin(incoming)) {
+    return incoming;
+  }
   return parsed.origin;
 }
 

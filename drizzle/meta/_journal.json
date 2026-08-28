@@ -15,6 +15,13 @@
       "when": 1787870669013,
       "tag": "0001_mean_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787875200000,
+      "tag": "0002_task6_reviewer_assignment",
+      "breakpoints": true
     }
   ]
 }

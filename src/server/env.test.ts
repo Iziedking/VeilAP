@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readServerConfig } from "./env";
+import { canAuthenticate, readServerConfig } from "./env";
 
 describe("server configuration", () => {
   it("allows preview to boot without persisted credentials", () => {
@@ -32,5 +32,36 @@ describe("server configuration", () => {
     });
 
     expect(config.missing).toEqual([]);
+  });
+
+  it("allows explicitly enabled local preview authentication only", () => {
+    expect(
+      canAuthenticate({
+        NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
+        VEILAP_PREVIEW_AUTH: "1",
+        VEILAP_APP_ORIGIN: "http://127.0.0.1:3003",
+        NODE_ENV: "production",
+      }),
+    ).toBe(true);
+    expect(
+      canAuthenticate({
+        NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
+        VEILAP_PREVIEW_AUTH: "1",
+        VEILAP_APP_ORIGIN: "http://localhost:3003",
+        NODE_ENV: "production",
+      }),
+    ).toBe(true);
+    expect(
+      canAuthenticate({
+        NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
+        NODE_ENV: "production",
+      }),
+    ).toBe(false);
+    expect(
+      canAuthenticate({
+        NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
+        NODE_ENV: "development",
+      }),
+    ).toBe(true);
   });
 });

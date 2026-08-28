@@ -5,7 +5,7 @@ import {
   expectedOrigin,
   getAuthRepositories,
   getSessionSecret,
-  hasDurableAuthStore,
+  hasAuthStore,
   requestOrigin,
   SESSION_COOKIE,
 } from "@/server/auth/runtime";
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (token && hasDurableAuthStore()) {
+  if (token && hasAuthStore()) {
     const verified = verifySessionToken(token, getSessionSecret());
     if (verified.ok && verified.session.sessionId) {
       await getAuthRepositories().sessions.revokeSession(verified.session.sessionId, new Date());

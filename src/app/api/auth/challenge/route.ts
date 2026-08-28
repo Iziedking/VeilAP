@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   expectedOrigin,
   getAuthChallenges,
-  hasDurableAuthStore,
+  hasAuthStore,
   requestOrigin,
 } from "@/server/auth/runtime";
 
@@ -23,7 +23,7 @@ function json(body: unknown, status = 200) {
 }
 
 export async function POST(request: Request) {
-  if (!hasDurableAuthStore()) {
+  if (!hasAuthStore()) {
     return json(
       {
         ok: false,

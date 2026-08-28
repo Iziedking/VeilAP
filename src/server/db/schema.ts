@@ -82,6 +82,7 @@ export const checkpoints = pgTable(
     payloadDigest: text("payload_digest").notNull(),
     status: text("status").notNull(),
     createdBy: text("created_by").notNull(),
+    assignedReviewerFingerprint: text("assigned_reviewer_fingerprint"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({

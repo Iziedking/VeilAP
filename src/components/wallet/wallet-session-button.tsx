@@ -145,7 +145,7 @@ export function WalletSessionButton() {
         {flow === "awaiting-signature" && "Review the VeilAP sign-in message in your wallet."}
         {flow === "verifying" && "Verifying the signed session on Starknet Mainnet…"}
         {!busy && message}
-        {flow === "idle" && "Choose a wallet. Signing proves control only—it cannot move funds."}
+        {flow === "idle" && "Choose a wallet. Signing proves control only. It cannot move funds."}
       </p>
       {(flow === "error" || flow === "unsupported" || flow === "wrong-network") && (
         <button className="wallet-retry" type="button" onClick={() => setFlow("idle")}>

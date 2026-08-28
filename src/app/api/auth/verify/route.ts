@@ -9,12 +9,12 @@ import {
   getAuthRepositories,
   getAuthChallenges,
   getSessionSecret,
-  hasDurableAuthStore,
+  getWalletHashPepper,
+  hasAuthStore,
   requestOrigin,
   SESSION_COOKIE,
   SESSION_TTL_MS,
 } from "@/server/auth/runtime";
-import { requirePersistedConfig } from "@/server/env";
 import { createSessionToken } from "@/server/auth/session";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 import { randomBytes } from "node:crypto";
@@ -43,7 +43,7 @@ function json(body: unknown, status = 200) {
 }
 
 export async function POST(request: Request) {
-  if (!hasDurableAuthStore()) {
+  if (!hasAuthStore()) {
     return json({ ok: false, code: "CONFIGURATION_MISSING" }, 503);
   }
   const origin = requestOrigin(request);
@@ -71,7 +71,6 @@ export async function POST(request: Request) {
 
     const now = Date.now();
     const sessionId = randomBytes(16).toString("hex");
-    const config = requirePersistedConfig();
     const token = createSessionToken(
       {
         sessionId,
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
     );
     await getAuthRepositories().sessions.saveSession({
       id: sessionId,
-      walletFingerprint: fingerprintWallet(result.walletAddress, config.walletHashPepper!),
+      walletFingerprint: fingerprintWallet(result.walletAddress, getWalletHashPepper()),
       issuedAt: new Date(now),
       expiresAt: new Date(now + SESSION_TTL_MS),
     });

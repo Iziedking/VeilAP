@@ -28,6 +28,16 @@ function hasStrongSecret(value: string | undefined): boolean {
   return Boolean(value && value.length >= 64);
 }
 
+export function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return parsed.origin === origin
+      && (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "::1");
+  } catch {
+    return false;
+  }
+}
+
 export function readServerConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): VeilapServerConfig {
@@ -64,4 +74,16 @@ export function requirePersistedConfig(
   if (config.mode === "preview") return config;
   if (config.missing.length > 0) throw new Error("CONFIGURATION_MISSING");
   return config;
+}
+
+export function canAuthenticate(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  const config = readServerConfig(env);
+  if (config.mode === "preview") {
+    if (env.NODE_ENV !== "production") return true;
+    if (env.VEILAP_PREVIEW_AUTH !== "1" || !env.VEILAP_APP_ORIGIN) return false;
+    return isLoopbackOrigin(env.VEILAP_APP_ORIGIN);
+  }
+  return config.missing.length === 0;
 }
