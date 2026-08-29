@@ -1,6 +1,7 @@
 import type { WalletWithStarknetFeatures } from "@starknet-io/get-starknet-wallet-standard/features";
 import { constants, RpcProvider, WalletAccountV6, walletV6 } from "starknet";
 
+import { apiUrl } from "@/lib/api/client";
 import { MINIMUM_STRK20_WALLET_API, supportsStrk20 } from "./capability";
 
 export type WalletStandardWallet = WalletWithStarknetFeatures;
@@ -44,7 +45,7 @@ export type SessionWalletConnection =
 export async function connectSessionWallet(
   wallet: WalletWithStarknetFeatures,
 ): Promise<SessionWalletConnection> {
-  const result = await connectWithCapability(wallet, createWalletAccountPort("/api/starknet/rpc"));
+  const result = await connectWithCapability(wallet, createWalletAccountPort(apiUrl("/api/starknet/rpc")));
   if (result.kind === "unsupported") return result;
   const chainId = await walletV6.requestChainId(wallet);
   if (chainId !== constants.StarknetChainId.SN_MAIN) {

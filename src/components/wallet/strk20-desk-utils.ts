@@ -1,9 +1,10 @@
 import type { ReceiptTraceProvider } from "@/lib/strk20/receipt";
 import type { PoolFeeResult } from "@/lib/strk20/pool-fee";
+import { apiFetch } from "@/lib/api/client";
 
 export async function readLivePoolFee(): Promise<PoolFeeResult> {
   try {
-    const response = await fetch("/api/strk20/pool-fee", { cache: "no-store" });
+    const response = await apiFetch("/api/strk20/pool-fee", { cache: "no-store" });
     const body: unknown = await response.json();
     if (!response.ok || !isRecord(body) || body.ok !== true || !isRecord(body.value)) {
       return { ok: false, code: "POOL_FEE_UNAVAILABLE" };
@@ -28,7 +29,7 @@ export async function readLivePoolFee(): Promise<PoolFeeResult> {
 
 export function createClientReceiptProvider(): ReceiptTraceProvider {
   async function rpc(method: string, params: string[]): Promise<unknown> {
-    const response = await fetch("/api/starknet/rpc", {
+    const response = await apiFetch("/api/starknet/rpc", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),

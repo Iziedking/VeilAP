@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { apiFetch } from "@/lib/api/client";
 import { connectSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
 import { useDiscoveredWallets } from "@/lib/wallet/wallet-store";
 import type { AuthChallenge } from "@/server/auth/challenge";
@@ -64,7 +65,7 @@ export function WalletSessionButton() {
       }
 
       const walletAddress = connected.account.address;
-      const challengeResponse = await fetch("/api/auth/challenge", {
+      const challengeResponse = await apiFetch("/api/auth/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ walletAddress, chainId: "SN_MAIN" }),
@@ -83,7 +84,7 @@ export function WalletSessionButton() {
         await connected.account.signMessage(challengeBody.challenge.typedData),
       );
       setFlow("verifying");
-      const verifyResponse = await fetch("/api/auth/verify", {
+      const verifyResponse = await apiFetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -113,7 +114,7 @@ export function WalletSessionButton() {
 
   async function logout() {
     try {
-      const response = await fetch("/api/auth/logout", { method: "POST" });
+      const response = await apiFetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error("LOGOUT_FAILED");
       setWalletAddress("");
       setMessage("");

@@ -38,6 +38,8 @@ chmod 600 /opt/veil-arena/config/veil-arena.env
 
 Set `VEILAP_APP_ORIGIN` to the final Vercel origin. Set `VEIL_API_DOMAIN` to the API hostname after its DNS record points to the VM. Use `:80` only for an initial HTTP smoke test. A Vercel HTTPS frontend needs an HTTPS API hostname to avoid browser mixed-content blocking.
 
+For the final split deployment, use `VEILAP_APP_ORIGIN=https://veila.xyz` on the VM and set the Vercel variable `NEXT_PUBLIC_VEIL_API_ORIGIN=https://api.veila.xyz`. The client keeps local development same-origin when this variable is empty. The API accepts CORS only from the exact `VEILAP_APP_ORIGIN`, and session cookies remain HTTP-only and strict.
+
 Install Docker Engine and the Docker Compose plugin on the VM before the first push. The Ubuntu Docker installation guide is the source of truth for those packages.
 
 ## GitHub Actions secrets
@@ -56,6 +58,8 @@ Do not add `DATABASE_URL`, KMS credentials, session secrets, signing keys, or th
 ## Vercel
 
 Connect the `Iziedking/VeilAP` repository in Vercel and enable deployment from `main`. Vercel will build the repository on every push. Keep backend-only values out of Vercel, including `DATABASE_URL`, `VEILAP_SESSION_SECRET`, `VEILAP_WALLET_HASH_PEPPER`, KMS identifiers, and receipt signing keys.
+
+Add `NEXT_PUBLIC_VEIL_API_ORIGIN` as a Vercel environment variable with `https://api.veila.xyz` once that hostname is live. Do not point it at the VM's plain HTTP address from an HTTPS Vercel deployment.
 
 The current GitHub workflow deploys the complete Next application to the VM. Before treating Vercel as a browser-only frontend, the client API base URL and cross-origin policy must be configured for the API hostname.
 
