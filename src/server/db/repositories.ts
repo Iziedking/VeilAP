@@ -4,6 +4,7 @@ import type { AuthChallenge } from "@/server/auth/challenge";
 import type { EncryptedField } from "@/server/crypto/envelope";
 import type { VeilapDatabase } from "./client";
 import {
+  arenaStrategyArtifacts,
   agreementVersions,
   auditEvents,
   authNonces,
@@ -186,6 +187,17 @@ export interface SelectiveReceiptRecord {
   createdAt: Date;
 }
 
+export interface ArenaStrategyArtifactRecord {
+  id: string;
+  projectId: string;
+  agentId: string;
+  displayName: string;
+  artifactCommitment: string;
+  encryptedPolicy: EncryptedField;
+  status: "sealed";
+  createdAt: Date;
+}
+
 export interface ProjectRepository extends ProjectKeyRepository {
   saveMember(record: ProjectMemberRecord): Promise<void>;
   getMemberRoles(projectId: string, walletFingerprint: string): Promise<ProjectRole[]>;
@@ -220,6 +232,22 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getRevenueEvent(id: string): Promise<RevenueEventRecord | undefined>;
   saveSelectiveReceipt(record: SelectiveReceiptRecord): Promise<void>;
   getSelectiveReceipt(id: string): Promise<SelectiveReceiptRecord | undefined>;
+  saveArenaStrategyArtifact(record: ArenaStrategyArtifactRecord): Promise<void>;
+  getArenaStrategyArtifact(projectId: string, agentId: string): Promise<ArenaStrategyArtifactRecord | undefined>;
+}
+
+function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$inferSelect): ArenaStrategyArtifactRecord {
+  if (row.status !== "sealed") throw new Error("ARENA_ARTIFACT_STATUS_INVALID");
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    agentId: row.agentId,
+    displayName: row.displayName,
+    artifactCommitment: row.artifactCommitment,
+    encryptedPolicy: row.encryptedPolicy as EncryptedField,
+    status: "sealed",
+    createdAt: row.createdAt,
+  };
 }
 
 function projectRole(value: string): ProjectRole {
@@ -625,6 +653,20 @@ export function createPostgresRepositories(db: VeilapDatabase): {
         const rows = await db.select().from(selectiveReceipts).where(eq(selectiveReceipts.id, id)).limit(1);
         return rows[0] ? toSelectiveReceiptRecord(rows[0]) : undefined;
       },
+      async saveArenaStrategyArtifact(record) {
+        await db.insert(arenaStrategyArtifacts).values({
+          ...record,
+          encryptedPolicy: record.encryptedPolicy,
+        });
+      },
+      async getArenaStrategyArtifact(projectId, agentId) {
+        const rows = await db
+          .select()
+          .from(arenaStrategyArtifacts)
+          .where(and(eq(arenaStrategyArtifacts.projectId, projectId), eq(arenaStrategyArtifacts.agentId, agentId)))
+          .limit(1);
+        return rows[0] ? toArenaStrategyArtifactRecord(rows[0]) : undefined;
+      },
     },
   };
 }
@@ -647,6 +689,7 @@ export function createMemoryRepositories(): {
   const chainOperationRows = new Map<string, ChainOperationRecord>();
   const revenueEventRows = new Map<string, RevenueEventRecord>();
   const selectiveReceiptRows = new Map<string, SelectiveReceiptRecord>();
+  const arenaStrategyArtifactRows = new Map<string, ArenaStrategyArtifactRecord>();
   return {
     nonces: {
       async saveNonce(record) {
@@ -840,6 +883,21 @@ export function createMemoryRepositories(): {
       },
       async getSelectiveReceipt(id) {
         const record = selectiveReceiptRows.get(id);
+        return record ? structuredClone(record) : undefined;
+      },
+      async saveArenaStrategyArtifact(record) {
+        const agentKey = `${record.projectId}:${record.agentId}`;
+        if (arenaStrategyArtifactRows.has(record.id)) throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
+        if ([...arenaStrategyArtifactRows.values()].some((row) => `${row.projectId}:${row.agentId}` === agentKey)) {
+          throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
+        }
+        if ([...arenaStrategyArtifactRows.values()].some((row) => row.projectId === record.projectId && row.artifactCommitment === record.artifactCommitment)) {
+          throw new Error("ARENA_ARTIFACT_COMMITMENT_ALREADY_EXISTS");
+        }
+        arenaStrategyArtifactRows.set(record.id, structuredClone(record));
+      },
+      async getArenaStrategyArtifact(projectId, agentId) {
+        const record = [...arenaStrategyArtifactRows.values()].find((row) => row.projectId === projectId && row.agentId === agentId);
         return record ? structuredClone(record) : undefined;
       },
     },

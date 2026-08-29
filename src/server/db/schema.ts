@@ -9,6 +9,24 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+export const arenaStrategyArtifacts = pgTable(
+  "arena_strategy_artifacts",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    displayName: text("display_name").notNull(),
+    artifactCommitment: text("artifact_commitment").notNull(),
+    encryptedPolicy: jsonb("encrypted_policy").notNull(),
+    status: text("status").notNull().default("sealed"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    projectAgent: uniqueIndex("arena_strategy_artifacts_project_agent_idx").on(table.projectId, table.agentId),
+    projectCommitment: uniqueIndex("arena_strategy_artifacts_project_commitment_idx").on(table.projectId, table.artifactCommitment),
+  }),
+);
+
 export const authNonces = pgTable("auth_nonces", {
   nonce: text("nonce").primaryKey(),
   walletFingerprint: text("wallet_fingerprint").notNull(),

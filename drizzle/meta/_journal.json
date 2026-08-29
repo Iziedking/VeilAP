@@ -29,6 +29,13 @@
       "when": 1787877000000,
       "tag": "0003_durable_decisions_and_releases",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787878800000,
+      "tag": "0004_arena_strategy_artifacts",
+      "breakpoints": true
     }
   ]
 }
