@@ -99,19 +99,20 @@ The repository also contains tested infrastructure from the earlier VeilAP direc
 
 The following are not complete yet:
 
-- encrypted agent submission;
 - tournament scheduling;
 - production transcript inclusion proofs and signed match receipts;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
-The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, duplicate deals with seat swapping, public artifact and transcript commitments, score calculation, and refusal paths for illegal or failed agent decisions. These are local preview capabilities and are not yet the production submission or settlement flow.
+The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, duplicate deals with seat swapping, public artifact and transcript commitments, score calculation, and refusal paths for illegal or failed agent decisions. Submission returns only commitment metadata. These are local preview capabilities and are not yet the production tournament scheduler or settlement flow.
 
 ## Product routes
 
 - **/**: Veil Arena landing and synthetic broadcast preview
 - **/sign-in**: Starknet wallet entry surface inherited from the existing foundation
 - **/workspace**: legacy synthetic proof workspace while the arena console is built
+
+Authenticated contributors submit a strategy through `POST /api/projects/:projectId/strategies`. The policy is validated, encrypted with the project's data key, and stored as sealed artifact data. The response contains the agent alias, display name, commitment, status, and timestamp, never the policy itself.
 
 Incomplete routes are described as incomplete. The preview never claims to move funds.
 

@@ -13,6 +13,7 @@ import { createMainnetReceiptProvider } from "@/server/strk20/rpc-receipt-provid
 import { ReceiptService } from "@/server/receipts/receipt-service";
 import { createReceiptSigner } from "@/server/receipts/signing";
 import { ProjectService } from "./project-service";
+import { StrategyService } from "@/server/arena/strategy-service";
 
 const previewKeyProvider = createPreviewKeyProvider();
 let persistedKeyProvider: KmsKeyProvider | undefined;
@@ -41,6 +42,10 @@ function dependencies() {
 
 export function getProjectService(): ProjectService {
   return new ProjectService(dependencies());
+}
+
+export function getStrategyService(): StrategyService {
+  return new StrategyService(dependencies());
 }
 
 export function getCheckpointService(): CheckpointService {

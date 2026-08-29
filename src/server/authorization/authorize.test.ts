@@ -44,6 +44,14 @@ describe("project authorization", () => {
     })).resolves.toMatchObject({ ok: true });
   });
 
+  it("allows contributors to submit a sealed strategy", async () => {
+    await expect(authorizeProject(repositoryFor(["contributor"]), {
+      projectId: "project-1",
+      walletFingerprint: "contributor-fp",
+      action: "submit_strategy",
+    })).resolves.toMatchObject({ ok: true });
+  });
+
   it("refuses an auditor evidence access path", async () => {
     await expect(authorizeCheckpoint(repositoryFor(["auditor"]), {
       checkpoint,
