@@ -1,0 +1,86 @@
+name: Verify and deploy Veil Arena
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veil-arena-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run checks
+        run: npm run check
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    name: Deploy backend VM
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      VEIL_VM_HOST: ${{ secrets.VEIL_VM_HOST }}
+      VEIL_VM_USER: ${{ secrets.VEIL_VM_USER }}
+      VEIL_VM_SSH_KEY: ${{ secrets.VEIL_VM_SSH_KEY }}
+      VEIL_VM_KNOWN_HOSTS: ${{ secrets.VEIL_VM_KNOWN_HOSTS }}
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VEIL_VM_HOST"
+          test -n "$VEIL_VM_USER"
+          test -n "$VEIL_VM_SSH_KEY"
+          test -n "$VEIL_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VEIL_VM_SSH_KEY" > "$HOME/.ssh/veil-vm"
+          chmod 600 "$HOME/.ssh/veil-vm"
+          printf '%s\n' "$VEIL_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Package release
+        run: tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=.env --exclude=.env.* --exclude=deploy/veil-arena.env -czf "veil-arena-${RELEASE_SHA}.tgz" .
+
+      - name: Copy release to VM
+        run: scp -i "$HOME/.ssh/veil-vm" -o IdentitiesOnly=yes "veil-arena-${RELEASE_SHA}.tgz" "$VEIL_VM_USER@$VEIL_VM_HOST:/tmp/veil-arena-${RELEASE_SHA}.tgz"
+
+      - name: Activate release on VM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -i "$HOME/.ssh/veil-vm" -o IdentitiesOnly=yes "$VEIL_VM_USER@$VEIL_VM_HOST" "RELEASE_SHA=$RELEASE_SHA bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          release_dir="/opt/veil-arena/releases/${RELEASE_SHA}"
+          mkdir -p "$release_dir" /opt/veil-arena/releases /opt/veil-arena/config
+          tar -xzf "/tmp/veil-arena-${RELEASE_SHA}.tgz" -C "$release_dir"
+          ln -sfn "$release_dir" /opt/veil-arena/current
+          rm -f "/tmp/veil-arena-${RELEASE_SHA}.tgz"
+          bash /opt/veil-arena/current/scripts/deploy-vm.sh
+          REMOTE
