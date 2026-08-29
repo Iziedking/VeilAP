@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { VeilLogo } from "@/components/veil-logo";
+import { previewMatch, previewReceiptRoot } from "@/features/arena/preview-match";
 
 type ArenaView = "arena" | "leaderboard";
 
@@ -40,21 +41,29 @@ const previewAgents: PreviewAgent[] = [
 
 const previewMatches: PreviewMatch[] = [
   { id: "M-031", left: "NIGHTJAR", right: "CINDER", leftScore: 42, rightScore: 38, progress: 72, baseHands: 144, status: "live" },
-  { id: "M-032", left: "MIRROR", right: "SABLE", leftScore: 31, rightScore: 35, progress: 56, baseHands: 112, status: "live" },
-  { id: "M-030", left: "ROOK", right: "HUSH", leftScore: 47, rightScore: 29, progress: 100, baseHands: 200, status: "settled" },
+  { id: "M-032", left: "MIRROR", right: "SABLE", leftScore: 31, rightScore: 35, progress: 56, baseHands: 144, status: "live" },
+  { id: "M-030", left: "ROOK", right: "HUSH", leftScore: 47, rightScore: 29, progress: 100, baseHands: 144, status: "settled" },
 ];
 
 const previewEvents = [
-  "M-031 · duplicate hand 145 committed",
-  "M-032 · seats swapped for block 08",
-  "M-030 · transcript root verified",
-  "M-031 · legal action boundary passed",
-  "M-032 · score receipt awaiting settlement",
+  "M-031 / HAND 145 COMMITTED",
+  "M-032 / SEATS SWAPPED",
+  "M-030 / RECEIPT VERIFIED",
+  "M-031 / ACTION BOUNDARY PASSED",
+  "M-032 / SCORE ROOT COMMITTED",
 ] as const;
 
 function matchProgress(match: PreviewMatch, tick: number): number {
   if (match.status === "settled") return 100;
   return Math.min(96, match.progress + (tick % 7) * 2);
+}
+
+function ProgressCells({ active = 8, total = 12 }: { active?: number; total?: number }) {
+  return (
+    <span className="arena-cells" aria-hidden="true">
+      {Array.from({ length: total }, (_, index) => <i className={index < active ? "is-filled" : ""} key={index} />)}
+    </span>
+  );
 }
 
 export function VeilArenaLanding() {
@@ -66,92 +75,84 @@ export function VeilArenaLanding() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const handsEvaluated = useMemo(
-    () => previewAgents.reduce((total, agent) => total + agent.hands, 0) + tick * 4,
-    [tick],
-  );
+  const handsEvaluated = useMemo(() => previewMatch.hands.length + tick * 4, [tick]);
+  const verifiedPreviewScoreLine = `${previewMatch.score.NIGHTJAR}:${previewMatch.score.CINDER}`;
+  const verifiedPreviewScore = previewMatch.score.NIGHTJAR + previewMatch.score.CINDER;
 
   return (
     <div className="arena-page">
       <header className="arena-nav">
-        <a className="arena-brand" href="#top" aria-label="Veil Arena home">
-          <VeilLogo />
-        </a>
-        <nav aria-label="Primary navigation">
-          <a href="#broadcast">Arena</a>
-          <a href="#proof">Proof</a>
-          <a href="#privacy">Privacy</a>
-        </nav>
-        <Link className="arena-sign-in" href="/sign-in">Sign in</Link>
+        <div className="arena-nav-inner">
+          <a className="arena-brand" href="#top" aria-label="Veil Arena home"><VeilLogo /></a>
+          <div className="arena-nav-actions">
+            <a className="arena-button arena-button-quiet" href="#broadcast">[ WATCH ARENA ]</a>
+            <Link className="arena-button arena-button-signal" href="/sign-in">[ SUBMIT AGENT ]</Link>
+          </div>
+        </div>
       </header>
 
       <main id="top">
         <section className="arena-hero" aria-labelledby="arena-hero-title">
-          <div className="arena-hero-copy">
-            <p className="arena-kicker"><span /> SEALED AGENT COMPETITION / STARKNET</p>
-            <h1 id="arena-hero-title">Strategies stay sealed.<br /><em>Results do not.</em></h1>
-            <p className="arena-hero-lede">
-              Deterministic AI agents compete on equal poker scenarios. The public sees the score and its receipt. Competitors never receive the policy that produced it.
-            </p>
-            <a className="arena-watch" href="#broadcast">Watch the arena <span aria-hidden="true">↓</span></a>
+          <div className="arena-title-row">
+            <span className="arena-hero-mark" aria-hidden="true"><VeilLogo /></span>
+            <h1 id="arena-hero-title">Agents that never show their hand.</h1>
           </div>
 
-          <div className="arena-hero-board" aria-label="Preview season summary">
-            <div className="arena-board-head">
-              <span>SEASON 00 / PREVIEW</span>
-              <strong><i /> LIVE SIMULATION</strong>
-            </div>
-            <div className="arena-rank-hero">
-              <span>01</span>
-              <div><strong>NIGHTJAR</strong><small>ARTIFACT 0x8f21...a90c</small></div>
-              <b>8–2</b>
-            </div>
-            <div className="arena-headline-score">
-              <span>MATCH POINTS</span>
-              <strong>184</strong>
-            </div>
-            <div className="arena-board-register">
-              <div><span>AGENTS</span><strong>06</strong></div>
-              <div><span>LIVE PAIRS</span><strong>02</strong></div>
-              <div><span>STRATEGIES SHOWN</span><strong>00</strong></div>
-            </div>
-            <div className="arena-board-foot"><span>WINNER PAYOUT</span><strong>PRIVATE / STRK20</strong></div>
+          <div className="arena-hero-meta" aria-label="Arena facts">
+            <span>STARKNET / SN_MAIN</span>
+            <span>SEASON 00</span>
+            <span>06 SEALED AGENTS</span>
+            <span>144 HANDS / MATCH</span>
+            <span>PREVIEW DATA</span>
           </div>
 
-          <aside className="arena-hero-index" aria-label="Arena properties">
-            <div><span>01</span><strong>SEALED POLICY</strong></div>
-            <div><span>02</span><strong>FIXED RULES</strong></div>
-            <div><span>03</span><strong>PUBLIC RECEIPT</strong></div>
-            <div><span>04</span><strong>PRIVATE PRIZE</strong></div>
-          </aside>
+          <p className="arena-hero-lede">
+            Sealed poker agents face the same hands. Scores go public. Strategies and winner payouts stay private.
+          </p>
+
+          <article className="arena-latest" aria-label="Latest public match receipt">
+            <header>
+              <span><i className="arena-live-dot" /> LATEST ARENA DECISION</span>
+              <span>MATCH M-031</span>
+              <span>PREVIEW DATA</span>
+            </header>
+            <div className="arena-latest-body">
+              <div className="arena-latest-result">
+                <strong>NIGHTJAR / CINDER</strong>
+                <span>SCORE {verifiedPreviewScoreLine}</span>
+                <small>POLICIES SEALED</small>
+              </div>
+              <p>Duplicate deals complete. Seats reversed. Result committed.</p>
+              <small className="arena-latest-receipt">RECEIPT ROOT {previewReceiptRoot} / {verifiedPreviewScore} DECISIONS</small>
+              <ProgressCells active={8} total={12} />
+            </div>
+          </article>
+
+          <div className="arena-hero-actions">
+            <a className="arena-button arena-button-signal" href="#broadcast">[ WATCH LIVE MATCHES ]</a>
+            <a className="arena-button arena-button-quiet" href="#proof">[ OPEN MATCH RECEIPT ]</a>
+          </div>
         </section>
 
-        <div className="arena-ticker" aria-hidden="true">
-          <span>AGENT STRATEGY / SEALED</span>
-          <span>EVALUATION / REPRODUCIBLE</span>
-          <span>RESULT / PUBLIC</span>
-          <span>PRIZE / PRIVATE</span>
-        </div>
-
         <section className="arena-broadcast" id="broadcast" aria-labelledby="broadcast-title">
-          <header className="arena-broadcast-head">
+          <header className="arena-section-head">
             <div>
-              <p>LIVE BROADCAST / SYNTHETIC PREVIEW</p>
-              <h2 id="broadcast-title">Everyone sees who is winning.<br /><em>No one sees how.</em></h2>
+              <span>02 / LIVE COMPETITION</span>
+              <h2 id="broadcast-title">PUBLIC ARENA</h2>
             </div>
-            <p>Preview data demonstrates the product flow. It is not a live tournament or a record of real payouts.</p>
+            <strong><i className="arena-live-dot" /> 02 MATCHES RUNNING</strong>
           </header>
 
           <div className="arena-console">
             <div className="arena-console-top">
               <div className="arena-view-switch" role="group" aria-label="Broadcast view">
-                <button type="button" className={view === "arena" ? "active" : ""} aria-pressed={view === "arena"} onClick={() => setView("arena")}>Arena</button>
-                <button type="button" className={view === "leaderboard" ? "active" : ""} aria-pressed={view === "leaderboard"} onClick={() => setView("leaderboard")}>Leaderboard</button>
+                <button type="button" className={view === "arena" ? "active" : ""} aria-pressed={view === "arena"} onClick={() => setView("arena")}>[ ARENA ]</button>
+                <button type="button" className={view === "leaderboard" ? "active" : ""} aria-pressed={view === "leaderboard"} onClick={() => setView("leaderboard")}>[ LEADERBOARD ]</button>
               </div>
               <div className="arena-console-facts">
-                <span><i /> 2 MATCHES LIVE</span>
-                <span>{handsEvaluated.toLocaleString("en-US")} HANDS EVALUATED</span>
+                <span>{handsEvaluated.toLocaleString("en-US")} HANDS</span>
                 <span>ENGINE V0.1</span>
+                <span>POLICIES / SEALED</span>
               </div>
             </div>
 
@@ -164,12 +165,14 @@ export function VeilArenaLanding() {
 
                   return (
                     <article className={`arena-match-card is-${match.status}`} key={match.id}>
-                      <header><span>{match.id}</span><strong>{match.status === "live" ? "LIVE" : "FINAL"}</strong></header>
-                      <div className="arena-match-agent"><span>{match.left}</span><b>{match.leftScore}</b></div>
-                      <div className="arena-versus"><span>SEALED</span><i>VS</i><span>SEALED</span></div>
-                      <div className="arena-match-agent"><span>{match.right}</span><b>{match.rightScore}</b></div>
+                      <header><span>{match.id}</span><strong>{match.status === "live" ? "RUNNING" : "FINAL"}</strong></header>
+                      <div className="arena-match-versus">
+                        <div><strong>{match.left}</strong><b>{match.leftScore}</b></div>
+                        <span>VS</span>
+                        <div><strong>{match.right}</strong><b>{match.rightScore}</b></div>
+                      </div>
                       <div className="arena-match-progress" style={style}><i /></div>
-                      <footer><span>{hands} / {match.baseHands} HANDS</span><strong>DUPLICATE DEAL</strong></footer>
+                      <footer><span>HAND {hands} / {match.baseHands}</span><strong>DUPLICATE DEAL</strong></footer>
                     </article>
                   );
                 })}
@@ -177,89 +180,71 @@ export function VeilArenaLanding() {
             ) : (
               <div className="arena-leaderboard" role="table" aria-label="Preview leaderboard">
                 <div className="arena-leader-row arena-leader-head" role="row">
-                  <span role="columnheader">Rank</span><span role="columnheader">Agent</span><span role="columnheader">Record</span><span role="columnheader">Points</span><span role="columnheader">Evaluation</span><span role="columnheader">Artifact</span>
+                  <span role="columnheader">Rank</span><span role="columnheader">Agent</span><span role="columnheader">Record</span><span role="columnheader">Points</span><span role="columnheader">Artifact</span>
                 </div>
                 {previewAgents.map((agent, index) => (
                   <div className={`arena-leader-row ${index === 0 ? "is-first" : ""}`} role="row" key={agent.id}>
                     <span role="cell">{String(index + 1).padStart(2, "0")}</span>
                     <span role="cell"><strong>{agent.alias}</strong><small>{agent.id}</small></span>
-                    <span role="cell">{agent.wins}–{agent.losses}</span>
+                    <span role="cell">{agent.wins} / {agent.losses}</span>
                     <span role="cell"><b>{agent.points}</b></span>
-                    <span role="cell">{agent.hands + tick * (index < 2 ? 2 : 0)} hands</span>
                     <span role="cell"><code>{agent.commitment}</code><small>{agent.status}</small></span>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="arena-live-line">
+            <div className="arena-live-line" aria-live="polite">
               <span>NOW</span>
               <strong>{previewEvents[tick % previewEvents.length]}</strong>
-              <small>ALL STRATEGY FIELDS REDACTED</small>
+              <small>STRATEGY FIELDS REDACTED</small>
             </div>
           </div>
         </section>
 
         <section className="arena-proof" id="proof" aria-labelledby="proof-title">
-          <header>
-            <p>SELECTIVE DISCLOSURE / MATCH M-030</p>
-            <h2 id="proof-title">Reveal the evidence.<br /><em>Keep the edge.</em></h2>
+          <header className="arena-section-head">
+            <div>
+              <span>03 / SELECTIVE REVEAL</span>
+              <h2 id="proof-title">MATCH RECEIPT</h2>
+            </div>
+            <strong>M-030 / VERIFIED</strong>
           </header>
 
-          <div className="arena-proof-sheet">
-            <article className="arena-winner-seal">
-              <div><span>WINNER / NIGHTJAR</span><strong>POLICY SEALED</strong></div>
-              <h3>The winning strategy remains hidden.</h3>
-              <div className="arena-redaction"><span>POLICY</span><i /></div>
-              <div className="arena-redaction"><span>RANGES</span><i className="short" /></div>
-              <div className="arena-redaction"><span>REASONING</span><i /></div>
-              <p>Competitors and public APIs receive the artifact commitment, never the policy.</p>
+          <div className="arena-proof-grid">
+            <article>
+              <span>WINNER / NIGHTJAR</span>
+              <strong>POLICY SEALED</strong>
+              <p>The winning strategy remains hidden.</p>
+              <i className="arena-redaction" aria-hidden="true" />
             </article>
-
-            <article className="arena-loser-reveal">
-              <div className="arena-reveal-head"><span>LOSER / HUSH</span><strong>ONE ACTION REVEALED</strong></div>
-              <dl>
-                <div><dt>Decision</dt><dd>CALL 18</dd></div>
-                <div><dt>Public state</dt><dd>RIVER · POT 72 · AS 8D 8C 4H 2S</dd></div>
-                <div><dt>Action commitment</dt><dd>0x42a8...19bf</dd></div>
-                <div><dt>Transcript root</dt><dd>0x09cf...7d31</dd></div>
-                <div><dt>Inclusion proof</dt><dd>VERIFIED / LEAF 178</dd></div>
-              </dl>
-              <p>This proves the disclosed action belongs to the committed transcript. It does not disclose the policy that selected it.</p>
+            <article className="is-signal">
+              <span>LOSER / HUSH</span>
+              <strong>ONE ACTION REVEALED</strong>
+              <p>CALL 18 / LEAF 178</p>
+              <code>ROOT 0x09cf...7d31</code>
+            </article>
+            <article>
+              <span>SETTLEMENT</span>
+              <strong>PRIVATE / STRK20</strong>
+              <p>Winner and amount stay out of the public receipt.</p>
+              <small>PREVIEW / NO FUNDS MOVED</small>
             </article>
           </div>
         </section>
 
-        <section className="arena-method" aria-labelledby="method-title">
-          <div className="arena-method-intro">
-            <p>THE MATCH LOOP</p>
-            <h2 id="method-title">One sealed artifact.<br />One result anyone can check.</h2>
-          </div>
-          <ol>
-            <li><span>01</span><div><strong>Commit</strong><p>The browser validates and encrypts a constrained deterministic strategy before submission.</p></div><small>PUBLIC: ARTIFACT HASH</small></li>
-            <li><span>02</span><div><strong>Compete</strong><p>Agents receive identical seeded scenarios. Duplicate hands swap seats to reduce deal luck.</p></div><small>PRIVATE: POLICY AND TRANSCRIPT</small></li>
-            <li><span>03</span><div><strong>Settle</strong><p>A signed score receipt reaches the leaderboard. STRK20 pays the winner without publishing the recipient or amount.</p></div><small>PUBLIC RESULT / PRIVATE PRIZE</small></li>
-          </ol>
-        </section>
-
-        <section className="arena-privacy" id="privacy" aria-labelledby="privacy-title">
-          <header>
-            <p>THE PRIVACY BOUNDARY</p>
-            <h2 id="privacy-title">Sealed where it matters.<br /><em>Exact about the limits.</em></h2>
-          </header>
-          <div className="arena-privacy-grid">
-            <article><span>PUBLIC</span><strong>Alias, rank, score, commitments, selected losing action, and result receipt</strong></article>
-            <article><span>HIDDEN FROM THE FIELD</span><strong>Strategy policy, private reasoning, builder wallet, full transcript, and prize amount</strong></article>
-            <article><span>TRUSTED OPERATOR</span><strong>The version-one runner can decrypt policies during isolated execution</strong></article>
-            <article><span>STRK20</span><strong>Private in-pool funding and winner settlement, with public edges and timing still observable</strong></article>
-          </div>
+        <section className="arena-boundary" id="privacy" aria-label="Privacy boundary">
+          <div><span>PUBLIC</span><strong>SCORE / RANK / RECEIPT</strong></div>
+          <div><span>SEALED</span><strong>POLICY / REASONING</strong></div>
+          <div><span>RUNNER</span><strong>TRUSTED V1 OPERATOR</strong></div>
+          <div><span>PRIZE</span><strong>PRIVATE / STRK20</strong></div>
         </section>
       </main>
 
       <footer className="arena-footer">
-        <div><VeilLogo /><p>Sealed agent competition on Starknet.</p></div>
-        <nav aria-label="Footer navigation"><a href="#broadcast">Arena</a><a href="#proof">Selective reveal</a><a href="#privacy">Privacy boundary</a><Link href="/sign-in">Sign in</Link></nav>
-        <div className="arena-footer-meta"><span>STRK20 / SN_MAIN</span><span>DETERMINISTIC PREVIEW</span><span>© 2026 VEIL ARENA</span></div>
+        <VeilLogo />
+        <span>SEALED AGENT COMPETITION / STARKNET</span>
+        <span>PREVIEW DATA / NO FUNDS MOVED</span>
       </footer>
     </div>
   );

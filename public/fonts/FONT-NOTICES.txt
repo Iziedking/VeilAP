@@ -1,0 +1,15 @@
+Veil Arena font notices
+
+Silkscreen
+Copyright 2001 The Silkscreen Project Authors.
+Source: https://github.com/googlefonts/silkscreen
+License: SIL Open Font License, Version 1.1.
+
+Departure Mono
+Copyright 2022-2024 Helena Zhang (helenazhang.com).
+Source: https://departuremono.com
+License: SIL Open Font License, Version 1.1.
+
+Both fonts are distributed under the SIL Open Font License, Version 1.1.
+The full license text is available at https://openfontlicense.org and in the
+upstream font repositories named above.

@@ -99,12 +99,13 @@ The repository also contains tested infrastructure from the earlier VeilAP direc
 
 The following are not complete yet:
 
-- deterministic poker policy schema and match engine;
 - encrypted agent submission;
 - tournament scheduling;
-- match transcript Merkle proofs;
+- production transcript inclusion proofs and signed match receipts;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
+
+The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, duplicate deals with seat swapping, public artifact and transcript commitments, score calculation, and refusal paths for illegal or failed agent decisions. These are local preview capabilities and are not yet the production submission or settlement flow.
 
 ## Product routes
 
@@ -118,7 +119,8 @@ Incomplete routes are described as incomplete. The preview never claims to move 
 
 - Next.js 16 and React 19
 - strict TypeScript
-- local Manrope and Newsreader variable fonts
+- local Silkscreen and Departure Mono fonts for the arena surface
+- local Manrope and Newsreader variable fonts for retained legacy surfaces
 - Drizzle ORM and Postgres schema
 - AWS KMS envelope encryption seam
 - Ed25519 selective receipt signing
@@ -149,7 +151,7 @@ npm run test:e2e
 npm run build
 ```
 
-`npm run prove` currently exercises the inherited deterministic proof and refusal paths. It will be replaced with the arena artifact, transcript, tampering, and selective-reveal proof as the match core lands.
+`npm run prove` currently exercises the inherited deterministic proof and refusal paths. The arena engine and receipt-boundary tests run as part of the standard Vitest suite.
 
 ## STRK20 sprint record
 
@@ -176,7 +178,9 @@ Only successful mainnet transactions that touch the pinned pool will enter `strk
 
 ## What Veil Arena can prove
 
-When the planned match receipt is implemented, Veil Arena can prove that a committed artifact was evaluated by the declared engine and seed, that the published score belongs to the committed transcript, and that a selectively disclosed action belongs to that transcript.
+The current deterministic engine computes a public receipt structure that binds the artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Its tests also verify that private hole cards and policy objects do not enter the public receipt.
+
+Production signing, transcript inclusion proofs, selective losing-action disclosure, and private payout receipts are still planned work.
 
 It does not prove that the operator never accessed plaintext, that an agent is universally optimal, that no implementation bug exists, or that public chain edges cannot be correlated.
 

@@ -182,7 +182,8 @@
 
 .sign-in-page { min-height: 100vh; padding: 28px; display: grid; grid-template-rows: auto 1fr; background: var(--paper); color: var(--ink); }
 .sign-in-header { display: flex; align-items: center; justify-content: space-between; }
-.sign-in-header > a:last-child { min-height: 44px; display: flex; align-items: center; font-size: 10px; font-weight: 700; }
+.sign-in-header > a { min-height: 44px; display: flex; align-items: center; }
+.sign-in-header > a:last-child { font-size: 10px; font-weight: 700; }
 .sign-in-main { width: min(1120px, 100%); margin: 40px auto; display: grid; grid-template-columns: 1fr 440px; gap: 90px; align-items: center; }
 .sign-in-copy span { color: var(--signal-dark); font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
 .sign-in-copy h1 { max-width: 650px; margin: 26px 0 0; font-size: clamp(54px, 6vw, 88px); font-weight: 530; line-height: .95; letter-spacing: -.06em; }
