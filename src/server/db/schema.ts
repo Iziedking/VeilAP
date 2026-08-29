@@ -38,11 +38,36 @@ export const arenaMatchReceipts = pgTable(
     rightDisplayName: text("right_display_name").notNull(),
     publicReceipt: jsonb("public_receipt").notNull(),
     encryptedSeed: jsonb("encrypted_seed").notNull(),
+    handCount: integer("hand_count"),
     status: text("status").notNull().default("completed"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
     projectMatch: uniqueIndex("arena_match_receipts_project_match_idx").on(table.projectId, table.id),
+  }),
+);
+
+export const arenaMatchReveals = pgTable(
+  "arena_match_reveals",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    matchId: text("match_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    handIndex: integer("hand_index").notNull(),
+    handNumber: integer("hand_number").notNull(),
+    position: text("position").notNull(),
+    action: text("action").notNull(),
+    seatSwapped: boolean("seat_swapped").notNull(),
+    actionCommitment: text("action_commitment").notNull(),
+    handCommitment: text("hand_commitment").notNull(),
+    transcriptRoot: text("transcript_root").notNull(),
+    publicHandReceipt: jsonb("public_hand_receipt").notNull(),
+    proof: jsonb("proof").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    projectMatch: uniqueIndex("arena_match_reveals_project_match_idx").on(table.projectId, table.matchId),
   }),
 );
 

@@ -6,6 +6,8 @@ import {
   evaluateHand,
   legalActions,
   runMatch,
+  transcriptProof,
+  verifyTranscriptProof,
   type AgentDefinition,
   type Card,
 } from "./poker-engine";
@@ -72,6 +74,26 @@ describe("poker engine", () => {
     expect(result.value.hands[0].outcomes[0]?.agentId).toBe("A");
     expect(result.value.hands[1].outcomes[0]?.agentId).toBe("A");
     expect(result.value.publicReceipt.transcriptRoot).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("creates inclusion proofs for every public transcript leaf", () => {
+    const result = runMatch({
+      agents: [
+        { artifactCommitment: commitment("agent-a"), id: "A", policy: callPolicy },
+        { artifactCommitment: commitment("agent-b"), id: "B", policy: raisePolicy },
+      ],
+      hands: 3,
+      matchId: "M-PROOF",
+      seed: "fixed-seed",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected match to run.");
+    expect(result.value.publicHandReceipts).toHaveLength(6);
+    result.value.publicHandReceipts.forEach((receipt, index) => {
+      const proof = transcriptProof(result.value.publicHandReceipts, index);
+      expect(verifyTranscriptProof(receipt, proof, result.value.publicReceipt.transcriptRoot)).toBe(true);
+      expect(JSON.stringify({ receipt, proof })).not.toContain("holeCards");
+    });
   });
 
   it("is deterministic and keeps private cards out of the public receipt", () => {

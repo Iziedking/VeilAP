@@ -17,7 +17,7 @@ const policy = (displayName: string, fallbackAction: "fold" | "check" | "raise")
   fallbackAction,
 });
 
-async function setup() {
+async function setup(actions: { cinder?: "fold" | "check" | "raise"; ember?: "fold" | "check" | "raise" } = {}) {
   const repositories = createMemoryRepositories();
   const keyProvider = createPreviewKeyProvider();
   let nextId = 0;
@@ -44,14 +44,14 @@ async function setup() {
     projectId: project.value.id,
     actorWalletAddress: contributor,
     agentId: "CINDER",
-    policy: policy("Cinder", "check"),
+    policy: policy("Cinder", actions.cinder ?? "check"),
   });
   if (!cinder.ok) throw new Error("TEST_CINDER_" + cinder.code);
   const ember = await strategies.submitStrategy({
     projectId: project.value.id,
     actorWalletAddress: contributor,
     agentId: "EMBER",
-    policy: policy("Ember", "raise"),
+    policy: policy("Ember", actions.ember ?? "raise"),
   });
   if (!ember.ok) throw new Error("TEST_EMBER_" + ember.code);
   if (!(await repositories.projects.getArenaStrategyArtifact(project.value.id, "CINDER"))) {
@@ -109,5 +109,47 @@ describe("ArenaMatchService", () => {
     expect(result.value.matches).toHaveLength(1);
     expect(result.value.leaderboard).toHaveLength(2);
     expect(result.value.leaderboard.every((entry) => entry.matches === 1)).toBe(true);
+  });
+
+  it("selectively reveals one losing action with a real inclusion proof", async () => {
+    const { repositories, projectId, service } = await setup({ cinder: "fold", ember: "raise" });
+    const match = await service.runMatch({
+      projectId,
+      actorWalletAddress: company,
+      leftAgentId: "CINDER",
+      rightAgentId: "EMBER",
+      hands: 3,
+    });
+    expect(match.ok).toBe(true);
+    if (!match.ok) throw new Error(match.code);
+
+    const reveal = await service.revealLosingAction({
+      projectId,
+      actorWalletAddress: company,
+      matchId: match.value.matchId,
+      handIndex: 1,
+    });
+    expect(reveal.ok).toBe(true);
+    if (!reveal.ok) throw new Error(reveal.code);
+    expect(reveal.value.action).toBe("fold");
+    expect(reveal.value.handIndex).toBe(1);
+    expect(reveal.value.proof).toEqual(expect.any(Array));
+    expect(JSON.stringify(reveal.value)).not.toContain("holeCards");
+    expect(JSON.stringify(reveal.value)).not.toContain("policy");
+
+    const stored = await repositories.projects.getArenaMatchReveal(projectId, match.value.matchId);
+    expect(stored?.agentId).toBe("CINDER");
+    const publicArena = await service.getPublicArena(projectId);
+    expect(publicArena.ok).toBe(true);
+    if (!publicArena.ok) throw new Error(publicArena.code);
+    expect(publicArena.value.matches[0]?.selectiveReveal?.action).toBe("fold");
+
+    const duplicate = await service.revealLosingAction({
+      projectId,
+      actorWalletAddress: company,
+      matchId: match.value.matchId,
+      handIndex: 3,
+    });
+    expect(duplicate).toEqual(reveal);
   });
 });

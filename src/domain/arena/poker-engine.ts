@@ -56,6 +56,7 @@ export type HandResult = Readonly<{
 
 export type PublicHandReceipt = Readonly<{
   actionCommitment: string;
+  actionCommitments: Readonly<Record<AgentId, string>>;
   boardCommitment: string;
   handNumber: number;
   handCommitment: string;
@@ -63,10 +64,18 @@ export type PublicHandReceipt = Readonly<{
   winner: AgentId | "tie";
 }>;
 
+export type TranscriptProofNode = Readonly<{
+  side: "left" | "right";
+  sibling: string;
+}>;
+
+export type TranscriptProof = readonly TranscriptProofNode[];
+
 export type MatchResult = Readonly<{
   engineVersion: string;
   hands: readonly HandResult[];
   matchId: string;
+  publicHandReceipts: readonly PublicHandReceipt[];
   publicReceipt: PublicMatchReceipt;
   score: Readonly<Record<AgentId, number>>;
   seedCommitment: string;
@@ -229,6 +238,43 @@ export function transcriptRoot(receipts: readonly PublicHandReceipt[]): string {
   return level[0];
 }
 
+export function transcriptProof(receipts: readonly PublicHandReceipt[], index: number): TranscriptProof {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= receipts.length) {
+    throw new Error("TRANSCRIPT_LEAF_INDEX_INVALID");
+  }
+  let level = receipts.map((receipt) => receipt.handCommitment);
+  let levelIndex = index;
+  const proof: TranscriptProofNode[] = [];
+  while (level.length > 1) {
+    const siblingIndex = levelIndex % 2 === 0 ? levelIndex + 1 : levelIndex - 1;
+    proof.push({
+      side: levelIndex % 2 === 0 ? "right" : "left",
+      sibling: level[siblingIndex] ?? level[levelIndex]!,
+    });
+    const next: string[] = [];
+    for (let cursor = 0; cursor < level.length; cursor += 2) {
+      next.push(commitment({ left: level[cursor], right: level[cursor + 1] ?? level[cursor] }));
+    }
+    level = next;
+    levelIndex = Math.floor(levelIndex / 2);
+  }
+  return proof;
+}
+
+export function verifyTranscriptProof(
+  receipt: PublicHandReceipt,
+  proof: TranscriptProof,
+  root: string,
+): boolean {
+  let current = receipt.handCommitment;
+  for (const node of proof) {
+    current = node.side === "left"
+      ? commitment({ left: node.sibling, right: current })
+      : commitment({ left: current, right: node.sibling });
+  }
+  return current === root;
+}
+
 function runHand(
   leftAgent: AgentDefinition,
   rightAgent: AgentDefinition,
@@ -327,9 +373,14 @@ export function runMatch(input: Readonly<{
       handResults.push(result.value);
       if (result.value.winner !== "tie") score[result.value.winner] += 1;
       const actionCommitment = commitment(result.value.outcomes.map((outcome) => ({ agentId: outcome.agentId, action: outcome.action })));
+      const actionCommitments: Record<AgentId, string> = {};
+      for (const outcome of result.value.outcomes) {
+        actionCommitments[outcome.agentId] = commitment({ agentId: outcome.agentId, action: outcome.action });
+      }
       const boardCommitment = commitment(result.value.board);
       const publicHand = {
         actionCommitment,
+        actionCommitments,
         boardCommitment,
         handNumber,
         handCommitment: commitment({
@@ -352,6 +403,7 @@ export function runMatch(input: Readonly<{
       engineVersion: ARENA_ENGINE_VERSION,
       hands: handResults,
       matchId: input.matchId,
+      publicHandReceipts: receiptLeaves,
       publicReceipt: {
         artifactCommitments: { [firstAgent.id]: firstAgent.artifactCommitment, [secondAgent.id]: secondAgent.artifactCommitment },
         engineVersion: ARENA_ENGINE_VERSION,

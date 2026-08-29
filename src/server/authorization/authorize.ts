@@ -10,6 +10,7 @@ export type AuthorizationAction =
   | "create_agreement"
   | "submit_strategy"
   | "run_arena_match"
+  | "reveal_losing_action"
   | "submit_checkpoint"
   | "read_checkpoint";
 
@@ -49,6 +50,7 @@ export async function authorizeProject(
     || (input.action === "create_agreement" && hasRole(roles, "company"))
     || (input.action === "submit_strategy" && hasRole(roles, "contributor"))
     || (input.action === "run_arena_match" && (hasRole(roles, "company") || hasRole(roles, "reviewer")))
+    || (input.action === "reveal_losing_action" && (hasRole(roles, "company") || hasRole(roles, "reviewer")))
     || (input.action === "submit_checkpoint" && hasRole(roles, "contributor"));
 
   if (!allowed) return { ok: false, code: "ROLE_FORBIDDEN" };

@@ -6,6 +6,7 @@ import type { VeilapDatabase } from "./client";
 import {
   arenaStrategyArtifacts,
   arenaMatchReceipts,
+  arenaMatchReveals,
   agreementVersions,
   auditEvents,
   authNonces,
@@ -208,9 +209,28 @@ export interface ArenaMatchReceiptRecord {
   rightDisplayName: string;
   publicReceipt: unknown;
   encryptedSeed: EncryptedField;
+  handCount?: number;
   status: "completed";
   createdAt: Date;
 }
+
+export type ArenaMatchRevealRecord = {
+  id: string;
+  projectId: string;
+  matchId: string;
+  agentId: string;
+  handIndex: number;
+  handNumber: number;
+  position: "button" | "big_blind";
+  action: "fold" | "check" | "call" | "raise";
+  seatSwapped: boolean;
+  actionCommitment: string;
+  handCommitment: string;
+  transcriptRoot: string;
+  publicHandReceipt: unknown;
+  proof: unknown;
+  createdAt: Date;
+};
 
 export interface ProjectRepository extends ProjectKeyRepository {
   saveMember(record: ProjectMemberRecord): Promise<void>;
@@ -252,6 +272,9 @@ export interface ProjectRepository extends ProjectKeyRepository {
   saveArenaMatchReceipt(record: ArenaMatchReceiptRecord): Promise<void>;
   getArenaMatchReceipt(projectId: string, matchId: string): Promise<ArenaMatchReceiptRecord | undefined>;
   listArenaMatchReceipts(projectId: string): Promise<ArenaMatchReceiptRecord[]>;
+  saveArenaMatchReveal(record: ArenaMatchRevealRecord): Promise<void>;
+  getArenaMatchReveal(projectId: string, matchId: string): Promise<ArenaMatchRevealRecord | undefined>;
+  listArenaMatchReveals(projectId: string): Promise<ArenaMatchRevealRecord[]>;
 }
 
 function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$inferSelect): ArenaStrategyArtifactRecord {
@@ -279,7 +302,38 @@ function toArenaMatchReceiptRecord(row: typeof arenaMatchReceipts.$inferSelect):
     rightDisplayName: row.rightDisplayName,
     publicReceipt: row.publicReceipt,
     encryptedSeed: row.encryptedSeed as EncryptedField,
+    handCount: row.handCount ?? undefined,
     status: "completed",
+    createdAt: row.createdAt,
+  };
+}
+
+function revealPosition(value: string): ArenaMatchRevealRecord["position"] {
+  if (value === "button" || value === "big_blind") return value;
+  throw new Error("ARENA_REVEAL_POSITION_INVALID");
+}
+
+function revealAction(value: string): ArenaMatchRevealRecord["action"] {
+  if (value === "fold" || value === "check" || value === "call" || value === "raise") return value;
+  throw new Error("ARENA_REVEAL_ACTION_INVALID");
+}
+
+function toArenaMatchRevealRecord(row: typeof arenaMatchReveals.$inferSelect): ArenaMatchRevealRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    matchId: row.matchId,
+    agentId: row.agentId,
+    handIndex: row.handIndex,
+    handNumber: row.handNumber,
+    position: revealPosition(row.position),
+    action: revealAction(row.action),
+    seatSwapped: row.seatSwapped,
+    actionCommitment: row.actionCommitment,
+    handCommitment: row.handCommitment,
+    transcriptRoot: row.transcriptRoot,
+    publicHandReceipt: row.publicHandReceipt,
+    proof: row.proof,
     createdAt: row.createdAt,
   };
 }
@@ -719,6 +773,7 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           rightDisplayName: record.rightDisplayName,
           publicReceipt: record.publicReceipt,
           encryptedSeed: record.encryptedSeed,
+          handCount: record.handCount ?? null,
           status: record.status,
           createdAt: record.createdAt,
         });
@@ -738,6 +793,41 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .where(eq(arenaMatchReceipts.projectId, projectId))
           .orderBy(asc(arenaMatchReceipts.createdAt));
         return rows.map(toArenaMatchReceiptRecord);
+      },
+      async saveArenaMatchReveal(record) {
+        await db.insert(arenaMatchReveals).values({
+          id: record.id,
+          projectId: record.projectId,
+          matchId: record.matchId,
+          agentId: record.agentId,
+          handIndex: record.handIndex,
+          handNumber: record.handNumber,
+          position: record.position,
+          action: record.action,
+          seatSwapped: record.seatSwapped,
+          actionCommitment: record.actionCommitment,
+          handCommitment: record.handCommitment,
+          transcriptRoot: record.transcriptRoot,
+          publicHandReceipt: record.publicHandReceipt,
+          proof: record.proof,
+          createdAt: record.createdAt,
+        });
+      },
+      async getArenaMatchReveal(projectId, matchId) {
+        const rows = await db
+          .select()
+          .from(arenaMatchReveals)
+          .where(and(eq(arenaMatchReveals.projectId, projectId), eq(arenaMatchReveals.matchId, matchId)))
+          .limit(1);
+        return rows[0] ? toArenaMatchRevealRecord(rows[0]) : undefined;
+      },
+      async listArenaMatchReveals(projectId) {
+        const rows = await db
+          .select()
+          .from(arenaMatchReveals)
+          .where(eq(arenaMatchReveals.projectId, projectId))
+          .orderBy(asc(arenaMatchReveals.createdAt));
+        return rows.map(toArenaMatchRevealRecord);
       },
     },
   };
@@ -763,6 +853,7 @@ export function createMemoryRepositories(): {
   const selectiveReceiptRows = new Map<string, SelectiveReceiptRecord>();
   const arenaStrategyArtifactRows = new Map<string, ArenaStrategyArtifactRecord>();
   const arenaMatchReceiptRows = new Map<string, ArenaMatchReceiptRecord>();
+  const arenaMatchRevealRows = new Map<string, ArenaMatchRevealRecord>();
   return {
     nonces: {
       async saveNonce(record) {
@@ -989,6 +1080,23 @@ export function createMemoryRepositories(): {
       },
       async listArenaMatchReceipts(projectId) {
         return [...arenaMatchReceiptRows.values()]
+          .filter((record) => record.projectId === projectId)
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async saveArenaMatchReveal(record) {
+        if (arenaMatchRevealRows.has(record.id)) throw new Error("ARENA_MATCH_REVEAL_ALREADY_EXISTS");
+        if ([...arenaMatchRevealRows.values()].some((row) => row.projectId === record.projectId && row.matchId === record.matchId)) {
+          throw new Error("ARENA_MATCH_REVEAL_ALREADY_EXISTS");
+        }
+        arenaMatchRevealRows.set(record.id, structuredClone(record));
+      },
+      async getArenaMatchReveal(projectId, matchId) {
+        const record = [...arenaMatchRevealRows.values()].find((row) => row.projectId === projectId && row.matchId === matchId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async listArenaMatchReveals(projectId) {
+        return [...arenaMatchRevealRows.values()]
           .filter((record) => record.projectId === projectId)
           .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
           .map((record) => structuredClone(record));

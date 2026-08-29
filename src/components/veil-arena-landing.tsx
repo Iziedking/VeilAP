@@ -31,6 +31,15 @@ type PublicMatch = {
   winner: string | "tie";
   seedCommitment: string;
   transcriptRoot: string;
+  handCount: number | null;
+  selectiveReveal?: {
+    action: "fold" | "check" | "call" | "raise";
+    agentId: string;
+    handIndex: number;
+    handNumber: number;
+    position: "button" | "big_blind";
+    transcriptRoot: string;
+  };
   createdAt: string;
 };
 
@@ -132,7 +141,7 @@ export function VeilArenaLanding() {
                     <span>SCORE {latestScore}</span>
                     <small>POLICIES SEALED</small>
                   </div>
-                  <p>Duplicate deals complete. Seats reversed. Result committed.</p>
+                  <p>Duplicate deals complete. Seats reversed. Result committed. {latestMatch.selectiveReveal ? "One losing action is disclosed." : "No action is disclosed."}</p>
                   <small className="arena-latest-receipt">TRANSCRIPT ROOT {shortCommitment(latestMatch.transcriptRoot)}</small>
                 </>
               ) : (
@@ -241,10 +250,10 @@ export function VeilArenaLanding() {
               <code>{latestMatch ? "SEED " + shortCommitment(latestMatch.seedCommitment) : "NO SEALED RUN"}</code>
             </article>
             <article>
-              <span>SETTLEMENT</span>
-              <strong>PRIVATE / STRK20</strong>
-              <p>Winner and amount stay out of the public receipt.</p>
-              <small>SETTLEMENT IS A SEPARATE BUILD STAGE</small>
+              <span>LOSING MOVE</span>
+              <strong>{latestMatch?.selectiveReveal ? latestMatch.selectiveReveal.action.toUpperCase() : "SEALED"}</strong>
+              <p>{latestMatch?.selectiveReveal ? "One losing action is revealed for an accountable audit." : "An authorized reviewer may reveal one losing action."}</p>
+              <small>{latestMatch?.selectiveReveal ? "LEAF " + String(latestMatch.selectiveReveal.handIndex).padStart(2, "0") + " / PROOF ATTACHED" : "WINNER STRATEGY STAYS SEALED"}</small>
             </article>
           </div>
         </section>

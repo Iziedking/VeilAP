@@ -2,12 +2,13 @@ import { randomBytes, randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
 import type { PublicMatchReceipt } from "@/domain/arena/poker-engine";
-import { runSealedMatch } from "./sealed-match-runner";
+import { revealSealedLosingAction, runSealedMatch, type SealedLosingActionReveal } from "./sealed-match-runner";
 import type { KeyProvider } from "@/server/crypto/key-provider";
-import { encryptField } from "@/server/crypto/envelope";
+import { decryptField, encryptField } from "@/server/crypto/envelope";
 import { authorizeProject } from "@/server/authorization/authorize";
 import type {
   ArenaMatchReceiptRecord,
+  ArenaMatchRevealRecord,
   ProjectRepository,
 } from "@/server/db/repositories";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
@@ -21,6 +22,11 @@ export type ArenaMatchServiceErrorCode =
   | "STRATEGY_ARTIFACT_INVALID"
   | "AGENT_POLICY_FAILED"
   | "ILLEGAL_AGENT_ACTION"
+  | "ARENA_MATCH_NOT_FOUND"
+  | "MATCH_HAND_COUNT_UNAVAILABLE"
+  | "REVEAL_HAND_NOT_FOUND"
+  | "NO_LOSING_AGENT"
+  | "TRANSCRIPT_PROOF_INVALID"
   | "PERSISTENCE_FAILED"
   | "ENCRYPTION_FAILED";
 
@@ -39,6 +45,24 @@ export interface PublicArenaMatchView {
   score: Record<string, number>;
   winner: string | "tie";
   seedCommitment: string;
+  transcriptRoot: string;
+  handCount: number | null;
+  selectiveReveal?: PublicArenaRevealView;
+  createdAt: string;
+}
+
+export interface PublicArenaRevealView {
+  id: string;
+  action: SealedLosingActionReveal["action"];
+  actionCommitment: string;
+  agentId: string;
+  handCommitment: string;
+  handIndex: number;
+  handNumber: number;
+  position: SealedLosingActionReveal["position"];
+  proof: unknown;
+  publicHandReceipt: unknown;
+  seatSwapped: boolean;
   transcriptRoot: string;
   createdAt: string;
 }
@@ -80,6 +104,17 @@ function mapRunCode(code: string): ArenaMatchServiceErrorCode {
   return "PERSISTENCE_FAILED";
 }
 
+function mapRevealCode(code: string): ArenaMatchServiceErrorCode {
+  if (code === "SEALED_ARTIFACT_NOT_FOUND") return "STRATEGY_ARTIFACT_NOT_FOUND";
+  if (code === "STRATEGY_ARTIFACT_INVALID") return "STRATEGY_ARTIFACT_INVALID";
+  if (code === "AGENT_POLICY_FAILED") return "AGENT_POLICY_FAILED";
+  if (code === "ILLEGAL_AGENT_ACTION") return "ILLEGAL_AGENT_ACTION";
+  if (code === "REVEAL_HAND_NOT_FOUND") return "REVEAL_HAND_NOT_FOUND";
+  if (code === "NO_LOSING_AGENT") return "NO_LOSING_AGENT";
+  if (code === "TRANSCRIPT_PROOF_INVALID") return "TRANSCRIPT_PROOF_INVALID";
+  return "PERSISTENCE_FAILED";
+}
+
 function mapError(error: unknown): ArenaMatchServiceErrorCode {
   if (!(error instanceof Error)) return "PERSISTENCE_FAILED";
   if (error.message === "ENVELOPE_AUTH_FAILED" || error.message.includes("KEY_")) return "ENCRYPTION_FAILED";
@@ -94,7 +129,25 @@ function winnerFor(score: Readonly<Record<string, number>>): string | "tie" {
   return leaders.length === 1 ? leaders[0]![0] : "tie";
 }
 
-function publicView(record: ArenaMatchReceiptRecord): PublicArenaMatchView {
+function publicReveal(record: ArenaMatchRevealRecord): PublicArenaRevealView {
+  return {
+    id: record.id,
+    action: record.action,
+    actionCommitment: record.actionCommitment,
+    agentId: record.agentId,
+    handCommitment: record.handCommitment,
+    handIndex: record.handIndex,
+    handNumber: record.handNumber,
+    position: record.position,
+    proof: record.proof,
+    publicHandReceipt: record.publicHandReceipt,
+    seatSwapped: record.seatSwapped,
+    transcriptRoot: record.transcriptRoot,
+    createdAt: record.createdAt.toISOString(),
+  };
+}
+
+function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRecord): PublicArenaMatchView {
   const receipt = record.publicReceipt as PublicMatchReceipt;
   return {
     matchId: receipt.matchId,
@@ -115,6 +168,8 @@ function publicView(record: ArenaMatchReceiptRecord): PublicArenaMatchView {
     winner: winnerFor(receipt.score),
     seedCommitment: receipt.seedCommitment,
     transcriptRoot: receipt.transcriptRoot,
+    handCount: record.handCount ?? null,
+    selectiveReveal: reveal ? publicReveal(reveal) : undefined,
     createdAt: record.createdAt.toISOString(),
   };
 }
@@ -211,6 +266,7 @@ export class ArenaMatchService {
         rightDisplayName: rightRecord.displayName,
         publicReceipt: result.value.publicReceipt,
         encryptedSeed,
+        handCount: input.hands,
         status: "completed",
         createdAt,
       };
@@ -233,6 +289,98 @@ export class ArenaMatchService {
     }
   }
 
+  async revealLosingAction(input: {
+    projectId: string;
+    actorWalletAddress: string;
+    matchId: string;
+    handIndex: number;
+  }): Promise<ArenaMatchServiceResult<PublicArenaRevealView>> {
+    const projectId = input.projectId.trim();
+    const matchId = input.matchId.trim();
+    if (!projectId || !matchId || !Number.isSafeInteger(input.handIndex) || input.handIndex < 1) {
+      return { ok: false, code: "INVALID_INPUT" };
+    }
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "reveal_losing_action",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+
+      const match = await this.repositories.getArenaMatchReceipt(projectId, matchId);
+      if (!match) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      if (!match.handCount) return { ok: false, code: "MATCH_HAND_COUNT_UNAVAILABLE" };
+      const existing = await this.repositories.getArenaMatchReveal(projectId, matchId);
+      if (existing) return { ok: true, value: publicReveal(existing) };
+
+      const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
+      const seed = decryptField(
+        match.encryptedSeed,
+        { projectId, recordType: "arena_match", recordId: matchId, fieldName: "seed" },
+        { dataKey, wrappedKey: project.wrappedDataKey },
+      );
+      const result = await revealSealedLosingAction({
+        projectId,
+        leftAgentId: match.leftAgentId,
+        rightAgentId: match.rightAgentId,
+        matchId,
+        seed,
+        hands: match.handCount,
+        handIndex: input.handIndex,
+        keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
+        store: {
+          get: (requestedProjectId, agentId) => this.repositories.getArenaStrategyArtifact(requestedProjectId, agentId),
+          save: async () => {
+            throw new Error("ARENA_MATCH_STORE_READ_ONLY");
+          },
+        },
+      });
+      if (!result.ok) return { ok: false, code: mapRevealCode(result.code) };
+
+      const createdAt = this.now();
+      const record: ArenaMatchRevealRecord = {
+        id: this.idFactory(),
+        projectId,
+        matchId,
+        agentId: result.value.agentId,
+        handIndex: result.value.handIndex,
+        handNumber: result.value.handNumber,
+        position: result.value.position,
+        action: result.value.action,
+        seatSwapped: result.value.seatSwapped,
+        actionCommitment: result.value.actionCommitment,
+        handCommitment: result.value.handCommitment,
+        transcriptRoot: result.value.transcriptRoot,
+        publicHandReceipt: result.value.publicHandReceipt,
+        proof: result.value.proof,
+        createdAt,
+      };
+      await this.repositories.saveArenaMatchReveal(record);
+      await this.repositories.saveAuditEvent({
+        id: this.idFactory(),
+        projectId,
+        actorFingerprint,
+        eventType: "arena_losing_action_revealed",
+        payloadDigest: commitment({
+          matchId,
+          agentId: record.agentId,
+          handIndex: record.handIndex,
+          actionCommitment: record.actionCommitment,
+          transcriptRoot: record.transcriptRoot,
+        }),
+        createdAt,
+      });
+      return { ok: true, value: publicReveal(record) };
+    } catch (error) {
+      return { ok: false, code: mapError(error) };
+    }
+  }
+
   async getPublicArena(projectId: string): Promise<ArenaMatchServiceResult<PublicArenaView>> {
     const normalizedProjectId = projectId.trim();
     if (!normalizedProjectId) return { ok: false, code: "INVALID_INPUT" };
@@ -240,10 +388,12 @@ export class ArenaMatchService {
       if (!(await this.repositories.getProject(normalizedProjectId))) {
         return { ok: false, code: "PROJECT_NOT_FOUND" };
       }
-      const [matches, artifacts] = await Promise.all([
+      const [matches, artifacts, reveals] = await Promise.all([
         this.repositories.listArenaMatchReceipts(normalizedProjectId),
         this.repositories.listArenaStrategyArtifacts(normalizedProjectId),
+        this.repositories.listArenaMatchReveals(normalizedProjectId),
       ]);
+      const revealByMatchId = new Map(reveals.map((reveal) => [reveal.matchId, reveal]));
       const leaderboard = new Map<string, ArenaLeaderboardEntry>(
         artifacts.map((artifact) => [artifact.agentId, {
           agentId: artifact.agentId,
@@ -257,7 +407,7 @@ export class ArenaMatchService {
         }]),
       );
       for (const record of matches) {
-        const view = publicView(record);
+        const view = publicView(record, revealByMatchId.get(record.id));
         const winner = view.winner;
         for (const player of view.players) {
           const entry = leaderboard.get(player.agentId);
@@ -277,7 +427,7 @@ export class ArenaMatchService {
       return {
         ok: true,
         value: {
-          matches: matches.map(publicView).reverse(),
+          matches: matches.map((match) => publicView(match, revealByMatchId.get(match.id))).reverse(),
           leaderboard: [...leaderboard.values()].sort(
             (left, right) => right.points - left.points || right.wins - left.wins || left.displayName.localeCompare(right.displayName),
           ),

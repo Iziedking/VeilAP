@@ -15,7 +15,7 @@ Veil Arena separates those concerns:
 - the competition remains visible;
 - the submitted strategy remains sealed from competitors and public APIs;
 - fixed rules and seeded scenarios make evaluation reproducible;
-- a signed receipt binds the artifact commitment, engine, seed, transcript root, and score;
+- a public receipt binds the artifact commitment, engine, seed, transcript root, and score;
 - STRK20 privately settles sponsor funding and winner payouts.
 
 ## Signature demo
@@ -27,7 +27,7 @@ The public broadcast switches between two views:
 
 Nothing on either view exposes a strategy.
 
-After a settled match, Veil Arena can reveal one decisive losing action with its transcript inclusion proof. The winner's policy stays hidden from competitors and public APIs. This demonstrates selective disclosure without publishing the losing agent's full policy or transcript.
+After a completed match, an authorized reviewer or company member can reveal one losing action with its transcript inclusion proof. The winner's policy stays hidden from competitors and public APIs. This demonstrates selective disclosure without publishing the losing agent's full policy or transcript.
 
 ## What is public
 
@@ -35,7 +35,7 @@ After a settled match, Veil Arena can reveal one decisive losing action with its
 - artifact commitment;
 - arena and ruleset version;
 - wins, losses, match points, and hands evaluated;
-- seed commitment, engine hash, transcript root, and signed result receipt;
+- seed commitment, engine hash, transcript root, and public result receipt;
 - one selected losing action after settlement;
 - settlement confirmation without the private recipient or amount.
 
@@ -100,12 +100,11 @@ The repository also contains tested infrastructure from the earlier VeilAP direc
 The following are not complete yet:
 
 - tournament scheduling;
-- production transcript inclusion proofs and signed match receipts;
-- selective losing-action disclosure;
+- production signing for match receipts;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
-The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, and refusal paths for illegal or failed agent decisions. Submission and match execution return only public commitment metadata. These are not yet the production tournament scheduler or settlement flow.
+The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, real transcript inclusion proofs, authorized selective losing-action disclosure, and refusal paths for illegal or failed agent decisions. Submission and match execution return only public commitment metadata. These are not yet the production tournament scheduler or settlement flow.
 
 ## Product routes
 
@@ -116,6 +115,8 @@ The current arena slice now includes a deterministic heads-up hold'em engine, a 
 Authenticated contributors submit a strategy through `POST /api/projects/:projectId/strategies`. The policy is validated, encrypted with the project's data key, and stored as sealed artifact data. The response contains the agent alias, display name, commitment, status, and timestamp, never the policy itself.
 
 Company or reviewer members run a real sealed match through `POST /api/projects/:projectId/matches` with two submitted agent IDs and a hand count. The server creates the seed, runs both decrypted policies in the deterministic engine, encrypts the seed, and persists the public receipt. `GET /api/projects/:projectId/matches` returns only the public receipt feed and leaderboard projection.
+
+Company or reviewer members can reveal one losing transcript leaf through `POST /api/projects/:projectId/matches/:matchId/reveal` with a one-based `handIndex`. The server replays the encrypted seed, verifies the selected losing action against its action commitment and transcript root, then persists only that selective reveal. Repeating the request returns the existing reveal. Receipts created before hand counts were persisted remain eligible for public viewing but fail closed for replay-based disclosure.
 
 Incomplete routes are described as incomplete. The preview never claims to move funds.
 
@@ -182,9 +183,9 @@ Only successful mainnet transactions that touch the pinned pool will enter `strk
 
 ## What Veil Arena can prove
 
-The current deterministic engine computes a public receipt structure that binds the artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Completed receipts are persisted with the match seed encrypted under the project data key. Its tests also verify that private hole cards and policy objects do not enter the public receipt.
+The current deterministic engine computes a public receipt structure that binds the artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Completed receipts are persisted with the match seed encrypted under the project data key. An authorized reveal replays the sealed strategies, discloses one losing action, and includes a Merkle-style inclusion path that verifies against the persisted transcript root. Its tests also verify that private hole cards and policy objects do not enter the public receipt or reveal.
 
-Production signing, transcript inclusion proofs, selective losing-action disclosure, and private payout receipts are still planned work.
+Production signing, private winner settlement, and private payout receipts are still planned work.
 
 It does not prove that the operator never accessed plaintext, that an agent is universally optimal, that no implementation bug exists, or that public chain edges cannot be correlated.
 
