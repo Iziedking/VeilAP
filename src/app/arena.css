@@ -138,6 +138,9 @@
 .arena-latest-result small { color: var(--arena-dim); font-size: 11px; letter-spacing: .03em; }
 .arena-latest-body p { margin: 17px 0 0; color: var(--arena-dim); font-size: 13px; line-height: 1.45; }
 .arena-latest-receipt { display: block; margin-top: 14px; color: var(--arena-dim); font-size: 10px; letter-spacing: .02em; }
+.arena-empty-state { min-height: 120px; padding: 20px; display: flex; flex-direction: column; justify-content: center; border: 1px dashed var(--arena-rule); color: var(--arena-dim); }
+.arena-empty-state strong { color: var(--arena-ink); font-family: var(--arena-display); font-size: 13px; }
+.arena-empty-state p { margin: 10px 0 0; }
 
 .arena-cells { margin-top: 22px; display: flex; gap: 4px; }
 .arena-cells i { width: 20px; height: 7px; display: block; border: 1px solid var(--arena-rule); background: var(--arena-paper); }
@@ -177,6 +180,7 @@
 .arena-match-versus > span { color: var(--arena-dim); font-size: 11px; }
 .arena-match-progress { height: 9px; margin: 0 14px; border: 1px solid var(--arena-ink); background: repeating-linear-gradient(90deg, transparent 0 17px, var(--arena-rule) 17px 18px); }
 .arena-match-progress i { width: var(--match-progress); height: 100%; display: block; background: var(--arena-signal); transition: width 500ms steps(6, end); }
+.arena-match-progress.is-complete i { width: 100%; }
 .arena-match-card > footer { margin-top: 15px; border-top: 1px solid var(--arena-rule); color: var(--arena-dim); }
 .arena-match-card > footer strong { font-weight: 700; }
 

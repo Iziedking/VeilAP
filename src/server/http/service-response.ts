@@ -8,6 +8,7 @@ const notFoundCodes = new Set([
   "RELEASE_NOT_FOUND",
   "REVENUE_EVENT_NOT_FOUND",
   "RECEIPT_NOT_FOUND",
+  "STRATEGY_ARTIFACT_NOT_FOUND",
 ]);
 const conflictCodes = new Set(["STRATEGY_ARTIFACT_ALREADY_EXISTS"]);
 const forbiddenCodes = new Set([

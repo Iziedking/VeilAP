@@ -27,6 +27,25 @@ export const arenaStrategyArtifacts = pgTable(
   }),
 );
 
+export const arenaMatchReceipts = pgTable(
+  "arena_match_receipts",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    leftAgentId: text("left_agent_id").notNull(),
+    rightAgentId: text("right_agent_id").notNull(),
+    leftDisplayName: text("left_display_name").notNull(),
+    rightDisplayName: text("right_display_name").notNull(),
+    publicReceipt: jsonb("public_receipt").notNull(),
+    encryptedSeed: jsonb("encrypted_seed").notNull(),
+    status: text("status").notNull().default("completed"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    projectMatch: uniqueIndex("arena_match_receipts_project_match_idx").on(table.projectId, table.id),
+  }),
+);
+
 export const authNonces = pgTable("auth_nonces", {
   nonce: text("nonce").primaryKey(),
   walletFingerprint: text("wallet_fingerprint").notNull(),

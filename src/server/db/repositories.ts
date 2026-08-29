@@ -5,6 +5,7 @@ import type { EncryptedField } from "@/server/crypto/envelope";
 import type { VeilapDatabase } from "./client";
 import {
   arenaStrategyArtifacts,
+  arenaMatchReceipts,
   agreementVersions,
   auditEvents,
   authNonces,
@@ -198,6 +199,19 @@ export interface ArenaStrategyArtifactRecord {
   createdAt: Date;
 }
 
+export interface ArenaMatchReceiptRecord {
+  id: string;
+  projectId: string;
+  leftAgentId: string;
+  rightAgentId: string;
+  leftDisplayName: string;
+  rightDisplayName: string;
+  publicReceipt: unknown;
+  encryptedSeed: EncryptedField;
+  status: "completed";
+  createdAt: Date;
+}
+
 export interface ProjectRepository extends ProjectKeyRepository {
   saveMember(record: ProjectMemberRecord): Promise<void>;
   getMemberRoles(projectId: string, walletFingerprint: string): Promise<ProjectRole[]>;
@@ -234,6 +248,10 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getSelectiveReceipt(id: string): Promise<SelectiveReceiptRecord | undefined>;
   saveArenaStrategyArtifact(record: ArenaStrategyArtifactRecord): Promise<void>;
   getArenaStrategyArtifact(projectId: string, agentId: string): Promise<ArenaStrategyArtifactRecord | undefined>;
+  listArenaStrategyArtifacts(projectId: string): Promise<ArenaStrategyArtifactRecord[]>;
+  saveArenaMatchReceipt(record: ArenaMatchReceiptRecord): Promise<void>;
+  getArenaMatchReceipt(projectId: string, matchId: string): Promise<ArenaMatchReceiptRecord | undefined>;
+  listArenaMatchReceipts(projectId: string): Promise<ArenaMatchReceiptRecord[]>;
 }
 
 function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$inferSelect): ArenaStrategyArtifactRecord {
@@ -246,6 +264,22 @@ function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$infer
     artifactCommitment: row.artifactCommitment,
     encryptedPolicy: row.encryptedPolicy as EncryptedField,
     status: "sealed",
+    createdAt: row.createdAt,
+  };
+}
+
+function toArenaMatchReceiptRecord(row: typeof arenaMatchReceipts.$inferSelect): ArenaMatchReceiptRecord {
+  if (row.status !== "completed") throw new Error("ARENA_MATCH_STATUS_INVALID");
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    leftAgentId: row.leftAgentId,
+    rightAgentId: row.rightAgentId,
+    leftDisplayName: row.leftDisplayName,
+    rightDisplayName: row.rightDisplayName,
+    publicReceipt: row.publicReceipt,
+    encryptedSeed: row.encryptedSeed as EncryptedField,
+    status: "completed",
     createdAt: row.createdAt,
   };
 }
@@ -667,6 +701,44 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .limit(1);
         return rows[0] ? toArenaStrategyArtifactRecord(rows[0]) : undefined;
       },
+      async listArenaStrategyArtifacts(projectId) {
+        const rows = await db
+          .select()
+          .from(arenaStrategyArtifacts)
+          .where(eq(arenaStrategyArtifacts.projectId, projectId))
+          .orderBy(asc(arenaStrategyArtifacts.createdAt));
+        return rows.map(toArenaStrategyArtifactRecord);
+      },
+      async saveArenaMatchReceipt(record) {
+        await db.insert(arenaMatchReceipts).values({
+          id: record.id,
+          projectId: record.projectId,
+          leftAgentId: record.leftAgentId,
+          rightAgentId: record.rightAgentId,
+          leftDisplayName: record.leftDisplayName,
+          rightDisplayName: record.rightDisplayName,
+          publicReceipt: record.publicReceipt,
+          encryptedSeed: record.encryptedSeed,
+          status: record.status,
+          createdAt: record.createdAt,
+        });
+      },
+      async getArenaMatchReceipt(projectId, matchId) {
+        const rows = await db
+          .select()
+          .from(arenaMatchReceipts)
+          .where(and(eq(arenaMatchReceipts.projectId, projectId), eq(arenaMatchReceipts.id, matchId)))
+          .limit(1);
+        return rows[0] ? toArenaMatchReceiptRecord(rows[0]) : undefined;
+      },
+      async listArenaMatchReceipts(projectId) {
+        const rows = await db
+          .select()
+          .from(arenaMatchReceipts)
+          .where(eq(arenaMatchReceipts.projectId, projectId))
+          .orderBy(asc(arenaMatchReceipts.createdAt));
+        return rows.map(toArenaMatchReceiptRecord);
+      },
     },
   };
 }
@@ -690,6 +762,7 @@ export function createMemoryRepositories(): {
   const revenueEventRows = new Map<string, RevenueEventRecord>();
   const selectiveReceiptRows = new Map<string, SelectiveReceiptRecord>();
   const arenaStrategyArtifactRows = new Map<string, ArenaStrategyArtifactRecord>();
+  const arenaMatchReceiptRows = new Map<string, ArenaMatchReceiptRecord>();
   return {
     nonces: {
       async saveNonce(record) {
@@ -899,6 +972,26 @@ export function createMemoryRepositories(): {
       async getArenaStrategyArtifact(projectId, agentId) {
         const record = [...arenaStrategyArtifactRows.values()].find((row) => row.projectId === projectId && row.agentId === agentId);
         return record ? structuredClone(record) : undefined;
+      },
+      async listArenaStrategyArtifacts(projectId) {
+        return [...arenaStrategyArtifactRows.values()]
+          .filter((record) => record.projectId === projectId)
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async saveArenaMatchReceipt(record) {
+        if (arenaMatchReceiptRows.has(record.id)) throw new Error("ARENA_MATCH_ALREADY_EXISTS");
+        arenaMatchReceiptRows.set(record.id, structuredClone(record));
+      },
+      async getArenaMatchReceipt(projectId, matchId) {
+        const record = arenaMatchReceiptRows.get(matchId);
+        return record && record.projectId === projectId ? structuredClone(record) : undefined;
+      },
+      async listArenaMatchReceipts(projectId) {
+        return [...arenaMatchReceiptRows.values()]
+          .filter((record) => record.projectId === projectId)
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
       },
     },
   };

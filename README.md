@@ -84,16 +84,16 @@ settlement commitment
 
 ## Current status
 
-The root landing page now contains the first Veil Arena broadcast slice:
+The root landing page now contains the first Veil Arena broadcast surface:
 
-- simultaneous synthetic preview matches;
+- persisted match receipt feed;
 - Arena and Leaderboard views;
-- live evaluation progress;
-- selective losing-action reveal;
+- live receipt refresh;
+- public transcript and seed commitments;
 - explicit public, private, and trusted-operator boundaries;
 - responsive and reduced-motion behavior.
 
-The preview numbers are synthetic and labelled in the interface. They are not tournament results, user counts, prize payments, or mainnet evidence.
+The landing page does not invent match numbers. It loads persisted arena records when a project identifier is provided. With no project identifier, it shows an empty state.
 
 The repository also contains tested infrastructure from the earlier VeilAP direction. Wallet sessions, encrypted envelopes, deterministic verification, append-only records, signed selective receipts, STRK20 wallet adapters, and settlement reconciliation will be adapted to seasons, agent artifacts, matches, and prizes. Legacy source has been preserved outside this repository working tree before the pivot.
 
@@ -101,18 +101,21 @@ The following are not complete yet:
 
 - tournament scheduling;
 - production transcript inclusion proofs and signed match receipts;
+- selective losing-action disclosure;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
-The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, duplicate deals with seat swapping, public artifact and transcript commitments, score calculation, and refusal paths for illegal or failed agent decisions. Submission returns only commitment metadata. These are local preview capabilities and are not yet the production tournament scheduler or settlement flow.
+The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, and refusal paths for illegal or failed agent decisions. Submission and match execution return only public commitment metadata. These are not yet the production tournament scheduler or settlement flow.
 
 ## Product routes
 
-- **/**: Veil Arena landing and synthetic broadcast preview
+- **/**: Veil Arena landing and persisted broadcast feed; pass `?project=<project-id>` for a project
 - **/sign-in**: Starknet wallet entry surface inherited from the existing foundation
 - **/workspace**: legacy synthetic proof workspace while the arena console is built
 
 Authenticated contributors submit a strategy through `POST /api/projects/:projectId/strategies`. The policy is validated, encrypted with the project's data key, and stored as sealed artifact data. The response contains the agent alias, display name, commitment, status, and timestamp, never the policy itself.
+
+Company or reviewer members run a real sealed match through `POST /api/projects/:projectId/matches` with two submitted agent IDs and a hand count. The server creates the seed, runs both decrypted policies in the deterministic engine, encrypts the seed, and persists the public receipt. `GET /api/projects/:projectId/matches` returns only the public receipt feed and leaderboard projection.
 
 Incomplete routes are described as incomplete. The preview never claims to move funds.
 
@@ -141,7 +144,7 @@ npm run dev
 
 Open [http://localhost:3003](http://localhost:3003).
 
-Preview mode works without a wallet, database, RPC key, or AWS credentials. It uses synthetic in-memory records and performs no settlement.
+Preview mode works without a wallet, database, RPC key, or AWS credentials for the retained legacy surfaces. The arena feed requires a persisted project and never fabricates match results.
 
 ## Checks
 
@@ -179,7 +182,7 @@ Only successful mainnet transactions that touch the pinned pool will enter `strk
 
 ## What Veil Arena can prove
 
-The current deterministic engine computes a public receipt structure that binds the artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Its tests also verify that private hole cards and policy objects do not enter the public receipt.
+The current deterministic engine computes a public receipt structure that binds the artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Completed receipts are persisted with the match seed encrypted under the project data key. Its tests also verify that private hole cards and policy objects do not enter the public receipt.
 
 Production signing, transcript inclusion proofs, selective losing-action disclosure, and private payout receipts are still planned work.
 

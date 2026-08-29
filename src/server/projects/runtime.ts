@@ -14,6 +14,7 @@ import { ReceiptService } from "@/server/receipts/receipt-service";
 import { createReceiptSigner } from "@/server/receipts/signing";
 import { ProjectService } from "./project-service";
 import { StrategyService } from "@/server/arena/strategy-service";
+import { ArenaMatchService } from "@/server/arena/arena-match-service";
 
 const previewKeyProvider = createPreviewKeyProvider();
 let persistedKeyProvider: KmsKeyProvider | undefined;
@@ -46,6 +47,10 @@ export function getProjectService(): ProjectService {
 
 export function getStrategyService(): StrategyService {
   return new StrategyService(dependencies());
+}
+
+export function getArenaMatchService(): ArenaMatchService {
+  return new ArenaMatchService(dependencies());
 }
 
 export function getCheckpointService(): CheckpointService {
