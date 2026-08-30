@@ -31,13 +31,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={`${arenaDisplay.variable} ${arenaMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${arenaDisplay.variable} ${arenaMono.variable} has-js is-loading`} suppressHydrationWarning>
       <body>
         <Script id="veil-loader-init" strategy="beforeInteractive">
           {`document.documentElement.classList.add("has-js", "is-loading");`}
         </Script>
         <VeilEntryLoader />
         {children}
+        <noscript>
+          <style>{`html.is-loading body { overflow: auto; } html.has-js .veil-entry-loader { display: none; }`}</style>
+        </noscript>
       </body>
     </html>
   );
