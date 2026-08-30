@@ -30,6 +30,7 @@ export type ArenaMatchServiceErrorCode =
   | "NO_LOSING_AGENT"
   | "TRANSCRIPT_PROOF_INVALID"
   | "SIGNING_UNAVAILABLE"
+  | "IDEMPOTENCY_KEY_REUSED"
   | "PERSISTENCE_FAILED"
   | "ENCRYPTION_FAILED";
 
@@ -128,6 +129,27 @@ function mapError(error: unknown): ArenaMatchServiceErrorCode {
   return "PERSISTENCE_FAILED";
 }
 
+function validIdempotencyKey(value: string): boolean {
+  return /^[\x21-\x7e]{8,200}$/.test(value);
+}
+
+function matchRequestDigest(input: {
+  leftAgentId: string;
+  rightAgentId: string;
+  hands: number;
+  actorFingerprint: string;
+}): string {
+  return commitment(input);
+}
+
+function revealRequestDigest(input: {
+  matchId: string;
+  handIndex: number;
+  actorFingerprint: string;
+}): string {
+  return commitment(input);
+}
+
 function winnerFor(score: Readonly<Record<string, number>>): string | "tie" {
   const entries = Object.entries(score);
   const highest = Math.max(...entries.map(([, points]) => points));
@@ -206,10 +228,12 @@ export class ArenaMatchService {
     leftAgentId: string;
     rightAgentId: string;
     hands: number;
+    idempotencyKey: string;
   }): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
     const projectId = input.projectId.trim();
     const leftAgentId = input.leftAgentId.trim();
     const rightAgentId = input.rightAgentId.trim();
+    const idempotencyKey = input.idempotencyKey.trim();
     if (
       !projectId
       || !leftAgentId
@@ -218,6 +242,7 @@ export class ArenaMatchService {
       || !Number.isSafeInteger(input.hands)
       || input.hands < 1
       || input.hands > 100
+      || !validIdempotencyKey(idempotencyKey)
     ) {
       return { ok: false, code: "INVALID_INPUT" };
     }
@@ -233,6 +258,13 @@ export class ArenaMatchService {
       });
       if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
       if (!this.signer) return { ok: false, code: "SIGNING_UNAVAILABLE" };
+      const requestDigest = matchRequestDigest({ leftAgentId, rightAgentId, hands: input.hands, actorFingerprint });
+      const existing = await this.repositories.getArenaMatchReceiptByIdempotencyKey(projectId, idempotencyKey);
+      if (existing) {
+        return existing.requestDigest === requestDigest
+          ? { ok: true, value: publicView(existing) }
+          : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+      }
 
       const [leftRecord, rightRecord] = await Promise.all([
         this.repositories.getArenaStrategyArtifact(projectId, leftAgentId),
@@ -294,10 +326,24 @@ export class ArenaMatchService {
         signedReceipt,
         encryptedSeed,
         handCount: input.hands,
+        idempotencyKey,
+        requestDigest,
         status: "completed",
         createdAt,
       };
-      await this.repositories.saveArenaMatchReceipt(record);
+      try {
+        await this.repositories.saveArenaMatchReceipt(record);
+      } catch (error) {
+        if (error instanceof Error && error.message === "ARENA_MATCH_IDEMPOTENCY_ALREADY_EXISTS") {
+          const concurrent = await this.repositories.getArenaMatchReceiptByIdempotencyKey(projectId, idempotencyKey);
+          if (concurrent) {
+            return concurrent.requestDigest === requestDigest
+              ? { ok: true, value: publicView(concurrent) }
+              : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+          }
+        }
+        throw error;
+      }
       await this.repositories.saveAuditEvent({
         id: this.idFactory(),
         projectId,
@@ -321,10 +367,12 @@ export class ArenaMatchService {
     actorWalletAddress: string;
     matchId: string;
     handIndex: number;
+    idempotencyKey: string;
   }): Promise<ArenaMatchServiceResult<PublicArenaRevealView>> {
     const projectId = input.projectId.trim();
     const matchId = input.matchId.trim();
-    if (!projectId || !matchId || !Number.isSafeInteger(input.handIndex) || input.handIndex < 1) {
+    const idempotencyKey = input.idempotencyKey.trim();
+    if (!projectId || !matchId || !Number.isSafeInteger(input.handIndex) || input.handIndex < 1 || !validIdempotencyKey(idempotencyKey)) {
       return { ok: false, code: "INVALID_INPUT" };
     }
 
@@ -338,6 +386,14 @@ export class ArenaMatchService {
         action: "reveal_losing_action",
       });
       if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+
+      const requestDigest = revealRequestDigest({ matchId, handIndex: input.handIndex, actorFingerprint });
+      const existingByKey = await this.repositories.getArenaMatchRevealByIdempotencyKey(projectId, idempotencyKey);
+      if (existingByKey) {
+        return existingByKey.requestDigest === requestDigest
+          ? { ok: true, value: publicReveal(existingByKey) }
+          : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+      }
 
       const match = await this.repositories.getArenaMatchReceipt(projectId, matchId);
       if (!match) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
@@ -385,9 +441,23 @@ export class ArenaMatchService {
         transcriptRoot: result.value.transcriptRoot,
         publicHandReceipt: result.value.publicHandReceipt,
         proof: result.value.proof,
+        idempotencyKey,
+        requestDigest,
         createdAt,
       };
-      await this.repositories.saveArenaMatchReveal(record);
+      try {
+        await this.repositories.saveArenaMatchReveal(record);
+      } catch (error) {
+        if (error instanceof Error && error.message === "ARENA_REVEAL_IDEMPOTENCY_ALREADY_EXISTS") {
+          const concurrent = await this.repositories.getArenaMatchRevealByIdempotencyKey(projectId, idempotencyKey);
+          if (concurrent) {
+            return concurrent.requestDigest === requestDigest
+              ? { ok: true, value: publicReveal(concurrent) }
+              : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+          }
+        }
+        throw error;
+      }
       await this.repositories.saveAuditEvent({
         id: this.idFactory(),
         projectId,

@@ -64,6 +64,13 @@
       "when": 1788049200000,
       "tag": "0008_arena_match_receipt_signatures",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788135600000,
+      "tag": "0009_arena_operator_idempotency",
+      "breakpoints": true
     }
   ]
 }

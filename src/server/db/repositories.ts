@@ -211,6 +211,8 @@ export interface ArenaMatchReceiptRecord {
   signedReceipt?: unknown;
   encryptedSeed: EncryptedField;
   handCount?: number;
+  idempotencyKey?: string;
+  requestDigest?: string;
   status: "completed";
   createdAt: Date;
 }
@@ -230,6 +232,8 @@ export type ArenaMatchRevealRecord = {
   transcriptRoot: string;
   publicHandReceipt: unknown;
   proof: unknown;
+  idempotencyKey?: string;
+  requestDigest?: string;
   createdAt: Date;
 };
 
@@ -272,9 +276,11 @@ export interface ProjectRepository extends ProjectKeyRepository {
   listArenaStrategyArtifacts(projectId: string): Promise<ArenaStrategyArtifactRecord[]>;
   saveArenaMatchReceipt(record: ArenaMatchReceiptRecord): Promise<void>;
   getArenaMatchReceipt(projectId: string, matchId: string): Promise<ArenaMatchReceiptRecord | undefined>;
+  getArenaMatchReceiptByIdempotencyKey(projectId: string, idempotencyKey: string): Promise<ArenaMatchReceiptRecord | undefined>;
   listArenaMatchReceipts(projectId: string): Promise<ArenaMatchReceiptRecord[]>;
   saveArenaMatchReveal(record: ArenaMatchRevealRecord): Promise<void>;
   getArenaMatchReveal(projectId: string, matchId: string): Promise<ArenaMatchRevealRecord | undefined>;
+  getArenaMatchRevealByIdempotencyKey(projectId: string, idempotencyKey: string): Promise<ArenaMatchRevealRecord | undefined>;
   listArenaMatchReveals(projectId: string): Promise<ArenaMatchRevealRecord[]>;
 }
 
@@ -305,6 +311,8 @@ function toArenaMatchReceiptRecord(row: typeof arenaMatchReceipts.$inferSelect):
     signedReceipt: row.signedReceipt ?? undefined,
     encryptedSeed: row.encryptedSeed as EncryptedField,
     handCount: row.handCount ?? undefined,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    requestDigest: row.requestDigest ?? undefined,
     status: "completed",
     createdAt: row.createdAt,
   };
@@ -336,6 +344,8 @@ function toArenaMatchRevealRecord(row: typeof arenaMatchReveals.$inferSelect): A
     transcriptRoot: row.transcriptRoot,
     publicHandReceipt: row.publicHandReceipt,
     proof: row.proof,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    requestDigest: row.requestDigest ?? undefined,
     createdAt: row.createdAt,
   };
 }
@@ -777,6 +787,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           signedReceipt: record.signedReceipt ?? null,
           encryptedSeed: record.encryptedSeed,
           handCount: record.handCount ?? null,
+          idempotencyKey: record.idempotencyKey ?? null,
+          requestDigest: record.requestDigest ?? null,
           status: record.status,
           createdAt: record.createdAt,
         });
@@ -786,6 +798,14 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .select()
           .from(arenaMatchReceipts)
           .where(and(eq(arenaMatchReceipts.projectId, projectId), eq(arenaMatchReceipts.id, matchId)))
+          .limit(1);
+        return rows[0] ? toArenaMatchReceiptRecord(rows[0]) : undefined;
+      },
+      async getArenaMatchReceiptByIdempotencyKey(projectId, idempotencyKey) {
+        const rows = await db
+          .select()
+          .from(arenaMatchReceipts)
+          .where(and(eq(arenaMatchReceipts.projectId, projectId), eq(arenaMatchReceipts.idempotencyKey, idempotencyKey)))
           .limit(1);
         return rows[0] ? toArenaMatchReceiptRecord(rows[0]) : undefined;
       },
@@ -813,6 +833,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           transcriptRoot: record.transcriptRoot,
           publicHandReceipt: record.publicHandReceipt,
           proof: record.proof,
+          idempotencyKey: record.idempotencyKey ?? null,
+          requestDigest: record.requestDigest ?? null,
           createdAt: record.createdAt,
         });
       },
@@ -821,6 +843,14 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .select()
           .from(arenaMatchReveals)
           .where(and(eq(arenaMatchReveals.projectId, projectId), eq(arenaMatchReveals.matchId, matchId)))
+          .limit(1);
+        return rows[0] ? toArenaMatchRevealRecord(rows[0]) : undefined;
+      },
+      async getArenaMatchRevealByIdempotencyKey(projectId, idempotencyKey) {
+        const rows = await db
+          .select()
+          .from(arenaMatchReveals)
+          .where(and(eq(arenaMatchReveals.projectId, projectId), eq(arenaMatchReveals.idempotencyKey, idempotencyKey)))
           .limit(1);
         return rows[0] ? toArenaMatchRevealRecord(rows[0]) : undefined;
       },
@@ -1075,11 +1105,18 @@ export function createMemoryRepositories(): {
       },
       async saveArenaMatchReceipt(record) {
         if (arenaMatchReceiptRows.has(record.id)) throw new Error("ARENA_MATCH_ALREADY_EXISTS");
+        if (record.idempotencyKey && [...arenaMatchReceiptRows.values()].some((row) => row.projectId === record.projectId && row.idempotencyKey === record.idempotencyKey)) {
+          throw new Error("ARENA_MATCH_IDEMPOTENCY_ALREADY_EXISTS");
+        }
         arenaMatchReceiptRows.set(record.id, structuredClone(record));
       },
       async getArenaMatchReceipt(projectId, matchId) {
         const record = arenaMatchReceiptRows.get(matchId);
         return record && record.projectId === projectId ? structuredClone(record) : undefined;
+      },
+      async getArenaMatchReceiptByIdempotencyKey(projectId, idempotencyKey) {
+        const record = [...arenaMatchReceiptRows.values()].find((row) => row.projectId === projectId && row.idempotencyKey === idempotencyKey);
+        return record ? structuredClone(record) : undefined;
       },
       async listArenaMatchReceipts(projectId) {
         return [...arenaMatchReceiptRows.values()]
@@ -1092,10 +1129,17 @@ export function createMemoryRepositories(): {
         if ([...arenaMatchRevealRows.values()].some((row) => row.projectId === record.projectId && row.matchId === record.matchId)) {
           throw new Error("ARENA_MATCH_REVEAL_ALREADY_EXISTS");
         }
+        if (record.idempotencyKey && [...arenaMatchRevealRows.values()].some((row) => row.projectId === record.projectId && row.idempotencyKey === record.idempotencyKey)) {
+          throw new Error("ARENA_REVEAL_IDEMPOTENCY_ALREADY_EXISTS");
+        }
         arenaMatchRevealRows.set(record.id, structuredClone(record));
       },
       async getArenaMatchReveal(projectId, matchId) {
         const record = [...arenaMatchRevealRows.values()].find((row) => row.projectId === projectId && row.matchId === matchId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async getArenaMatchRevealByIdempotencyKey(projectId, idempotencyKey) {
+        const record = [...arenaMatchRevealRows.values()].find((row) => row.projectId === projectId && row.idempotencyKey === idempotencyKey);
         return record ? structuredClone(record) : undefined;
       },
       async listArenaMatchReveals(projectId) {

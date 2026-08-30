@@ -87,6 +87,7 @@ describe("ArenaMatchService", () => {
       leftAgentId: "CINDER",
       rightAgentId: "EMBER",
       hands: 3,
+      idempotencyKey: "match-request-1",
     });
 
     expect(result.ok).toBe(true);
@@ -113,6 +114,7 @@ describe("ArenaMatchService", () => {
       leftAgentId: "CINDER",
       rightAgentId: "EMBER",
       hands: 2,
+      idempotencyKey: "leaderboard-match",
     });
 
     const result = await service.getPublicArena(projectId);
@@ -131,6 +133,7 @@ describe("ArenaMatchService", () => {
       leftAgentId: "CINDER",
       rightAgentId: "EMBER",
       hands: 3,
+      idempotencyKey: "selective-match",
     });
     expect(match.ok).toBe(true);
     if (!match.ok) throw new Error(match.code);
@@ -140,6 +143,7 @@ describe("ArenaMatchService", () => {
       actorWalletAddress: company,
       matchId: match.value.matchId,
       handIndex: 1,
+      idempotencyKey: "reveal-request-1",
     });
     expect(reveal.ok).toBe(true);
     if (!reveal.ok) throw new Error(reveal.code);
@@ -160,8 +164,43 @@ describe("ArenaMatchService", () => {
       projectId,
       actorWalletAddress: company,
       matchId: match.value.matchId,
-      handIndex: 3,
+      handIndex: 1,
+      idempotencyKey: "reveal-request-1",
     });
     expect(duplicate).toEqual(reveal);
+  });
+
+  it("returns the stored match for a retry and refuses key reuse for different input", async () => {
+    const { projectId, service } = await setup();
+    const first = await service.runMatch({
+      projectId,
+      actorWalletAddress: company,
+      leftAgentId: "CINDER",
+      rightAgentId: "EMBER",
+      hands: 2,
+      idempotencyKey: "retry-match-1",
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(first.code);
+
+    const retry = await service.runMatch({
+      projectId,
+      actorWalletAddress: company,
+      leftAgentId: "CINDER",
+      rightAgentId: "EMBER",
+      hands: 2,
+      idempotencyKey: "retry-match-1",
+    });
+    expect(retry).toEqual(first);
+
+    const reused = await service.runMatch({
+      projectId,
+      actorWalletAddress: company,
+      leftAgentId: "CINDER",
+      rightAgentId: "EMBER",
+      hands: 3,
+      idempotencyKey: "retry-match-1",
+    });
+    expect(reused).toEqual({ ok: false, code: "IDEMPOTENCY_KEY_REUSED" });
   });
 });

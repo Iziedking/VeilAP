@@ -40,11 +40,14 @@ export const arenaMatchReceipts = pgTable(
     signedReceipt: jsonb("signed_receipt"),
     encryptedSeed: jsonb("encrypted_seed").notNull(),
     handCount: integer("hand_count"),
+    idempotencyKey: text("idempotency_key"),
+    requestDigest: text("request_digest"),
     status: text("status").notNull().default("completed"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
     projectMatch: uniqueIndex("arena_match_receipts_project_match_idx").on(table.projectId, table.id),
+    projectIdempotency: uniqueIndex("arena_match_receipts_project_idempotency_idx").on(table.projectId, table.idempotencyKey),
   }),
 );
 
@@ -65,10 +68,13 @@ export const arenaMatchReveals = pgTable(
     transcriptRoot: text("transcript_root").notNull(),
     publicHandReceipt: jsonb("public_hand_receipt").notNull(),
     proof: jsonb("proof").notNull(),
+    idempotencyKey: text("idempotency_key"),
+    requestDigest: text("request_digest"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
     projectMatch: uniqueIndex("arena_match_reveals_project_match_idx").on(table.projectId, table.matchId),
+    projectIdempotency: uniqueIndex("arena_match_reveals_project_idempotency_idx").on(table.projectId, table.idempotencyKey),
   }),
 );
 
