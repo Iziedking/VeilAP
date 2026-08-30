@@ -1,6 +1,6 @@
 import { commitment } from "@/domain/canonical";
 
-export const ARENA_ENGINE_VERSION = "holdem-sealed-v0.1";
+export const ARENA_ENGINE_VERSION = "holdem-sealed-v0.2";
 
 export type Suit = "clubs" | "diamonds" | "hearts" | "spades";
 export type Rank = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
@@ -70,6 +70,8 @@ export type TranscriptProofNode = Readonly<{
 }>;
 
 export type TranscriptProof = readonly TranscriptProofNode[];
+
+type PublicHandReceiptCommitmentInput = Omit<PublicHandReceipt, "handCommitment">;
 
 export type MatchResult = Readonly<{
   engineVersion: string;
@@ -238,6 +240,19 @@ export function transcriptRoot(receipts: readonly PublicHandReceipt[]): string {
   return level[0];
 }
 
+export function publicHandReceiptCommitment(
+  receipt: PublicHandReceiptCommitmentInput,
+): string {
+  return commitment({
+    actionCommitment: receipt.actionCommitment,
+    actionCommitments: receipt.actionCommitments,
+    boardCommitment: receipt.boardCommitment,
+    handNumber: receipt.handNumber,
+    seatSwapped: receipt.seatSwapped,
+    winner: receipt.winner,
+  });
+}
+
 export function transcriptProof(receipts: readonly PublicHandReceipt[], index: number): TranscriptProof {
   if (!Number.isSafeInteger(index) || index < 0 || index >= receipts.length) {
     throw new Error("TRANSCRIPT_LEAF_INDEX_INVALID");
@@ -266,6 +281,8 @@ export function verifyTranscriptProof(
   proof: TranscriptProof,
   root: string,
 ): boolean {
+  const { handCommitment, ...content } = receipt;
+  if (publicHandReceiptCommitment(content) !== handCommitment) return false;
   let current = receipt.handCommitment;
   for (const node of proof) {
     current = node.side === "left"
@@ -378,20 +395,17 @@ export function runMatch(input: Readonly<{
         actionCommitments[outcome.agentId] = commitment({ agentId: outcome.agentId, action: outcome.action });
       }
       const boardCommitment = commitment(result.value.board);
-      const publicHand = {
+      const publicHandContent = {
         actionCommitment,
         actionCommitments,
         boardCommitment,
         handNumber,
-        handCommitment: commitment({
-          actionCommitment,
-          boardCommitment,
-          handNumber,
-          seatSwapped,
-          winner: result.value.winner,
-        }),
         seatSwapped,
         winner: result.value.winner,
+      } satisfies PublicHandReceiptCommitmentInput;
+      const publicHand = {
+        ...publicHandContent,
+        handCommitment: publicHandReceiptCommitment(publicHandContent),
       } satisfies PublicHandReceipt;
       receiptLeaves.push(publicHand);
     }

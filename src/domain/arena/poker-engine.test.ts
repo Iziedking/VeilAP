@@ -96,6 +96,34 @@ describe("poker engine", () => {
     });
   });
 
+  it("rejects a transcript leaf when any public receipt field is changed", () => {
+    const result = runMatch({
+      agents: [
+        { artifactCommitment: commitment("agent-a"), id: "A", policy: callPolicy },
+        { artifactCommitment: commitment("agent-b"), id: "B", policy: raisePolicy },
+      ],
+      hands: 2,
+      matchId: "M-TAMPER",
+      seed: "fixed-seed",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected match to run.");
+
+    const receipt = result.value.publicHandReceipts[0]!;
+    const proof = transcriptProof(result.value.publicHandReceipts, 0);
+    const changedWinner = {
+      ...receipt,
+      winner: receipt.winner === "tie" ? "A" : "tie",
+    } as const;
+    const changedActionCommitments = {
+      ...receipt,
+      actionCommitments: { ...receipt.actionCommitments, A: commitment("changed") },
+    };
+
+    expect(verifyTranscriptProof(changedWinner, proof, result.value.publicReceipt.transcriptRoot)).toBe(false);
+    expect(verifyTranscriptProof(changedActionCommitments, proof, result.value.publicReceipt.transcriptRoot)).toBe(false);
+  });
+
   it("is deterministic and keeps private cards out of the public receipt", () => {
     const input = {
       agents: [

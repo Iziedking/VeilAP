@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readRequestActor } from "@/server/auth/request-actor";
 import { readIdempotencyKey } from "@/server/http/idempotency";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
 import { getArenaMatchService } from "@/server/projects/runtime";
 
@@ -20,7 +21,7 @@ export async function POST(
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
     const { projectId, matchId } = await context.params;
-    const input = requestSchema.parse(await request.json());
+    const input = requestSchema.parse(await readJsonBody(request));
     return serviceResponse(await getArenaMatchService().revealLosingAction({
       projectId,
       actorWalletAddress: actor.walletAddress,
@@ -29,6 +30,8 @@ export async function POST(
       idempotencyKey: readIdempotencyKey(request) ?? "",
     }));
   } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     if (error instanceof Error && error.message === "CONFIGURATION_MISSING") {
       return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });
     }
