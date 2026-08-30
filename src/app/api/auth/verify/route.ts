@@ -16,6 +16,7 @@ import {
   SESSION_TTL_MS,
 } from "@/server/auth/runtime";
 import { createSessionToken } from "@/server/auth/session";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 import { randomBytes } from "node:crypto";
 
@@ -23,17 +24,17 @@ export const runtime = "nodejs";
 
 const bodySchema = z.object({
   challenge: z.object({
-    nonce: z.string().startsWith("0x"),
-    walletAddress: z.string(),
-    origin: z.string(),
-    chainId: z.string(),
-    issuedAt: z.string(),
-    expiresAt: z.string(),
+    nonce: z.string().startsWith("0x").max(130),
+    walletAddress: z.string().min(3).max(80),
+    origin: z.string().url().max(2_048),
+    chainId: z.literal("SN_MAIN"),
+    issuedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
     typedData: z.unknown(),
-  }),
-  walletAddress: z.string(),
+  }).strict(),
+  walletAddress: z.string().min(3).max(80),
   signature: z.array(z.string()).min(1).max(16),
-});
+}).strict();
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -54,9 +55,7 @@ export async function POST(request: Request) {
   if (!rpcUrl) return json({ ok: false, code: "RPC_NOT_CONFIGURED" }, 503);
 
   try {
-    const raw = await request.text();
-    if (raw.length > 32_768) return json({ ok: false, code: "AUTH_REQUEST_TOO_LARGE" }, 413);
-    const input = bodySchema.parse(JSON.parse(raw));
+    const input = bodySchema.parse(await readJsonBody(request));
     const provider = new RpcProvider({ nodeUrl: rpcUrl });
     const result = await getAuthChallenges().verify({
       challenge: input.challenge as AuthChallenge,
@@ -95,7 +94,9 @@ export async function POST(request: Request) {
       maxAge: SESSION_TTL_MS / 1000,
     });
     return json({ ok: true, walletAddress: result.walletAddress });
-  } catch {
+  } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     return json({ ok: false, code: "AUTH_REQUEST_INVALID" }, 400);
   }
 }

@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { validateAndParseAddress } from "starknet";
 
+import type { SessionRepository } from "@/server/db/repositories";
+
 export interface WalletSession {
   sessionId?: string;
   walletAddress: string;
@@ -80,4 +82,27 @@ export function verifySessionToken(token: string, secret: string, now = Date.now
   } catch {
     return { ok: false as const, code: "SESSION_INVALID" as const };
   }
+}
+
+export async function verifyActiveSession(
+  token: string,
+  secret: string,
+  sessions: Pick<SessionRepository, "getSession">,
+  now = Date.now(),
+) {
+  const verified = verifySessionToken(token, secret, now);
+  if (!verified.ok || !verified.session.sessionId) {
+    return { ok: false as const, code: "SESSION_INVALID" as const };
+  }
+  const stored = await sessions.getSession(verified.session.sessionId);
+  if (
+    !stored
+    || stored.revokedAt
+    || stored.expiresAt.getTime() <= now
+    || stored.issuedAt.toISOString() !== verified.session.issuedAt
+    || stored.expiresAt.toISOString() !== verified.session.expiresAt
+  ) {
+    return { ok: false as const, code: "SESSION_INACTIVE" as const };
+  }
+  return verified;
 }

@@ -10,6 +10,8 @@ export interface VeilapServerConfig {
   awsRegion?: string;
   receiptSigningPrivateKey?: string;
   receiptSigningPublicKey?: string;
+  arenaWorkerSecret?: string;
+  arenaWorkerWalletAddress?: string;
   missing: string[];
 }
 
@@ -41,7 +43,7 @@ export function isLoopbackOrigin(origin: string): boolean {
 export function readServerConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): VeilapServerConfig {
-  const preview = env.NEXT_PUBLIC_VEILAP_PREVIEW_MODE === "1";
+  const preview = env.NODE_ENV !== "production" && env.NEXT_PUBLIC_VEILAP_PREVIEW_MODE === "1";
   const missing = preview
     ? []
     : REQUIRED_PERSISTED_VARS.filter((name) => {
@@ -63,6 +65,8 @@ export function readServerConfig(
     awsRegion: env.AWS_REGION,
     receiptSigningPrivateKey: env.VEILAP_RECEIPT_SIGNING_PRIVATE_KEY,
     receiptSigningPublicKey: env.VEILAP_RECEIPT_SIGNING_PUBLIC_KEY,
+    arenaWorkerSecret: env.VEILAP_ARENA_WORKER_SECRET,
+    arenaWorkerWalletAddress: env.VEILAP_ARENA_WORKER_WALLET_ADDRESS,
     missing,
   };
 }

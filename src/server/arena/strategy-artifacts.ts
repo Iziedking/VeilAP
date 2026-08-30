@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { decryptField, encryptField, type EncryptedField } from "@/server/crypto/envelope";
 import type { ProjectKeyMaterial } from "@/server/crypto/key-provider";
 import type { ProjectRepository } from "@/server/db/repositories";
+import { normalizeFeltAddress } from "@/lib/strk20/address";
 import {
   compileStrategyAgent,
   parseStrategyPolicy,
@@ -19,6 +20,8 @@ export type StrategyArtifactRecord = Readonly<{
   displayName: string;
   artifactCommitment: string;
   encryptedPolicy: EncryptedField;
+  ownerFingerprint?: string;
+  encryptedOwnerWallet?: EncryptedField;
   status: "sealed";
   createdAt: Date;
 }>;
@@ -56,24 +59,28 @@ export function createMemoryStrategyArtifactStore(): StrategyArtifactStore {
   };
 }
 
-function contextFor(record: Pick<StrategyArtifactRecord, "projectId" | "id">) {
+function contextFor(
+  record: Pick<StrategyArtifactRecord, "projectId" | "id">,
+  fieldName: "policy" | "owner_wallet",
+) {
   return {
     projectId: record.projectId,
     recordType: RECORD_TYPE,
     recordId: record.id,
-    fieldName: "policy",
+    fieldName,
   } as const;
 }
 
-export async function submitStrategyArtifact(input: {
+export function buildStrategyArtifact(input: {
   projectId: string;
   agentId: string;
   policy: unknown;
   keyMaterial: ProjectKeyMaterial;
-  store: StrategyArtifactStore;
+  ownerFingerprint?: string;
+  ownerWalletAddress?: string;
   now?: () => Date;
   idFactory?: () => string;
-}): Promise<StrategyArtifactRecord> {
+}): StrategyArtifactRecord {
   const projectId = input.projectId.trim();
   const agentId = input.agentId.trim();
   if (projectId.length < 1 || agentId.length < 1 || agentId.length > 80) {
@@ -83,9 +90,15 @@ export async function submitStrategyArtifact(input: {
   const id = input.idFactory?.() ?? randomUUID();
   const encryptedPolicy = encryptField(
     JSON.stringify(policy),
-    contextFor({ projectId, id }),
+    contextFor({ projectId, id }, "policy"),
     input.keyMaterial,
   );
+  const ownerWalletAddress = input.ownerWalletAddress
+    ? normalizeFeltAddress(input.ownerWalletAddress)
+    : undefined;
+  if ((input.ownerFingerprint && !ownerWalletAddress) || (!input.ownerFingerprint && ownerWalletAddress)) {
+    throw new Error("STRATEGY_OWNER_INVALID");
+  }
   const record: StrategyArtifactRecord = {
     id,
     projectId,
@@ -93,9 +106,32 @@ export async function submitStrategyArtifact(input: {
     displayName: policy.displayName,
     artifactCommitment: strategyArtifactCommitment(policy),
     encryptedPolicy,
+    ownerFingerprint: input.ownerFingerprint,
+    encryptedOwnerWallet: ownerWalletAddress
+      ? encryptField(
+        ownerWalletAddress,
+        contextFor({ projectId, id }, "owner_wallet"),
+        input.keyMaterial,
+      )
+      : undefined,
     status: "sealed",
     createdAt: input.now?.() ?? new Date(),
   };
+  return record;
+}
+
+export async function submitStrategyArtifact(input: {
+  projectId: string;
+  agentId: string;
+  policy: unknown;
+  keyMaterial: ProjectKeyMaterial;
+  store: StrategyArtifactStore;
+  ownerFingerprint?: string;
+  ownerWalletAddress?: string;
+  now?: () => Date;
+  idFactory?: () => string;
+}): Promise<StrategyArtifactRecord> {
+  const record = buildStrategyArtifact(input);
   await input.store.save(record);
   return record;
 }
@@ -106,7 +142,7 @@ export async function openStrategyArtifact(input: {
 }): Promise<{ policy: StrategyPolicy; agent: ReturnType<typeof compileStrategyAgent> }> {
   const plaintext = decryptField(
     input.record.encryptedPolicy,
-    contextFor(input.record),
+    contextFor(input.record, "policy"),
     input.keyMaterial,
   );
   let policy: StrategyPolicy;
@@ -122,4 +158,16 @@ export async function openStrategyArtifact(input: {
     policy,
     agent: compileStrategyAgent(input.record.agentId, policy),
   };
+}
+
+export function openStrategyOwnerWallet(input: {
+  record: StrategyArtifactRecord;
+  keyMaterial: ProjectKeyMaterial;
+}): string | undefined {
+  if (!input.record.encryptedOwnerWallet) return undefined;
+  return normalizeFeltAddress(decryptField(
+    input.record.encryptedOwnerWallet,
+    contextFor(input.record, "owner_wallet"),
+    input.keyMaterial,
+  ));
 }

@@ -165,18 +165,6 @@ export function createAuthChallengeService(options: ChallengeServiceOptions = {}
         return { ok: false as const, code: "CHALLENGE_ALTERED" as const };
       }
 
-      if (persistence) {
-        const consumedRecord = await persistence.consume(nonce, new Date(now));
-        if (consumedRecord === "REPLAYED") {
-          return { ok: false as const, code: "CHALLENGE_REPLAYED" as const };
-        }
-        if (!consumedRecord) {
-          return { ok: false as const, code: "CHALLENGE_NOT_FOUND" as const };
-        }
-      } else {
-        active.delete(nonce);
-        consumed.set(nonce, Date.parse(stored.challenge.expiresAt));
-      }
       try {
         const valid = await input.verifySignature(
           stored.challenge.typedData,
@@ -188,6 +176,21 @@ export function createAuthChallengeService(options: ChallengeServiceOptions = {}
         }
       } catch {
         return { ok: false as const, code: "SIGNATURE_UNAVAILABLE" as const };
+      }
+      if (persistence) {
+        const consumedRecord = await persistence.consume(nonce, new Date(now));
+        if (consumedRecord === "REPLAYED") {
+          return { ok: false as const, code: "CHALLENGE_REPLAYED" as const };
+        }
+        if (!consumedRecord) {
+          return { ok: false as const, code: "CHALLENGE_NOT_FOUND" as const };
+        }
+      } else {
+        if (!active.has(nonce)) {
+          return { ok: false as const, code: "CHALLENGE_REPLAYED" as const };
+        }
+        active.delete(nonce);
+        consumed.set(nonce, Date.parse(stored.challenge.expiresAt));
       }
       return { ok: true as const, walletAddress: stored.challenge.walletAddress };
     },

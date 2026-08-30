@@ -114,7 +114,7 @@ describe("STRK20 address and wallet adapter", () => {
 
   it("confirms only a successful receipt whose trace touches the configured pool", async () => {
     const result = await confirmStrk20Transaction({
-      getTransactionReceipt: async () => ({ execution_status: "SUCCEEDED" }),
+      getTransactionReceipt: async () => ({ execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L2" }),
       getTransactionTrace: async () => ({ execute_invocation: { contract_address: "0x040337B1AF3C663E86E333BAB5A4B28DA8D4652A15A69BEEE2B677776FFE812A" } }),
     }, { transactionHash: "0xtx", poolAddress }, { sleep: async () => undefined });
     expect(result).toMatchObject({ kind: "confirmed", transactionHash: "0xtx" });
@@ -132,7 +132,7 @@ describe("STRK20 address and wallet adapter", () => {
     }, { transactionHash: "0xtimeout", poolAddress }, { maxAttempts: 2, sleep: async () => undefined })).resolves.toEqual({ kind: "unknown", transactionHash: "0xtimeout", reason: "CONFIRMATION_TIMEOUT" });
 
     await expect(confirmStrk20Transaction({
-      getTransactionReceipt: async () => ({ execution_status: "SUCCEEDED" }),
+      getTransactionReceipt: async () => ({ execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L2" }),
       getTransactionTrace: async () => ({ execute_invocation: { contract_address: "0x999" } }),
     }, { transactionHash: "0xmissing", poolAddress }, { sleep: async () => undefined })).resolves.toEqual({ kind: "unknown", transactionHash: "0xmissing", reason: "POOL_TRACE_MISSING" });
   });

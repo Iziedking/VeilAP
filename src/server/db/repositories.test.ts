@@ -47,4 +47,67 @@ describe("memory repository contract", () => {
       wrappedDataKey: "wrapped-alpha",
     });
   });
+
+  it("keeps settlement preparation and its audit event atomic", async () => {
+    const repositories = createMemoryRepositories();
+    const now = new Date("2026-08-30T09:00:00.000Z");
+    const pool = {
+      id: "pool-atomic",
+      projectId: "project-atomic",
+      seasonId: "season-atomic",
+      tokenAddress: "0x123",
+      tokenSymbol: "STRK",
+      poolAddress: "0x456",
+      amountMinor: "1000",
+      sponsorFingerprint: "sponsor",
+      status: "funded" as const,
+      fundingTransactionHash: "0xfunded",
+      fundingReceiptDigest: "funded-receipt",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const duplicateAudit = {
+      id: "audit-duplicate",
+      projectId: pool.projectId,
+      actorFingerprint: "operator",
+      eventType: "existing_event",
+      payloadDigest: "existing-digest",
+      createdAt: now,
+    };
+    await repositories.projects.saveArenaPrizePool(pool);
+    await repositories.projects.saveAuditEvent(duplicateAudit);
+
+    const pendingPool = {
+      ...pool,
+      status: "settlement_pending" as const,
+      winnerAgentId: "winner",
+      recipientFingerprint: "recipient",
+      encryptedRecipient: {
+        version: 1 as const,
+        algorithm: "AES-256-GCM" as const,
+        ciphertext: "ciphertext",
+        iv: "iv",
+        authTag: "auth-tag",
+      },
+      updatedAt: new Date("2026-08-30T09:01:00.000Z"),
+    };
+    await expect(repositories.projects.prepareArenaPrizeSettlement({
+      pool: pendingPool,
+      expectedStatus: "funded",
+      audit: duplicateAudit,
+    })).rejects.toThrow("AUDIT_EVENT_ALREADY_EXISTS");
+    const unchanged = await repositories.projects.getArenaPrizePool(pool.projectId, pool.seasonId);
+    expect(unchanged).toMatchObject({ status: "funded" });
+    expect(unchanged).not.toHaveProperty("winnerAgentId");
+
+    await expect(repositories.projects.prepareArenaPrizeSettlement({
+      pool: pendingPool,
+      expectedStatus: "funded",
+      audit: { ...duplicateAudit, id: "audit-prepared", eventType: "arena_prize_settlement_prepared" },
+    })).resolves.toBeUndefined();
+    await expect(repositories.projects.getArenaPrizePool(pool.projectId, pool.seasonId)).resolves.toMatchObject({
+      status: "settlement_pending",
+      winnerAgentId: "winner",
+    });
+  });
 });

@@ -34,7 +34,7 @@ describe("server configuration", () => {
     expect(config.missing).toEqual([]);
   });
 
-  it("allows explicitly enabled local preview authentication only", () => {
+  it("never enables preview mode in production", () => {
     expect(
       canAuthenticate({
         NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
@@ -42,21 +42,11 @@ describe("server configuration", () => {
         VEILAP_APP_ORIGIN: "http://127.0.0.1:3003",
         NODE_ENV: "production",
       }),
-    ).toBe(true);
-    expect(
-      canAuthenticate({
-        NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
-        VEILAP_PREVIEW_AUTH: "1",
-        VEILAP_APP_ORIGIN: "http://localhost:3003",
-        NODE_ENV: "production",
-      }),
-    ).toBe(true);
-    expect(
-      canAuthenticate({
-        NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",
-        NODE_ENV: "production",
-      }),
     ).toBe(false);
+    expect(readServerConfig({ NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1", NODE_ENV: "production" }).mode).toBe("persisted");
+  });
+
+  it("allows preview authentication only during local development", () => {
     expect(
       canAuthenticate({
         NEXT_PUBLIC_VEILAP_PREVIEW_MODE: "1",

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readRequestActor } from "@/server/auth/request-actor";
 import { readIdempotencyKey } from "@/server/http/idempotency";
+import { JsonBodyError, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
 import { getArenaSeasonService } from "@/server/projects/runtime";
 
@@ -14,6 +15,8 @@ const requestSchema = z.object({
   startsAt: z.string().min(1),
   locksAt: z.string().min(1),
   endsAt: z.string().min(1),
+  entryMode: z.enum(["invite_only", "open"]).default("invite_only"),
+  maxEntries: z.number().int().min(2).max(32).default(16),
 }).strict();
 
 export async function POST(
@@ -24,14 +27,17 @@ export async function POST(
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
     const { projectId } = await context.params;
-    const input = requestSchema.parse(await request.json());
+    const input = requestSchema.parse(await readJsonBody(request));
     return serviceResponse(await getArenaSeasonService().createSeason({
       projectId,
       actorWalletAddress: actor.walletAddress,
       idempotencyKey: readIdempotencyKey(request) ?? "",
       ...input,
     }));
-  } catch {
+  } catch (error) {
+    if (error instanceof JsonBodyError) {
+      return NextResponse.json({ ok: false, code: error.code }, { status: error.status, headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.json({ ok: false, code: "INVALID_INPUT" }, { status: 400 });
   }
 }

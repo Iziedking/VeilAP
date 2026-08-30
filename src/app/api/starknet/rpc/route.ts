@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { expectedOrigin, requestOrigin } from "@/server/auth/runtime";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
+
 export const runtime = "nodejs";
 
 const READ_ONLY_METHODS = new Set([
@@ -27,19 +30,19 @@ const rpcSchema = z.object({
   id: z.union([z.string(), z.number(), z.null()]),
   method: z.string(),
   params: z.unknown().optional(),
-});
+}).strict();
 
 export async function POST(request: Request) {
   const rpcUrl = process.env.STARKNET_RPC_URL;
   if (!rpcUrl) {
     return NextResponse.json({ error: "RPC_NOT_CONFIGURED" }, { status: 503 });
   }
+  const origin = requestOrigin(request);
+  if (!origin || origin !== expectedOrigin(request)) {
+    return NextResponse.json({ error: "ORIGIN_MISMATCH" }, { status: 403 });
+  }
   try {
-    const raw = await request.text();
-    if (raw.length > 65_536) {
-      return NextResponse.json({ error: "RPC_REQUEST_TOO_LARGE" }, { status: 413 });
-    }
-    const body = rpcSchema.parse(JSON.parse(raw));
+    const body = rpcSchema.parse(await readJsonBody(request, 65_536));
     if (!READ_ONLY_METHODS.has(body.method)) {
       return NextResponse.json({ error: "RPC_METHOD_REFUSED" }, { status: 403 });
     }
@@ -57,7 +60,9 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
     });
-  } catch {
+  } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     return NextResponse.json({ error: "RPC_REQUEST_INVALID" }, { status: 400 });
   }
 }

@@ -1,5 +1,6 @@
 import {
   DecryptCommand,
+  DescribeKeyCommand,
   EncryptCommand,
   KMSClient,
 } from "@aws-sdk/client-kms";
@@ -10,6 +11,18 @@ export interface KmsKeyProviderOptions {
   keyId: string;
   region: string;
   client?: KMSClient;
+}
+
+export async function checkKmsKeyAccess(options: KmsKeyProviderOptions): Promise<boolean> {
+  if (!options.keyId.trim() || !options.region.trim()) return false;
+  const client = options.client ?? new KMSClient({ region: options.region });
+  try {
+    const result = await client.send(new DescribeKeyCommand({ KeyId: options.keyId }));
+    return result.KeyMetadata?.Enabled === true
+      && result.KeyMetadata.KeyUsage === "ENCRYPT_DECRYPT";
+  } catch {
+    return false;
+  }
 }
 
 export class KmsKeyProvider implements KeyProvider {

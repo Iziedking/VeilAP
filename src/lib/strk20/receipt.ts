@@ -11,24 +11,29 @@ export interface ReceiptTraceProvider {
 export interface ConfirmationOptions {
   maxAttempts?: number;
   waitMs?: number;
+  requestTimeoutMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
-type ReceiptState = "succeeded" | "reverted" | "pending" | "unknown";
+type ReceiptState = "succeeded" | "reverted" | "pending";
 
 export async function confirmStrk20Transaction(
   provider: ReceiptTraceProvider,
   input: { transactionHash: string; poolAddress: string },
   options: ConfirmationOptions = {},
 ): Promise<Strk20Outcome> {
-  const maxAttempts = options.maxAttempts ?? 3;
-  const waitMs = options.waitMs ?? 1_000;
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
+  const waitMs = Math.max(0, options.waitMs ?? 1_000);
+  const requestTimeoutMs = Math.max(1, options.requestTimeoutMs ?? 10_000);
   const sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     let receipt: unknown;
     try {
-      receipt = await provider.getTransactionReceipt(input.transactionHash);
+      receipt = await withTimeout(
+        provider.getTransactionReceipt(input.transactionHash),
+        requestTimeoutMs,
+      );
     } catch {
       receipt = undefined;
     }
@@ -39,7 +44,10 @@ export async function confirmStrk20Transaction(
     }
     if (state === "succeeded") {
       try {
-        const trace = await provider.getTransactionTrace(input.transactionHash);
+        const trace = await withTimeout(
+          provider.getTransactionTrace(input.transactionHash),
+          requestTimeoutMs,
+        );
         if (!traceTouchesPool(trace, input.poolAddress)) {
           return { kind: "unknown", transactionHash: input.transactionHash, reason: "POOL_TRACE_MISSING" };
         }
@@ -62,18 +70,15 @@ export function traceTouchesPool(trace: unknown, poolAddress: string): boolean {
   const visited = new Set<object>();
 
   function visit(value: unknown): boolean {
-    if (typeof value !== "object" || value === null) return false;
-    if (visited.has(value)) return false;
+    if (typeof value !== "object" || value === null || visited.has(value)) return false;
     visited.add(value);
     if (Array.isArray(value)) return value.some(visit);
 
-    for (const [key, nested] of Object.entries(value)) {
-      if (ADDRESS_KEYS.has(key) && typeof nested === "string" && sameFeltAddress(nested, poolAddress)) {
-        return true;
-      }
-      if (visit(nested)) return true;
-    }
-    return false;
+    const record = value as Record<string, unknown>;
+    const contractAddress = stringField(record, "contract_address", "contractAddress");
+    const reverted = record.is_reverted === true || record.isReverted === true;
+    if (contractAddress && !reverted && sameFeltAddress(contractAddress, poolAddress)) return true;
+    return Object.values(record).some(visit);
   }
 
   return visit(trace);
@@ -82,18 +87,35 @@ export function traceTouchesPool(trace: unknown, poolAddress: string): boolean {
 function receiptState(value: unknown): ReceiptState {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return "pending";
   const record = value as Record<string, unknown>;
-  const executionStatus = typeof record.execution_status === "string"
-    ? record.execution_status.toUpperCase()
-    : undefined;
-  if (executionStatus === "SUCCEEDED") return "succeeded";
+  const executionStatus = stringField(record, "execution_status", "executionStatus")?.toUpperCase();
+  const finalityStatus = stringField(record, "finality_status", "finalityStatus")?.toUpperCase();
   if (executionStatus === "REVERTED") return "reverted";
+  if (
+    executionStatus === "SUCCEEDED"
+    && (finalityStatus === "ACCEPTED_ON_L2" || finalityStatus === "ACCEPTED_ON_L1")
+  ) {
+    return "succeeded";
+  }
   return "pending";
 }
 
-const ADDRESS_KEYS = new Set([
-  "contract_address",
-  "contractAddress",
-  "to",
-  "target",
-  "address",
-]);
+function stringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    if (typeof record[key] === "string") return record[key];
+  }
+  return undefined;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("RPC_TIMEOUT")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}

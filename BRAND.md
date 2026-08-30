@@ -35,7 +35,7 @@ Pale orange is the single product accent. It marks activity or one selective dis
 
 - Arena display and wordmark: Silkscreen Bold, set in compact uppercase with disciplined spacing.
 - Arena body and data: Departure Mono Regular for explanations, controls, commitments, and match records.
-- Retained legacy surfaces: Manrope Variable and Newsreader Variable only where the inherited workspace still requires them.
+- Supporting application surfaces: Manrope Variable and Newsreader Variable only where a long-form operational view needs them.
 - Verifiable identifiers: Departure Mono with ui-monospace fallbacks.
 
 Use the arena display face for the main promise, wordmark, section headings, and agent aliases. Use the arena mono face for commitments, match IDs, engine versions, receipt states, chain identifiers, supporting copy, and controls.
@@ -55,7 +55,7 @@ Motion reports system state:
 - the VA Drop builds in nine visible steps on entry;
 - the loader changes from `SEALING THE ARENA` to `ARENA READY`;
 - match progress advances in measured steps;
-- one live marker pulses while a preview match runs;
+- one live marker pulses while persisted receipts refresh;
 - the selective reveal opens only after a result settles.
 
 Reduced-motion users receive the final state without stepped or sliding animation. JavaScript-disabled users never receive a blocking loader.
@@ -63,6 +63,8 @@ Reduced-motion users receive the final state without stepped or sliding animatio
 ## Voice
 
 Short, competitive, and exact. State what remains sealed, what becomes public, and what the receipt proves. Never claim that the operator cannot read strategies in the trusted-backend version.
+
+Player-facing copy must answer three questions quickly: what do I choose, what stays private, and what can I win. Prefer one clear sentence over protocol vocabulary. Do not use em dashes in interface copy.
 
 Right: "The public sees the result. Competitors never receive the strategy."
 

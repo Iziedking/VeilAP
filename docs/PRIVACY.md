@@ -1,59 +1,103 @@
-# Veil Arena privacy boundary
+# Veil Arena privacy and threat boundary
 
-Last verified against the STRK20 documentation export on 28 August 2026.
+Last reviewed against the implemented source on 30 August 2026.
 
-## Two separate privacy systems
+## Privacy model
 
-Veil Arena has two privacy layers with different jobs.
+Veil Arena uses two separate privacy systems.
 
-Application encryption protects agent strategy artifacts, private reasoning, full transcripts, and builder records from competitors and public APIs.
+Application encryption protects strategy policies, private match inputs, payout wallets, and transfer authorizations in storage. STRK20 protects private in-pool transfers from public chain observers. STRK20 does not encrypt agent files, prompts, or database records.
 
-STRK20 protects private in-pool funding and payout transfers from public chain observers. It does not encrypt arbitrary strategy files.
+## Data classification
 
-## Strategy privacy in version one
+| Data | Public | Stored encrypted | Trusted runner can read |
+| --- | --- | --- | --- |
+| Agent alias and identifier | Yes | No | Yes |
+| Artifact commitment | Yes | No | Yes |
+| Strategy policy | No | Yes | Yes, during authorized execution |
+| Builder wallet address | No | Fingerprint plus encrypted payout address | Authorized application services only |
+| Match seed | Commitment only | Yes | Yes, during execution and replay |
+| Full transcript | Root and selected leaf only | Reproducible from encrypted inputs | Yes |
+| Score, rank, and receipt | Yes | No | Yes |
+| Losing selective reveal | One authorized action | Public after reveal | Yes |
+| Funding or payout plan | No | Authorization is encrypted | Sponsor and authorized application services |
+| Public settlement receipt | Winner agent and digests | No | Yes |
+| Private transfer recipient and amount | No | Recipient encrypted; amount held in private operator record | Sponsor and authorized application services |
 
-The browser will validate a constrained strategy policy, encrypt it, and submit ciphertext plus an artifact commitment. Stored records must not contain the plaintext policy.
+## Strategy protection
 
-The trusted backend can unwrap the strategy for an authorized isolated evaluation run. The runner can observe the strategy and full transcript. Database, KMS, and deployment operators remain inside the trust boundary.
+The player builder creates a constrained, versioned deterministic policy. The server validates it, computes an artifact commitment, encrypts the policy with a project data key, and stores only the encrypted artifact plus public metadata.
 
-Version one is therefore private from competitors and the public, but not operator-blind or end-to-end encrypted.
+The project data key is wrapped by AWS KMS. The EC2 application role can request KMS encrypt and decrypt operations for the configured key. Database access alone does not expose plaintext strategy data.
 
-## Public tournament data
+The trusted runner unwraps the project key and decrypts both policies for an authorized scheduled match. The runner can therefore observe the policy and full transcript. A host administrator with sufficient application and KMS access is also inside this boundary.
 
-- agent alias;
-- artifact commitment;
-- arena, ruleset, and engine version;
-- wins, losses, score, rank, and hands evaluated;
-- seed commitment and transcript root;
-- signed result receipt;
-- one selected losing action after settlement;
-- private settlement confirmed state without recipient or amount.
+Version one is private from competitors and public APIs. It is not operator-blind, end-to-end encrypted, zero knowledge, or confidential-compute attested.
 
-## Selective disclosure
+## Wallet privacy
 
-A settled match may expose one decisive losing action with its state hash and Merkle inclusion proof. The public verifier can check that the action belongs to the committed transcript.
+Wallet sign-in uses a one-time typed-data challenge bound to `SN_MAIN`, the expected browser origin, the wallet, and an expiry. The API verifies the signature through the configured Starknet RPC. A consumed nonce cannot be replayed.
 
-The reveal does not include the complete policy, prompt, reasoning, or transcript. Repeated disclosures must be capped so a sequence of losses cannot reconstruct a strategy.
+The session cookie is HTTP-only, secure in production, host-only, and SameSite Strict. The database stores a keyed wallet fingerprint for authorization joins. Payout addresses are encrypted under the project data key.
 
-The winning policy is never returned by a public endpoint. This does not mean the trusted runner never saw it.
+Veil Arena never asks for, receives, or stores a wallet private key or STRK20 viewing key.
 
-## What STRK20 is designed to conceal
+## Match evidence and selective disclosure
 
-For a private transfer inside the STRK20 pool, the protocol is designed to hide sender, recipient, amount, token type, and spent notes from public observers. Veil Arena asks a compatible privacy wallet to prepare proofs and sign. The application must not receive or store the user's viewing key or private key.
+A public match receipt binds the participating artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. New receipts are signed with the configured Ed25519 receipt key.
 
-## What remains observable
+An authorized reveal replays the deterministic match and publishes one losing action with its inclusion path. The verifier can check that the leaf belongs to the committed transcript. The complete policy, private cards, full transcript, and winning strategy remain absent from the public response.
 
-- that the STRK20 pool was called and when;
-- public ERC-20 deposit and withdrawal legs;
-- network metadata and wallet behavior;
-- a small anonymity set or distinctive timing pattern;
-- information a participant voluntarily discloses;
-- application operators inside the declared trusted boundary.
+Repeated reveal policy is an operator responsibility. A season should disclose only the minimum evidence required for accountability.
 
-## Current preview
+## Reward privacy and proof boundary
 
-The landing broadcast uses synthetic agents, matches, scores, commitments, actions, and settlement states. It does not upload a strategy, run a poker engine, connect a wallet, submit a transaction, or prove a payout.
+Funding is a sponsor shield operation into the sponsor's own STRK20 private balance. Settlement is a private STRK20 transfer from that sponsor to the encrypted winner wallet.
 
-## Claim rule
+Before either confirmation is accepted, the sponsor signs a five-minute typed authorization that binds:
 
-Do not use "fully anonymous", "untraceable", "private forever", "trustless execution", or "end-to-end encrypted" unless the implemented system and repeatable evidence support that exact statement. Name who cannot read a field and who still can.
+- operation;
+- project, season, and application pool record;
+- STRK20 pool and token;
+- amount and recipient;
+- plan digest and transaction hash;
+- issue and expiry time.
+
+The API verifies the signature against the original sponsor wallet, rejects altered or expired plans, prevents transaction-hash reuse, checks Starknet finality, and requires the trace to touch the configured STRK20 pool. The authorization is encrypted before persistence.
+
+The chain does not reveal enough private transfer detail for the application to prove the hidden token, amount, and recipient from public events. The sponsor signature attests those hidden fields. The chain evidence proves finality and pool interaction. The application record is not an onchain escrow and does not prove sponsor solvency.
+
+Public settlement responses omit the recipient, amount, token, pool address, transaction hash, sponsor identity, and encrypted authorization.
+
+## Observable information
+
+Privacy does not remove all metadata. Observers may still learn:
+
+- when the STRK20 pool was called;
+- public deposit or withdrawal edges;
+- network timing and transaction behavior;
+- that a particular season or match exists;
+- aliases, commitments, scores, and signed receipts;
+- information disclosed by a player or operator outside Veil Arena;
+- data available to systems inside the declared trusted boundary.
+
+Small anonymity sets and distinctive timing can weaken practical privacy.
+
+## Threats and controls
+
+| Threat | Current control | Residual risk |
+| --- | --- | --- |
+| Competitor reads a policy | Public schemas exclude policy; encrypted persistence | Trusted operators can still read during execution |
+| Database theft | Envelope encryption and KMS-wrapped project keys | Application and KMS compromise can expose data |
+| Wallet impersonation | One-time typed challenge, RPC verification, durable session revocation | Compromised wallet or browser remains authoritative |
+| Cross-origin session abuse | Exact origin checks, strict CORS, SameSite cookie | Misconfigured production origins can break or weaken access |
+| Duplicate match execution | Database lease, idempotency key, terminal state checks | Database outage can delay reconciliation |
+| Fake reward confirmation | Sponsor signature, exact plan binding, finality, pool trace, replay guard | No contract-enforced escrow or public proof of hidden fields |
+| Strategy reconstruction | Minimal selective reveal and no full transcript endpoint | Too many operator-approved reveals can leak behavior |
+| Sensitive log leakage | Public error mapping and digest-based audit records | Operators must keep request-body logging disabled |
+
+## Claims Veil Arena does not make
+
+Do not describe version one as fully anonymous, untraceable, trustless, private forever, operator-blind, zero knowledge, or end-to-end encrypted.
+
+The precise claim is: competitors and public APIs receive verifiable competition results without receiving submitted strategy policies or private reward fields. Authorized infrastructure can decrypt the minimum data required to run and settle the competition.

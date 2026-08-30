@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createAuthChallengeService, type AuthChallenge } from "./challenge";
-import { createSessionToken, verifySessionToken } from "./session";
+import { createSessionToken, verifyActiveSession, verifySessionToken } from "./session";
+import { createMemoryRepositories } from "@/server/db/repositories";
 
 const ORIGIN = "http://127.0.0.1:3000";
 const WALLET = "0x123";
@@ -91,6 +92,37 @@ describe("challenge refusal paths", () => {
     expect(await service.verify(request)).toMatchObject({ ok: true });
     expect(await service.verify(request)).toEqual({ ok: false, code: "CHALLENGE_REPLAYED" });
   });
+
+  it("does not consume a challenge when signature verification fails", async () => {
+    const service = makeService();
+    const challenge = service.issue({ walletAddress: WALLET, origin: ORIGIN, chainId: CHAIN_ID });
+    const request = {
+      challenge,
+      requestOrigin: ORIGIN,
+      walletAddress: WALLET,
+      signature: ["0x1"],
+    };
+    await expect(service.verify({ ...request, verifySignature: async () => false })).resolves.toEqual({
+      ok: false,
+      code: "SIGNATURE_INVALID",
+    });
+    await expect(service.verify({ ...request, verifySignature: async () => true })).resolves.toMatchObject({ ok: true });
+  });
+
+  it("accepts only one concurrent verification", async () => {
+    const service = makeService();
+    const challenge = service.issue({ walletAddress: WALLET, origin: ORIGIN, chainId: CHAIN_ID });
+    const request = {
+      challenge,
+      requestOrigin: ORIGIN,
+      walletAddress: WALLET,
+      signature: ["0x1"],
+      verifySignature: async () => true,
+    };
+    const results = await Promise.all([service.verify(request), service.verify(request)]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results).toContainEqual({ ok: false, code: "CHALLENGE_REPLAYED" });
+  });
 });
 
 it("refuses an altered challenge before signature verification", async () => {
@@ -140,6 +172,36 @@ describe("signed session cookie", () => {
     expect(verifySessionToken(token, SECRET, NOW)).toEqual({
       ok: false,
       code: "SESSION_EXPIRED",
+    });
+  });
+
+  it("requires a durable, unrevoked session record", async () => {
+    const repositories = createMemoryRepositories();
+    const sessionId = "session-1";
+    const issuedAt = new Date(NOW);
+    const expiresAt = new Date(NOW + 60_000);
+    const token = createSessionToken({
+      sessionId,
+      walletAddress: WALLET,
+      issuedAt: issuedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    }, SECRET);
+
+    await expect(verifyActiveSession(token, SECRET, repositories.sessions, NOW)).resolves.toEqual({
+      ok: false,
+      code: "SESSION_INACTIVE",
+    });
+    await repositories.sessions.saveSession({
+      id: sessionId,
+      walletFingerprint: "fingerprint",
+      issuedAt,
+      expiresAt,
+    });
+    await expect(verifyActiveSession(token, SECRET, repositories.sessions, NOW)).resolves.toMatchObject({ ok: true });
+    await repositories.sessions.revokeSession(sessionId, new Date(NOW + 1));
+    await expect(verifyActiveSession(token, SECRET, repositories.sessions, NOW + 2)).resolves.toEqual({
+      ok: false,
+      code: "SESSION_INACTIVE",
     });
   });
 });

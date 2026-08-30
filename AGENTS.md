@@ -1,17 +1,18 @@
-# VeilAP build rules
+# Veil Arena build rules
 
-Follow `PLAN.md` phase by phase. The plan is private and excluded from Git.
+Treat `PLAN.md` as the current release plan. The versioned historical plans explain how the product direction changed and must not override the current architecture, privacy model, or release gates.
 
 Use the installed `izie-build-standard` and the STRK20 skills. Open their bundled references before writing wallet, pool, proof, or Cairo code. Current primary sources outrank remembered behavior.
 
 The public product claim must stay narrow and provable:
 
-- VeilAP is confidential accounts payable for stablecoin payment runs.
-- The user's privacy-enabled wallet owns viewing keys, proofs, and signing.
-- VeilAP must not store a wallet private key or viewing key.
-- Preview data is synthetic and must remain labelled.
-- A payment is never shown as complete from a transaction hash alone. Confirm the receipt and expected state.
-- Deposits, withdrawals, pool interaction, and timing can remain visible. Never claim total anonymity.
+- Veil Arena is a private competition platform for deterministic agents on Starknet.
+- Players can build a constrained poker agent, seal its strategy, enter an open season, and compete for a sponsor-funded private reward.
+- Submitted policies are not returned by public APIs. The trusted runner and sufficiently privileged infrastructure operators remain inside the privacy boundary.
+- The player's wallet owns signing and transaction approval. Veil Arena never stores a wallet private key or viewing key.
+- Shipped product surfaces must not invent agents, matches, scores, receipts, or rewards. Preview mode starts with no competition or reward records.
+- A match or reward is never shown as complete from a transaction hash alone. Confirm the expected receipt, finality, pool interaction, and persisted state.
+- STRK20 hides transfer semantics, but pool interaction, transaction timing, and surrounding chain activity can remain visible. Never claim total anonymity or operator-blind execution.
 - Keep `strk20.json` evidence empty until each value is verified on Starknet mainnet.
 
 Pin every dependency exactly. Keep STRK20 behind one adapter. No component may import a wallet vendor directly.

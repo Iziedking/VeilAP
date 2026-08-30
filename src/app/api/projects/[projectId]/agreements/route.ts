@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { readRequestActor } from "@/server/auth/request-actor";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
 import { getProjectService } from "@/server/projects/runtime";
 import { agreementTermsSchema } from "@/server/projects/project-service";
@@ -32,13 +33,15 @@ export async function POST(
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
     const { projectId } = await context.params;
-    const terms = agreementTermsSchema.parse(await request.json());
+    const terms = agreementTermsSchema.parse(await readJsonBody(request));
     return serviceResponse(await getProjectService().createAgreement({
       projectId,
       actorWalletAddress: actor.walletAddress,
       terms,
     }));
-  } catch {
+  } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     return NextResponse.json({ ok: false, code: "INVALID_INPUT" }, { status: 400 });
   }
 }

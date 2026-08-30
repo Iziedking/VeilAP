@@ -1,22 +1,44 @@
 import { expect, test } from "@playwright/test";
 
-test("preview exposes no signed receipt or private receipt data", async ({ page }) => {
-  await page.goto("/workspace");
+test("keeps private reward fields out of the public arena", async ({ page }) => {
+  await page.goto("/#settlements");
 
-  await expect(page.getByText("RECEIPT / NOT ISSUED")).toBeVisible();
-  await expect(page.getByText("PREVIEW / NO SIGNING KEY")).toBeVisible();
-  await expect(page.locator("body")).not.toContainText("transaction hash");
-  await expect(page.locator("body")).not.toContainText("recipient receipt");
-
-  const publicKeyResponse = await page.request.get("/api/receipts/public-key");
-  expect(publicKeyResponse.status()).toBe(503);
-  expect(await publicKeyResponse.json()).toEqual({ ok: false, code: "CONFIGURATION_MISSING" });
+  await expect(page.getByRole("heading", { name: "REWARD PROOF" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(
+    /amountMinor|tokenAddress|recipientFingerprint|fundingTransactionHash|settlementTransactionHash/,
+  );
+  await expect(page.locator("body")).toContainText("PRIVATE / SPONSOR AUTHORIZED");
 });
 
-test("preview receipt state stays honest after reload", async ({ page }) => {
-  await page.goto("/workspace");
-  await page.reload();
+test("returns a nullable session instead of fabricating a signed-in player", async ({ page }) => {
+  const response = await page.request.get("/api/auth/session");
 
-  await expect(page.getByText("RECEIPT / NOT ISSUED")).toBeVisible();
-  await expect(page.getByText("No wallet connected. No funds moved.").first()).toBeVisible();
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual({ ok: true, value: null });
+});
+
+test("ships the browser security headers on the public surface", async ({ page }) => {
+  const response = await page.request.get("/");
+
+  expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+  expect(response.headers()["x-frame-options"]).toBe("DENY");
+  expect(response.headers()["referrer-policy"]).toBe("no-referrer");
+  expect(response.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
+});
+
+test("rejects an unapproved browser origin before an API write runs", async ({ request }) => {
+  const response = await request.post("/api/auth/challenge", {
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://untrusted.example",
+    },
+    data: {
+      walletAddress: `0x${"0".repeat(63)}1`,
+      chainId: "SN_MAIN",
+    },
+  });
+
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toEqual({ ok: false, code: "ORIGIN_NOT_ALLOWED" });
+  expect(response.headers()["access-control-allow-origin"]).toBeUndefined();
 });

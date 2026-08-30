@@ -11,7 +11,7 @@ async function stubPreviewAuth(page: Parameters<typeof installFakeWallet>[0]): P
         ok: true,
         challenge: {
           version: 1,
-          origin: "http://127.0.0.1:3000",
+          origin: "http://127.0.0.1:3010",
           chainId: "SN_MAIN",
           walletAddress: "0x" + "0".repeat(63) + "1",
           nonce: "playwright-nonce",

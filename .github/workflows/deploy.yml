@@ -17,6 +17,22 @@ jobs:
   verify:
     name: Verify application
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://veil_arena_ci:veil_arena_ci@127.0.0.1:5432/veil_arena_ci
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: veil_arena_ci
+          POSTGRES_USER: veil_arena_ci
+          POSTGRES_PASSWORD: veil_arena_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veil_arena_ci -d veil_arena_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -33,8 +49,19 @@ jobs:
       - name: Run checks
         run: npm run check
 
+      - name: Prove database migrations are repeat-safe
+        run: |
+          npm run db:migrate
+          npm run db:migrate
+
       - name: Build application
         run: npm run build
+
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser journeys
+        run: npm run test:e2e
 
   deploy:
     name: Deploy backend VM
@@ -66,7 +93,7 @@ jobs:
           chmod 644 "$HOME/.ssh/known_hosts"
 
       - name: Package release
-        run: tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=.env --exclude=.env.* --exclude=deploy/veil-arena.env -czf "veil-arena-${RELEASE_SHA}.tgz" .
+        run: tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=.env --exclude=.env.* --exclude=deploy/veil-arena.env --exclude=playwright-report --exclude=test-results --exclude=ui-artifacts -czf "veil-arena-${RELEASE_SHA}.tgz" .
 
       - name: Copy release to VM
         run: scp -i "$HOME/.ssh/veil-vm" -o IdentitiesOnly=yes "veil-arena-${RELEASE_SHA}.tgz" "$VEIL_VM_USER@$VEIL_VM_HOST:/tmp/veil-arena-${RELEASE_SHA}.tgz"
@@ -80,7 +107,6 @@ jobs:
           release_dir="/opt/veil-arena/releases/${RELEASE_SHA}"
           mkdir -p "$release_dir" /opt/veil-arena/releases /opt/veil-arena/config
           tar -xzf "/tmp/veil-arena-${RELEASE_SHA}.tgz" -C "$release_dir"
-          ln -sfn "$release_dir" /opt/veil-arena/current
           rm -f "/tmp/veil-arena-${RELEASE_SHA}.tgz"
-          bash /opt/veil-arena/current/scripts/deploy-vm.sh
+          VEIL_ARENA_RELEASE_DIR="$release_dir" bash "$release_dir/scripts/deploy-vm.sh"
           REMOTE

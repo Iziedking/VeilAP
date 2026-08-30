@@ -7,6 +7,7 @@ import {
   hasAuthStore,
   requestOrigin,
 } from "@/server/auth/runtime";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 
 export const runtime = "nodejs";
 
@@ -40,10 +41,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const input = requestSchema.parse(await request.json());
+    const input = requestSchema.parse(await readJsonBody(request));
     const challenge = await getAuthChallenges().issue({ ...input, origin });
     return json({ ok: true, challenge });
-  } catch {
+  } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     return json({ ok: false, code: "CHALLENGE_REQUEST_INVALID" }, 400);
   }
 }

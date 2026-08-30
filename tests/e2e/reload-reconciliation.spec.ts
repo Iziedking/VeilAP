@@ -1,14 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-test("reload keeps the synthetic workspace from implying settlement", async ({ page }) => {
+test("redirects the retired workspace into the real player journey", async ({ page }) => {
   await page.goto("/workspace");
-  await page.getByRole("button", { name: "Open Circuit package / revision two" }).click();
-  await page.getByRole("button", { name: /accept.*prepare/i }).click();
 
-  await expect(page.getByText("The release intent is prepared, not paid.")).toBeVisible();
-  await page.getByRole("button", { name: "Close review" }).click();
+  await expect(page).toHaveURL(/\/play$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Build your agent. Keep its playbook private. Win rewards.",
+  );
+  await expect(page.locator("body")).not.toContainText(/synthetic project|release intent|zk compliance module/i);
+});
+
+test("reload never invents an entry, score, or reward", async ({ page }) => {
+  await page.goto("/play");
   await page.reload();
 
-  await expect(page.getByText("Synthetic project and values. No wallet connected. No funds moved.").first()).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(/payment complete|confirmed on mainnet/i);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(/entry confirmed|sample agent|preview reward/i);
+  await expect(page.getByRole("button", { name: /seal agent and enter|this arena is not accepting entries/i })).toBeDisabled();
 });

@@ -1,9 +1,5 @@
-import { VeilApDashboard } from "@/components/veilap-dashboard";
-
-export const metadata = {
-  title: "Proof workspace | VeilAP",
-};
+import { redirect } from "next/navigation";
 
 export default function WorkspacePage() {
-  return <VeilApDashboard />;
+  redirect("/play");
 }

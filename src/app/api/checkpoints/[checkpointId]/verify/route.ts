@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { readRequestActor } from "@/server/auth/request-actor";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
 import {
   verifyCheckpointInputSchema,
@@ -17,13 +18,15 @@ export async function POST(
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
     const { checkpointId } = await context.params;
-    const requestBody = verifyCheckpointInputSchema.parse(await request.json());
+    const requestBody = verifyCheckpointInputSchema.parse(await readJsonBody(request));
     return serviceResponse(await getVerificationService().verifyCheckpoint({
       checkpointId,
       actorWalletAddress: actor.walletAddress,
       request: requestBody,
     }));
-  } catch {
+  } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     return NextResponse.json({ ok: false, code: "INVALID_INPUT" }, { status: 400 });
   }
 }

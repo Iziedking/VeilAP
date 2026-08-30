@@ -49,7 +49,7 @@ describe("ReconciliationService", () => {
     let receiptCalls = 0;
     const value = await fixture();
     const service = value.service({
-      getTransactionReceipt: async () => { receiptCalls += 1; return { execution_status: "SUCCEEDED" }; },
+      getTransactionReceipt: async () => { receiptCalls += 1; return { execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L2" }; },
       getTransactionTrace: async () => ({ calls: [{ contract_address: poolAddress.toUpperCase() }] }),
     });
     const confirmed = await service.reconcile({ releaseId: "release-1", actorWalletAddress: company });
@@ -62,7 +62,7 @@ describe("ReconciliationService", () => {
   it("marks missing pool trace unknown and never treats a revert as paid", async () => {
     const missingTrace = await fixture();
     const unknown = await missingTrace.service({
-      getTransactionReceipt: async () => ({ execution_status: "SUCCEEDED" }),
+      getTransactionReceipt: async () => ({ execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L2" }),
       getTransactionTrace: async () => ({ calls: [{ contract_address: "0x123" }] }),
     }).reconcile({ releaseId: "release-1", actorWalletAddress: company });
     expect(unknown).toMatchObject({ ok: true, value: { status: "unknown", reason: "POOL_TRACE_MISSING" } });

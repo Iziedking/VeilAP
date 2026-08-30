@@ -6,7 +6,9 @@ import { createMemoryRepositories, createPostgresRepositories } from "@/server/d
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 import { canAuthenticate, isLoopbackOrigin, readServerConfig, requirePersistedConfig } from "@/server/env";
 
-export const SESSION_COOKIE = "veilap_session";
+export const SESSION_COOKIE = process.env.NODE_ENV === "production"
+  ? "__Host-veilap_session"
+  : "veilap_session";
 export const SESSION_TTL_MS = 8 * 60 * 60_000;
 
 const authChallenges = createAuthChallengeService();

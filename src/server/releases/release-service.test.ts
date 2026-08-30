@@ -106,7 +106,7 @@ describe("ReleaseService", () => {
 
   it("encrypts revenue inputs and recomputes the royalty before reservation", async () => {
     const value = await fixture("250000");
-    const revenue = await value.service.recordSyntheticRevenue({ projectId: value.projectId, actorWalletAddress: company, revenueEventId: value.revenueEventId, amountMinor: "10000000" });
+    const revenue = await value.service.recordRevenueEvent({ projectId: value.projectId, actorWalletAddress: company, revenueEventId: value.revenueEventId, amountMinor: "10000000" });
     expect(revenue).toEqual({ ok: true, value: { id: value.revenueEventId, amountMinor: "10000000" } });
     const release = await value.service.prepareRoyaltyRelease({ projectId: value.projectId, decisionId: value.decisionId, revenueEventId: value.revenueEventId, actorWalletAddress: company });
     expect(release).toMatchObject({ ok: true, value: { kind: "royalty", amountMinor: "250000" } });

@@ -2,14 +2,18 @@ import { randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
 import { authorizeProject } from "@/server/authorization/authorize";
+import { encryptField } from "@/server/crypto/envelope";
+import type { KeyProvider } from "@/server/crypto/key-provider";
 import type { ArenaMatchService, ArenaMatchServiceErrorCode, PublicArenaMatchView } from "@/server/arena/arena-match-service";
 import type {
   ArenaScheduledMatchRecord,
   ArenaSeasonEntryRecord,
   ArenaSeasonRecord,
+  ArenaPrizePoolStatus,
   ProjectRepository,
 } from "@/server/db/repositories";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
+import { openStrategyOwnerWallet } from "./strategy-artifacts";
 
 export type ArenaSeasonServiceErrorCode =
   | "INVALID_INPUT"
@@ -20,6 +24,8 @@ export type ArenaSeasonServiceErrorCode =
   | "ARENA_SEASON_NOT_LOCKED"
   | "ARENA_SEASON_ALREADY_LOCKED"
   | "ARENA_SEASON_TOO_SMALL"
+  | "ARENA_SEASON_FULL"
+  | "ARENA_WALLET_ALREADY_ENTERED"
   | "STRATEGY_ARTIFACT_NOT_FOUND"
   | "ARENA_SEASON_ENTRY_ALREADY_EXISTS"
   | "ARENA_SCHEDULED_MATCH_NOT_FOUND"
@@ -41,6 +47,10 @@ export interface ArenaSeasonView {
   locksAt: string;
   endsAt: string;
   status: ArenaSeasonRecord["status"];
+  entryMode: "invite_only" | "open";
+  maxEntries: number;
+  entryCount: number;
+  prizeStatus?: ArenaPrizePoolStatus;
   createdAt: string;
   lockedAt?: string;
 }
@@ -74,6 +84,7 @@ export interface ArenaSeasonScheduleView {
 
 export interface ArenaSeasonServiceDependencies {
   repositories: ProjectRepository;
+  keyProvider: KeyProvider;
   matchService: Pick<ArenaMatchService, "runMatch" | "getPublicArena">;
   walletHashPepper: string;
   now?: () => Date;
@@ -108,6 +119,7 @@ function normalizeSchedule(
   season: ArenaSeasonRecord,
   entries: ArenaSeasonEntryRecord[],
   matches: ArenaScheduledMatchRecord[],
+  prizeStatus?: ArenaPrizePoolStatus,
 ): ArenaSeasonScheduleView {
   return {
     season: {
@@ -119,6 +131,10 @@ function normalizeSchedule(
       locksAt: season.locksAt.toISOString(),
       endsAt: season.endsAt.toISOString(),
       status: season.status,
+      entryMode: season.entryMode ?? "invite_only",
+      maxEntries: season.maxEntries ?? 16,
+      entryCount: entries.length,
+      prizeStatus,
       createdAt: season.createdAt.toISOString(),
       lockedAt: season.lockedAt?.toISOString(),
     },
@@ -146,6 +162,7 @@ function normalizeSchedule(
 
 export class ArenaSeasonService {
   private readonly repositories: ProjectRepository;
+  private readonly keyProvider: KeyProvider;
   private readonly matchService: ArenaSeasonServiceDependencies["matchService"];
   private readonly walletHashPepper: string;
   private readonly now: () => Date;
@@ -153,6 +170,7 @@ export class ArenaSeasonService {
 
   constructor(dependencies: ArenaSeasonServiceDependencies) {
     this.repositories = dependencies.repositories;
+    this.keyProvider = dependencies.keyProvider;
     this.matchService = dependencies.matchService;
     this.walletHashPepper = dependencies.walletHashPepper;
     this.now = dependencies.now ?? (() => new Date());
@@ -168,6 +186,8 @@ export class ArenaSeasonService {
     startsAt: string;
     locksAt: string;
     endsAt: string;
+    entryMode?: "invite_only" | "open";
+    maxEntries?: number;
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonView>> {
     const projectId = input.projectId.trim();
     const name = input.name.trim();
@@ -175,7 +195,9 @@ export class ArenaSeasonService {
     const startsAt = parseDate(input.startsAt);
     const locksAt = parseDate(input.locksAt);
     const endsAt = parseDate(input.endsAt);
-    if (!projectId || !name || name.length > 120 || !rulesetPattern.test(rulesetVersion) || !startsAt || !locksAt || !endsAt || !(startsAt < locksAt && locksAt < endsAt) || !validKey(input.idempotencyKey)) {
+    const entryMode = input.entryMode ?? "invite_only";
+    const maxEntries = input.maxEntries ?? 16;
+    if (!projectId || !name || name.length > 120 || !rulesetPattern.test(rulesetVersion) || !startsAt || !locksAt || !endsAt || !(startsAt < locksAt && locksAt < endsAt) || (entryMode !== "invite_only" && entryMode !== "open") || !Number.isInteger(maxEntries) || maxEntries < 2 || maxEntries > 32 || !validKey(input.idempotencyKey)) {
       return { ok: false, code: "INVALID_INPUT" };
     }
 
@@ -197,6 +219,8 @@ export class ArenaSeasonService {
         startsAt: startsAt.toISOString(),
         locksAt: locksAt.toISOString(),
         endsAt: endsAt.toISOString(),
+        entryMode,
+        maxEntries,
       });
       const existing = await this.repositories.getArenaSeasonByCreateIdempotencyKey(projectId, input.idempotencyKey);
       if (existing) return existing.createRequestDigest === requestDigest ? { ok: true, value: this.view(existing) } : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
@@ -211,6 +235,8 @@ export class ArenaSeasonService {
         locksAt,
         endsAt,
         status: "open",
+        entryMode,
+        maxEntries,
         createdBy: actorFingerprint,
         createdAt,
         createIdempotencyKey: input.idempotencyKey,
@@ -229,6 +255,8 @@ export class ArenaSeasonService {
           startsAt: startsAt.toISOString(),
           locksAt: locksAt.toISOString(),
           endsAt: endsAt.toISOString(),
+          entryMode,
+          maxEntries,
         }),
         createdAt,
       });
@@ -266,6 +294,15 @@ export class ArenaSeasonService {
 
       const artifact = await this.repositories.getArenaStrategyArtifact(projectId, agentId);
       if (!artifact) return { ok: false, code: "STRATEGY_ARTIFACT_NOT_FOUND" };
+      const entries = await this.repositories.listArenaSeasonEntries(projectId, seasonId);
+      if (entries.length >= (season.maxEntries ?? 16)) return { ok: false, code: "ARENA_SEASON_FULL" };
+      const ownerBoundEntry = (season.entryMode ?? "invite_only") === "open";
+      if (ownerBoundEntry && artifact.ownerFingerprint) {
+        const ownerEntry = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(projectId, seasonId, artifact.ownerFingerprint);
+        if (ownerEntry) return ownerEntry.agentId === artifact.agentId
+          ? { ok: true, value: this.entryView(ownerEntry) }
+          : { ok: false, code: "ARENA_WALLET_ALREADY_ENTERED" };
+      }
       const requestDigest = commitment({ actorFingerprint, seasonId, agentId, artifactCommitment: artifact.artifactCommitment });
       const existingByKey = await this.repositories.getArenaSeasonEntryByIdempotencyKey(projectId, seasonId, input.idempotencyKey);
       if (existingByKey) return existingByKey.requestDigest === requestDigest ? { ok: true, value: this.entryView(existingByKey) } : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
@@ -274,13 +311,28 @@ export class ArenaSeasonService {
         ? { ok: true, value: this.entryView(existingAgent) }
         : { ok: false, code: "ARENA_SEASON_ENTRY_ALREADY_EXISTS" };
 
+      const entryId = this.idFactory();
+      const dataKey = ownerBoundEntry && artifact.encryptedOwnerWallet
+        ? await this.keyProvider.unwrap(project.wrappedDataKey, projectId)
+        : undefined;
+      const ownerWallet = dataKey
+        ? openStrategyOwnerWallet({ record: artifact, keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey } })
+        : undefined;
       const record: ArenaSeasonEntryRecord = {
-        id: this.idFactory(),
+        id: entryId,
         seasonId,
         projectId,
         agentId,
         displayName: artifact.displayName,
         artifactCommitment: artifact.artifactCommitment,
+        ownerFingerprint: ownerBoundEntry ? artifact.ownerFingerprint : undefined,
+        encryptedPayoutWallet: ownerWallet && dataKey
+          ? encryptField(
+            ownerWallet,
+            { projectId, recordType: "arena_season_entry", recordId: entryId, fieldName: "payout_wallet" },
+            { dataKey, wrappedKey: project.wrappedDataKey },
+          )
+          : undefined,
         joinedAt: this.now(),
         idempotencyKey: input.idempotencyKey,
         requestDigest,
@@ -397,6 +449,7 @@ export class ArenaSeasonService {
           season,
           await this.repositories.listArenaSeasonEntries(projectId, seasonId),
           await this.repositories.listArenaScheduledMatches(projectId, seasonId),
+          (await this.repositories.getArenaPrizePool(projectId, seasonId))?.status,
         ),
       };
     } catch {
@@ -500,7 +553,13 @@ export class ArenaSeasonService {
       const project = await this.repositories.getProject(projectId.trim());
       if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
       const records = await this.repositories.listArenaSeasons(projectId);
-      return { ok: true, value: records.map((record) => this.view(record)) };
+      const values = await Promise.all(records.map(async (record) => normalizeSchedule(
+        record,
+        await this.repositories.listArenaSeasonEntries(projectId, record.id),
+        [],
+        (await this.repositories.getArenaPrizePool(projectId, record.id))?.status,
+      ).season));
+      return { ok: true, value: values };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
     }
@@ -520,4 +579,5 @@ export class ArenaSeasonService {
       joinedAt: record.joinedAt.toISOString(),
     };
   }
+
 }

@@ -1,53 +1,49 @@
 import { expect, test } from "@playwright/test";
 
-test("refuses tampered evidence and prepares only a preview release", async ({ page }, testInfo) => {
-  await page.goto("/workspace");
+test("gives a first-time player a clear private-agent journey", async ({ page }, testInfo) => {
+  await page.goto("/play");
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 3_000 });
 
-  await expect(page.getByRole("heading", { name: "ZK Compliance Module" })).toBeVisible();
-  await expect(page.getByText("Synthetic project and values. No wallet connected. No funds moved.").first()).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(/payroll|supplier|invoice/i);
-
-  await page.getByRole("button", { name: "Open Circuit package / revision one" }).click();
-  await expect(page.getByRole("dialog")).toContainText("The artifact changed after its checkpoint was recorded.");
-  await expect(page.getByRole("dialog")).toContainText("MISMATCH");
-  await expect(page.getByRole("button", { name: /accept.*prepare/i })).toHaveCount(0);
-  await page.getByRole("button", { name: "Close review" }).click();
-
-  await page.getByRole("button", { name: "Open Circuit package / revision two" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Accept the exact checkpoint");
-  await page.getByRole("button", { name: /accept.*prepare/i }).click();
-
-  await expect(page.getByRole("dialog")).toContainText("The release intent is prepared, not paid.");
-  await expect(page.getByRole("dialog")).toContainText("Synthetic project and values. No wallet connected. No funds moved.");
-  await expect(page.getByText("RELEASE INTENT / RECEIPT PENDING")).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(/transaction hash|payment complete/i);
-  await page.getByRole("button", { name: "Close review" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Build your agent. Keep its playbook private. Win rewards.",
+  );
+  await expect(page.getByText("NO CODE NEEDED / PRIVATE STRATEGY")).toBeVisible();
+  await expect(page.getByRole("list", { name: "How to enter" })).toContainText(
+    "Answer three questions to build your agent",
+  );
+  await expect(page.getByRole("heading", { name: "Choose your arena" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose how your agent plays" })).toBeVisible();
+  await expect(page.getByText("EVERYONE CAN SEE")).toBeVisible();
+  await expect(page.getByText("KEPT PRIVATE")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Wallet access" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /seal agent and enter|this arena is not accepting entries/i })).toBeDisabled();
+  await expect(page.locator("body")).not.toContainText(/sample agent|preview data|synthetic project/i);
   await page.screenshot({
-    path: testInfo.outputPath(`workspace-prepared-${testInfo.project.name}.png`),
+    path: testInfo.outputPath(`play-${testInfo.project.name}.png`),
     fullPage: true,
   });
 });
 
-test("keeps the proof workspace within a 390px viewport with usable controls", async ({ page }) => {
+test("keeps the player builder usable at 390 pixels", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/workspace");
+  await page.goto("/play");
 
-  const width = await page.evaluate(() => ({
+  const layout = await page.evaluate(() => ({
     client: document.documentElement.clientWidth,
     scroll: document.documentElement.scrollWidth,
+    h1Count: document.querySelectorAll("h1").length,
+    visibleControls: [...document.querySelectorAll("a, button")]
+      .filter((element) => (element as HTMLElement).offsetParent !== null)
+      .map((element) => ({
+        width: element.getBoundingClientRect().width,
+        height: element.getBoundingClientRect().height,
+      })),
   }));
-  expect(width.scroll).toBeLessThanOrEqual(width.client);
 
-  const checkpointControls = page.locator(".checkpoint-open");
-  await expect(checkpointControls).toHaveCount(2);
-  const sizes = await checkpointControls.evaluateAll((controls) =>
-    controls.map((control) => {
-      const rect = control.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
-    }),
-  );
-  for (const size of sizes) {
-    expect(size.width).toBeGreaterThanOrEqual(44);
-    expect(size.height).toBeGreaterThanOrEqual(44);
+  expect(layout.scroll).toBeLessThanOrEqual(layout.client);
+  expect(layout.h1Count).toBe(1);
+  for (const control of layout.visibleControls) {
+    expect(control.width).toBeGreaterThanOrEqual(44);
+    expect(control.height).toBeGreaterThanOrEqual(44);
   }
 });

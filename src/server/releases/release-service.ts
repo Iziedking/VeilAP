@@ -98,7 +98,7 @@ export class ReleaseService {
     this.idFactory = dependencies.idFactory ?? randomUUID;
   }
 
-  async recordSyntheticRevenue(input: {
+  async recordRevenueEvent(input: {
     projectId: string;
     actorWalletAddress: string;
     revenueEventId?: string;
@@ -121,7 +121,7 @@ export class ReleaseService {
       const record: RevenueEventRecord = {
         id,
         projectId: input.projectId,
-        eventType: "synthetic_revenue",
+        eventType: "reported_revenue",
         encryptedAmount: encryptField(
           JSON.stringify({ amountMinor: input.amountMinor }),
           { projectId: input.projectId, recordType: "revenue_event", recordId: id, fieldName: "amount" },
@@ -135,7 +135,7 @@ export class ReleaseService {
         id: this.idFactory(),
         projectId: input.projectId,
         actorFingerprint: actor,
-        eventType: "synthetic_revenue_recorded",
+        eventType: "revenue_event_recorded",
         payloadDigest: commitment({ projectId: input.projectId, revenueEventId: id }),
         createdAt: this.now(),
       });
