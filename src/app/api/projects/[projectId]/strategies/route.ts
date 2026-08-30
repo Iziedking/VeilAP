@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readRequestActor } from "@/server/auth/request-actor";
+import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { getStrategyService } from "@/server/projects/runtime";
 import { serviceResponse } from "@/server/http/service-response";
 
@@ -20,7 +21,7 @@ export async function POST(
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
     const { projectId } = await context.params;
-    const input = requestSchema.parse(await request.json());
+    const input = requestSchema.parse(await readJsonBody(request));
     return serviceResponse(await getStrategyService().submitStrategy({
       projectId,
       actorWalletAddress: actor.walletAddress,
@@ -28,9 +29,28 @@ export async function POST(
       policy: input.policy,
     }));
   } catch (error) {
+    const bodyError = jsonBodyErrorResponse(error);
+    if (bodyError) return bodyError;
     if (error instanceof Error && error.message === "CONFIGURATION_MISSING") {
       return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });
     }
+    return NextResponse.json({ ok: false, code: "INVALID_INPUT" }, { status: 400 });
+  }
+}
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ projectId: string }> },
+) {
+  try {
+    const actor = await readRequestActor();
+    if (!actor.ok) return serviceResponse(actor);
+    const { projectId } = await context.params;
+    return serviceResponse(await getStrategyService().listStrategies({
+      projectId,
+      actorWalletAddress: actor.walletAddress,
+    }));
+  } catch {
     return NextResponse.json({ ok: false, code: "INVALID_INPUT" }, { status: 400 });
   }
 }

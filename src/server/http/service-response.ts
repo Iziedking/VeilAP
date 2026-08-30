@@ -12,14 +12,35 @@ const notFoundCodes = new Set([
   "ARENA_MATCH_NOT_FOUND",
   "ARENA_SEASON_NOT_FOUND",
   "ARENA_SCHEDULED_MATCH_NOT_FOUND",
+  "ARENA_PRIZE_POOL_NOT_FOUND",
 ]);
 const conflictCodes = new Set([
   "STRATEGY_ARTIFACT_ALREADY_EXISTS",
   "IDEMPOTENCY_KEY_REUSED",
   "ARENA_SEASON_ALREADY_LOCKED",
+  "ARENA_SEASON_NOT_OPEN",
+  "ARENA_SEASON_NOT_PUBLIC",
+  "ARENA_SEASON_NOT_STARTED",
+  "ARENA_SEASON_CLOSED",
+  "ARENA_SEASON_NOT_ACTIVE",
+  "ARENA_SEASON_FULL",
+  "ARENA_WALLET_ALREADY_ENTERED",
   "ARENA_SEASON_TOO_SMALL",
   "ARENA_SEASON_ENTRY_ALREADY_EXISTS",
   "ARENA_SCHEDULED_MATCH_IN_PROGRESS",
+  "ARENA_PRIZE_POOL_ALREADY_EXISTS",
+  "ARENA_PRIZE_POOL_ALREADY_FUNDED",
+  "ARENA_PRIZE_POOL_ALREADY_SETTLED",
+  "ARENA_WINNER_TIE",
+  "ARENA_WINNER_PAYOUT_NOT_REGISTERED",
+  "ARENA_MATCH_NOT_COMPLETE",
+  "ARENA_PRIZE_POOL_NOT_FUNDED",
+  "ARENA_PRIZE_POOL_NOT_SETTLEMENT_READY",
+  "TRANSACTION_NOT_CONFIRMED",
+  "TRANSACTION_ALREADY_USED",
+  "ARENA_PRIZE_POOL_STATE_CHANGED",
+  "TRANSFER_PLAN_MISMATCH",
+  "TRANSFER_AUTHORIZATION_EXPIRED",
 ]);
 const forbiddenCodes = new Set([
   "PROJECT_ACCESS_REQUIRED",
@@ -28,6 +49,7 @@ const forbiddenCodes = new Set([
   "EVIDENCE_FORBIDDEN",
   "REVIEWER_NOT_INVITED",
   "WALLET_FORBIDDEN",
+  "ARENA_SPONSOR_WALLET_REQUIRED",
 ]);
 
 export function serviceResponse(result: { ok: true; value: unknown } | { ok: false; code: string }) {
@@ -38,7 +60,7 @@ export function serviceResponse(result: { ok: true; value: unknown } | { ok: fal
   else if (forbiddenCodes.has(result.code)) status = 403;
   else if (result.code === "AUTH_REQUIRED") status = 401;
   else if (result.code === "NO_LOSING_AGENT") status = 409;
-  else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING" || result.code === "SIGNING_UNAVAILABLE") status = 503;
+  else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING" || result.code === "SIGNING_UNAVAILABLE" || result.code === "SIGNATURE_UNAVAILABLE") status = 503;
   return NextResponse.json(result, {
     status,
     headers: { "Cache-Control": "no-store" },

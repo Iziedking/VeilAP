@@ -1,4 +1,4 @@
-import { KmsKeyProvider } from "@/server/crypto/kms-key-provider";
+import { checkKmsKeyAccess, KmsKeyProvider } from "@/server/crypto/kms-key-provider";
 import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
 import { RpcProvider } from "starknet";
 import { getAuthRepositories } from "@/server/auth/runtime";
@@ -16,6 +16,11 @@ import { ProjectService } from "./project-service";
 import { StrategyService } from "@/server/arena/strategy-service";
 import { ArenaMatchService } from "@/server/arena/arena-match-service";
 import { ArenaSeasonService } from "@/server/arena/arena-season-service";
+import { ArenaEnrollmentService } from "@/server/arena/arena-enrollment-service";
+import { ArenaPrizePoolService } from "@/server/arena/arena-prize-pool-service";
+import { ArenaWorkerService } from "@/server/arena/arena-worker-service";
+import { ArenaReadinessService } from "@/server/arena/arena-readiness-service";
+import { checkArenaDatabaseReadiness } from "@/server/arena/arena-readiness-database";
 
 const previewKeyProvider = createPreviewKeyProvider();
 let persistedKeyProvider: KmsKeyProvider | undefined;
@@ -64,6 +69,59 @@ export function getArenaSeasonService(): ArenaSeasonService {
   return new ArenaSeasonService({
     ...dependencies(),
     matchService: getArenaMatchService(),
+  });
+}
+
+export function getArenaEnrollmentService(): ArenaEnrollmentService {
+  return new ArenaEnrollmentService(dependencies());
+}
+
+export function getArenaPrizePoolService(): ArenaPrizePoolService {
+  const config = requirePersistedConfig();
+  const poolAddress = process.env.NEXT_PUBLIC_STRK20_POOL_ADDRESS;
+  if (!poolAddress) throw new Error("STRK20_POOL_NOT_CONFIGURED");
+  const provider = new RpcProvider({ nodeUrl: config.starknetRpcUrl });
+  return new ArenaPrizePoolService({
+    ...dependencies(),
+    receiptProvider: createMainnetReceiptProvider(config.starknetRpcUrl),
+    poolAddress,
+    verifySignature: (typedData, signature, walletAddress) =>
+      provider.verifyMessageInStarknet(typedData, signature, walletAddress),
+  });
+}
+
+export function getArenaWorkerService(): ArenaWorkerService {
+  const config = requirePersistedConfig();
+  if (!config.arenaWorkerWalletAddress) throw new Error("WORKER_NOT_CONFIGURED");
+  return new ArenaWorkerService({
+    repositories: getAuthRepositories().projects,
+    seasonService: getArenaSeasonService(),
+    workerWalletAddress: config.arenaWorkerWalletAddress,
+  });
+}
+
+export function getArenaReadinessService(): ArenaReadinessService {
+  const config = readServerConfig();
+  return new ArenaReadinessService({
+    config,
+    poolAddress: process.env.NEXT_PUBLIC_STRK20_POOL_ADDRESS,
+    checkKms: async () => {
+      if (!config.kmsKeyId || !config.awsRegion) return false;
+      return checkKmsKeyAccess({ keyId: config.kmsKeyId, region: config.awsRegion });
+    },
+    checkReceiptSigning: () => {
+      if (!config.receiptSigningPrivateKey || !config.receiptSigningPublicKey) return false;
+      try {
+        createReceiptSigner({
+          privateKeyBase64: config.receiptSigningPrivateKey,
+          publicKeyBase64: config.receiptSigningPublicKey,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    checkDatabase: () => checkArenaDatabaseReadiness(config.databaseUrl),
   });
 }
 

@@ -105,6 +105,8 @@ export class StrategyService {
         agentId: input.agentId,
         policy: input.policy,
         keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
+        ownerFingerprint: actorFingerprint,
+        ownerWalletAddress: input.actorWalletAddress,
         store: createRepositoryStrategyArtifactStore(this.repositories),
         now: this.now,
         idFactory: this.idFactory,
@@ -124,6 +126,30 @@ export class StrategyService {
       return { ok: true, value: this.view(record) };
     } catch (error) {
       return { ok: false, code: mapError(error) };
+    }
+  }
+
+  async listStrategies(input: {
+    projectId: string;
+    actorWalletAddress: string;
+  }): Promise<StrategyServiceResult<StrategyArtifactView[]>> {
+    const projectId = input.projectId.trim();
+    if (!projectId) return { ok: false, code: "INVALID_INPUT" };
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "read_project",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+      const records = await this.repositories.listArenaStrategyArtifacts(projectId);
+      return { ok: true, value: records.map((record) => this.view(record)) };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
     }
   }
 
