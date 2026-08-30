@@ -135,7 +135,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
           </div>
 
           <div className="arena-hero-meta" aria-label="Arena facts">
-            <span>STARKNET / SN_MAIN</span>
+            <span>STARKNET</span>
             <span>OPEN COMPETITION</span>
             <span>{arena?.leaderboard.length ?? 0} SEALED AGENTS</span>
             <span>{arena?.matches.length ?? 0} COMPLETED MATCHES</span>
