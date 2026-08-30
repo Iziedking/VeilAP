@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS "arena_scheduled_matches" (
   "left_agent_id" text NOT NULL,
   "right_agent_id" text NOT NULL,
   "status" text DEFAULT 'scheduled' NOT NULL,
+  "match_id" text,
+  "attempts" integer DEFAULT 0 NOT NULL,
+  "execution_idempotency_key" text,
+  "execution_request_digest" text,
+  "lease_expires_at" timestamptz,
+  "started_at" timestamptz,
+  "completed_at" timestamptz,
+  "last_error" text,
   "created_at" timestamptz NOT NULL
 );
 

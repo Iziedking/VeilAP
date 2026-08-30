@@ -100,11 +100,11 @@ The repository also contains tested infrastructure from the earlier VeilAP direc
 
 The following are not complete yet:
 
-- executing scheduled matches through a worker;
+- automatic worker orchestration and scheduling retries;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
-The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, real transcript inclusion proofs, authorized selective losing-action disclosure, durable season entry snapshots, deterministic round-robin scheduling, transactional season locking, and refusal paths for illegal or failed agent decisions. Submission, scheduling, and match execution return only public commitment metadata. The runner still needs to consume scheduled matches, and settlement remains a separate phase.
+The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, real transcript inclusion proofs, authorized selective losing-action disclosure, durable season entry snapshots, deterministic round-robin scheduling, transactional season locking, lease-based scheduled-match execution claims, and refusal paths for illegal or failed agent decisions. Submission, scheduling, and match execution return only public commitment metadata. Automatic worker orchestration and settlement remain separate phases.
 
 ## Product routes
 
@@ -121,6 +121,8 @@ Company or reviewer members can reveal one losing transcript leaf through `POST 
 Company members create a season through `POST /api/projects/:projectId/seasons` with its name, ruleset version, and UTC start, lock, and end times. The write requires an `Idempotency-Key` header. A contributor, reviewer, or company member registers an existing sealed artifact through `POST /api/projects/:projectId/seasons/:seasonId/entries`, also with an idempotency key. The entry stores the artifact commitment and display name as a season snapshot, so later artifact changes cannot rewrite the season roster. `GET /api/projects/:projectId/seasons` and `GET /api/projects/:projectId/seasons/:seasonId` expose only public season metadata, commitments, entries, and scheduled pairings.
 
 Company or reviewer members lock a season through `POST /api/projects/:projectId/seasons/:seasonId/lock` with a hand count and idempotency key. Locking requires at least two real sealed entries, orders them deterministically, creates every unique pair once, and commits the season and schedule in one database transaction. Locking does not execute matches or move funds.
+
+Company or reviewer members execute one locked pairing through `POST /api/projects/:projectId/seasons/:seasonId/matches/:scheduledMatchId/run` with an idempotency key. The endpoint claims the scheduled row with a two-minute lease, invokes the existing sealed match runner with the fixed pairing identity, records attempts and terminal failure state, and marks the row complete only after the signed public receipt is persisted. An expired lease can be reclaimed. The endpoint is operator-driven; it is not a background worker and does not move funds.
 
 Incomplete routes are described as incomplete. The preview never claims to move funds.
 

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
 import { authorizeProject } from "@/server/authorization/authorize";
+import type { ArenaMatchService, ArenaMatchServiceErrorCode, PublicArenaMatchView } from "@/server/arena/arena-match-service";
 import type {
   ArenaScheduledMatchRecord,
   ArenaSeasonEntryRecord,
@@ -16,12 +17,16 @@ export type ArenaSeasonServiceErrorCode =
   | "PROJECT_ACCESS_REQUIRED"
   | "ROLE_FORBIDDEN"
   | "ARENA_SEASON_NOT_FOUND"
+  | "ARENA_SEASON_NOT_LOCKED"
   | "ARENA_SEASON_ALREADY_LOCKED"
   | "ARENA_SEASON_TOO_SMALL"
   | "STRATEGY_ARTIFACT_NOT_FOUND"
   | "ARENA_SEASON_ENTRY_ALREADY_EXISTS"
+  | "ARENA_SCHEDULED_MATCH_NOT_FOUND"
+  | "ARENA_SCHEDULED_MATCH_IN_PROGRESS"
   | "IDEMPOTENCY_KEY_REUSED"
-  | "PERSISTENCE_FAILED";
+  | "PERSISTENCE_FAILED"
+  | ArenaMatchServiceErrorCode;
 
 export type ArenaSeasonServiceResult<T> =
   | { ok: true; value: T }
@@ -57,6 +62,7 @@ export interface ArenaScheduledMatchView {
   leftAgentId: string;
   rightAgentId: string;
   status: ArenaScheduledMatchRecord["status"];
+  matchId?: string;
   createdAt: string;
 }
 
@@ -68,6 +74,7 @@ export interface ArenaSeasonScheduleView {
 
 export interface ArenaSeasonServiceDependencies {
   repositories: ProjectRepository;
+  matchService: Pick<ArenaMatchService, "runMatch" | "getPublicArena">;
   walletHashPepper: string;
   now?: () => Date;
   idFactory?: () => string;
@@ -131,6 +138,7 @@ function normalizeSchedule(
       leftAgentId: match.leftAgentId,
       rightAgentId: match.rightAgentId,
       status: match.status,
+      matchId: match.matchId,
       createdAt: match.createdAt.toISOString(),
     })),
   };
@@ -138,12 +146,14 @@ function normalizeSchedule(
 
 export class ArenaSeasonService {
   private readonly repositories: ProjectRepository;
+  private readonly matchService: ArenaSeasonServiceDependencies["matchService"];
   private readonly walletHashPepper: string;
   private readonly now: () => Date;
   private readonly idFactory: () => string;
 
   constructor(dependencies: ArenaSeasonServiceDependencies) {
     this.repositories = dependencies.repositories;
+    this.matchService = dependencies.matchService;
     this.walletHashPepper = dependencies.walletHashPepper;
     this.now = dependencies.now ?? (() => new Date());
     this.idFactory = dependencies.idFactory ?? randomUUID;
@@ -338,6 +348,8 @@ export class ArenaSeasonService {
             leftAgentId: orderedEntries[leftIndex].agentId,
             rightAgentId: orderedEntries[rightIndex].agentId,
             status: "scheduled",
+            matchId: this.idFactory(),
+            attempts: 0,
             createdAt,
           });
           sequence += 1;
@@ -389,6 +401,97 @@ export class ArenaSeasonService {
       };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async runScheduledMatch(input: {
+    projectId: string;
+    actorWalletAddress: string;
+    seasonId: string;
+    scheduledMatchId: string;
+    idempotencyKey: string;
+  }): Promise<ArenaSeasonServiceResult<PublicArenaMatchView>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    const scheduledMatchId = input.scheduledMatchId.trim();
+    if (!projectId || !seasonId || !scheduledMatchId || !validKey(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const season = await this.repositories.getArenaSeason(projectId, seasonId);
+      if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "run_arena_match",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+      if (season.status !== "locked") return { ok: false, code: "ARENA_SEASON_NOT_LOCKED" };
+
+      const scheduled = await this.repositories.getArenaScheduledMatch(projectId, seasonId, scheduledMatchId);
+      if (!scheduled) return { ok: false, code: "ARENA_SCHEDULED_MATCH_NOT_FOUND" };
+      const existingMatch = async (): Promise<ArenaSeasonServiceResult<PublicArenaMatchView>> => {
+        if (!scheduled.matchId) return { ok: false, code: "PERSISTENCE_FAILED" };
+        const arena = await this.matchService.getPublicArena(projectId);
+        if (!arena.ok) return { ok: false, code: arena.code };
+        const match = arena.value.matches.find((candidate) => candidate.matchId === scheduled.matchId);
+        return match ? { ok: true, value: match } : { ok: false, code: "PERSISTENCE_FAILED" };
+      };
+      if (scheduled.status === "completed") return existingMatch();
+
+      const executionRequestDigest = commitment({
+        actorFingerprint,
+        seasonId,
+        scheduledMatchId,
+        hands: scheduled.hands,
+        leftAgentId: scheduled.leftAgentId,
+        rightAgentId: scheduled.rightAgentId,
+      });
+      const claimed = await this.repositories.claimArenaScheduledMatch({
+        projectId,
+        seasonId,
+        scheduledMatchId,
+        now: this.now(),
+        leaseMs: 120_000,
+        executionIdempotencyKey: input.idempotencyKey,
+        executionRequestDigest,
+      });
+      if (!claimed) return { ok: false, code: "ARENA_SCHEDULED_MATCH_NOT_FOUND" };
+      if (claimed === "IN_PROGRESS") return { ok: false, code: "ARENA_SCHEDULED_MATCH_IN_PROGRESS" };
+      if (claimed.status === "completed") return existingMatch();
+      const executionKey = `scheduled-${scheduled.id}`;
+      const result = await this.matchService.runMatch({
+        projectId,
+        actorWalletAddress: input.actorWalletAddress,
+        leftAgentId: claimed.leftAgentId,
+        rightAgentId: claimed.rightAgentId,
+        hands: claimed.hands,
+        matchId: claimed.matchId,
+        idempotencyKey: executionKey,
+      });
+      if (!result.ok) {
+        await this.repositories.updateArenaScheduledMatch({
+          ...claimed,
+          status: "failed",
+          leaseExpiresAt: undefined,
+          lastError: result.code,
+        });
+        return { ok: false, code: result.code };
+      }
+      await this.repositories.updateArenaScheduledMatch({
+        ...claimed,
+        status: "completed",
+        matchId: result.value.matchId,
+        leaseExpiresAt: undefined,
+        completedAt: this.now(),
+        lastError: undefined,
+      });
+      return { ok: true, value: result.value };
+    } catch (error) {
+      if (error instanceof Error && error.message === "ARENA_SCHEDULED_MATCH_NOT_FOUND") return { ok: false, code: "ARENA_SCHEDULED_MATCH_NOT_FOUND" };
+      return { ok: false, code: mapPersistenceError(error) };
     }
   }
 

@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { AuthChallenge } from "@/server/auth/challenge";
 import type { EncryptedField } from "@/server/crypto/envelope";
@@ -283,6 +283,14 @@ export interface ArenaScheduledMatchRecord {
   leftAgentId: string;
   rightAgentId: string;
   status: ArenaScheduledMatchStatus;
+  matchId?: string;
+  attempts: number;
+  executionIdempotencyKey?: string;
+  executionRequestDigest?: string;
+  leaseExpiresAt?: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  lastError?: string;
   createdAt: Date;
 }
 
@@ -341,7 +349,18 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getArenaSeasonEntryByIdempotencyKey(projectId: string, seasonId: string, idempotencyKey: string): Promise<ArenaSeasonEntryRecord | undefined>;
   listArenaSeasonEntries(projectId: string, seasonId: string): Promise<ArenaSeasonEntryRecord[]>;
   saveArenaScheduledMatch(record: ArenaScheduledMatchRecord): Promise<void>;
+  getArenaScheduledMatch(projectId: string, seasonId: string, scheduledMatchId: string): Promise<ArenaScheduledMatchRecord | undefined>;
   listArenaScheduledMatches(projectId: string, seasonId: string): Promise<ArenaScheduledMatchRecord[]>;
+  claimArenaScheduledMatch(input: {
+    projectId: string;
+    seasonId: string;
+    scheduledMatchId: string;
+    now: Date;
+    leaseMs: number;
+    executionIdempotencyKey: string;
+    executionRequestDigest: string;
+  }): Promise<ArenaScheduledMatchRecord | "IN_PROGRESS" | undefined>;
+  updateArenaScheduledMatch(record: ArenaScheduledMatchRecord): Promise<void>;
   saveArenaSeasonSchedule(input: {
     season: ArenaSeasonRecord;
     matches: ArenaScheduledMatchRecord[];
@@ -469,6 +488,14 @@ function toArenaScheduledMatchRecord(row: typeof arenaScheduledMatches.$inferSel
     leftAgentId: row.leftAgentId,
     rightAgentId: row.rightAgentId,
     status: arenaScheduledMatchStatus(row.status),
+    matchId: row.matchId ?? undefined,
+    attempts: row.attempts,
+    executionIdempotencyKey: row.executionIdempotencyKey ?? undefined,
+    executionRequestDigest: row.executionRequestDigest ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt ?? undefined,
+    startedAt: row.startedAt ?? undefined,
+    completedAt: row.completedAt ?? undefined,
+    lastError: row.lastError ?? undefined,
     createdAt: row.createdAt,
   };
 }
@@ -1070,7 +1097,28 @@ export function createPostgresRepositories(db: VeilapDatabase): {
         return rows.map(toArenaSeasonEntryRecord);
       },
       async saveArenaScheduledMatch(record) {
-        await db.insert(arenaScheduledMatches).values(record);
+        await db.insert(arenaScheduledMatches).values({
+          ...record,
+          matchId: record.matchId ?? null,
+          executionIdempotencyKey: record.executionIdempotencyKey ?? null,
+          executionRequestDigest: record.executionRequestDigest ?? null,
+          leaseExpiresAt: record.leaseExpiresAt ?? null,
+          startedAt: record.startedAt ?? null,
+          completedAt: record.completedAt ?? null,
+          lastError: record.lastError ?? null,
+        });
+      },
+      async getArenaScheduledMatch(projectId, seasonId, scheduledMatchId) {
+        const rows = await db
+          .select()
+          .from(arenaScheduledMatches)
+          .where(and(
+            eq(arenaScheduledMatches.projectId, projectId),
+            eq(arenaScheduledMatches.seasonId, seasonId),
+            eq(arenaScheduledMatches.id, scheduledMatchId),
+          ))
+          .limit(1);
+        return rows[0] ? toArenaScheduledMatchRecord(rows[0]) : undefined;
       },
       async listArenaScheduledMatches(projectId, seasonId) {
         const rows = await db
@@ -1079,6 +1127,52 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .where(and(eq(arenaScheduledMatches.projectId, projectId), eq(arenaScheduledMatches.seasonId, seasonId)))
           .orderBy(asc(arenaScheduledMatches.sequence));
         return rows.map(toArenaScheduledMatchRecord);
+      },
+      async claimArenaScheduledMatch(input) {
+        const leaseExpiresAt = new Date(input.now.getTime() + input.leaseMs);
+        const rows = await db
+          .update(arenaScheduledMatches)
+          .set({
+            status: "running",
+            attempts: sql`${arenaScheduledMatches.attempts} + 1`,
+            executionIdempotencyKey: input.executionIdempotencyKey,
+            executionRequestDigest: input.executionRequestDigest,
+            leaseExpiresAt,
+            startedAt: input.now,
+            lastError: null,
+          })
+          .where(and(
+            eq(arenaScheduledMatches.projectId, input.projectId),
+            eq(arenaScheduledMatches.seasonId, input.seasonId),
+            eq(arenaScheduledMatches.id, input.scheduledMatchId),
+            or(
+              eq(arenaScheduledMatches.status, "scheduled"),
+              eq(arenaScheduledMatches.status, "failed"),
+              and(eq(arenaScheduledMatches.status, "running"), lt(arenaScheduledMatches.leaseExpiresAt, input.now)),
+            ),
+          ))
+          .returning();
+        if (rows[0]) return toArenaScheduledMatchRecord(rows[0]);
+        const current = await this.getArenaScheduledMatch(input.projectId, input.seasonId, input.scheduledMatchId);
+        if (current?.status === "completed") return current;
+        if (current?.status === "running") return "IN_PROGRESS";
+        return undefined;
+      },
+      async updateArenaScheduledMatch(record) {
+        await db
+          .update(arenaScheduledMatches)
+          .set({
+            status: record.status,
+            matchId: record.matchId ?? null,
+            attempts: record.attempts,
+            executionIdempotencyKey: record.executionIdempotencyKey ?? null,
+            executionRequestDigest: record.executionRequestDigest ?? null,
+            leaseExpiresAt: record.leaseExpiresAt ?? null,
+            startedAt: record.startedAt ?? null,
+            completedAt: record.completedAt ?? null,
+            lastError: record.lastError ?? null,
+          })
+          .where(and(eq(arenaScheduledMatches.projectId, record.projectId), eq(arenaScheduledMatches.id, record.id)));
       },
       async saveArenaSeasonSchedule(input) {
         await db.transaction(async (tx) => {
@@ -1448,11 +1542,39 @@ export function createMemoryRepositories(): {
         }
         arenaScheduledMatchRows.set(record.id, structuredClone(record));
       },
+      async getArenaScheduledMatch(projectId, seasonId, scheduledMatchId) {
+        const record = arenaScheduledMatchRows.get(scheduledMatchId);
+        return record && record.projectId === projectId && record.seasonId === seasonId ? structuredClone(record) : undefined;
+      },
       async listArenaScheduledMatches(projectId, seasonId) {
         return [...arenaScheduledMatchRows.values()]
           .filter((record) => record.projectId === projectId && record.seasonId === seasonId)
           .sort((left, right) => left.sequence - right.sequence)
           .map((record) => structuredClone(record));
+      },
+      async claimArenaScheduledMatch(input) {
+        const current = arenaScheduledMatchRows.get(input.scheduledMatchId);
+        if (!current || current.projectId !== input.projectId || current.seasonId !== input.seasonId) return undefined;
+        const reclaimable = current.status === "scheduled"
+          || current.status === "failed"
+          || (current.status === "running" && !!current.leaseExpiresAt && current.leaseExpiresAt < input.now);
+        if (!reclaimable) return current.status === "completed" ? structuredClone(current) : "IN_PROGRESS";
+        const claimed: ArenaScheduledMatchRecord = {
+          ...current,
+          status: "running",
+          attempts: current.attempts + 1,
+          executionIdempotencyKey: input.executionIdempotencyKey,
+          executionRequestDigest: input.executionRequestDigest,
+          leaseExpiresAt: new Date(input.now.getTime() + input.leaseMs),
+          startedAt: input.now,
+          lastError: undefined,
+        };
+        arenaScheduledMatchRows.set(current.id, structuredClone(claimed));
+        return structuredClone(claimed);
+      },
+      async updateArenaScheduledMatch(record) {
+        if (!arenaScheduledMatchRows.has(record.id)) throw new Error("ARENA_SCHEDULED_MATCH_NOT_FOUND");
+        arenaScheduledMatchRows.set(record.id, structuredClone(record));
       },
       async saveArenaSeasonSchedule(input) {
         const current = arenaSeasonRows.get(input.season.id);

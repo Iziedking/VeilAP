@@ -229,6 +229,7 @@ export class ArenaMatchService {
     rightAgentId: string;
     hands: number;
     idempotencyKey: string;
+    matchId?: string;
   }): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
     const projectId = input.projectId.trim();
     const leftAgentId = input.leftAgentId.trim();
@@ -274,7 +275,7 @@ export class ArenaMatchService {
       if (!rightRecord) return { ok: false, code: "STRATEGY_ARTIFACT_NOT_FOUND" };
 
       const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
-      const matchId = this.idFactory();
+      const matchId = input.matchId?.trim() || this.idFactory();
       const seed = this.seedFactory();
       const result = await runSealedMatch({
         projectId,

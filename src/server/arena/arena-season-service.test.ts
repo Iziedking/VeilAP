@@ -1,3 +1,5 @@
+import { generateKeyPairSync } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
@@ -6,6 +8,8 @@ import { ProjectService } from "@/server/projects/project-service";
 
 import { ArenaSeasonService } from "./arena-season-service";
 import { StrategyService } from "./strategy-service";
+import { ArenaMatchService } from "./arena-match-service";
+import { createReceiptSigner } from "@/server/receipts/signing";
 
 const address = (value: string) => `0x${value.padStart(64, "0")}`;
 const company = address("1");
@@ -47,10 +51,19 @@ async function setup() {
     });
     if (!result.ok) throw new Error(result.code);
   }
+  const pair = generateKeyPairSync("ed25519");
+  const matchService = new ArenaMatchService({
+    ...dependencies,
+    signer: createReceiptSigner({
+      privateKeyBase64: pair.privateKey.export({ type: "pkcs8", format: "der" }).toString("base64"),
+      publicKeyBase64: pair.publicKey.export({ type: "spki", format: "der" }).toString("base64"),
+    }),
+    seedFactory: () => "scheduled-match-seed",
+  });
   return {
     repositories,
     projectId: project.value.id,
-    service: new ArenaSeasonService({ ...dependencies }),
+    service: new ArenaSeasonService({ ...dependencies, matchService }),
   };
 }
 
@@ -140,5 +153,58 @@ describe("ArenaSeasonService", () => {
       hands: 5,
       idempotencyKey: "season-lock-2",
     })).resolves.toEqual({ ok: false, code: "ARENA_SEASON_TOO_SMALL" });
+  });
+
+  it("claims, executes, and safely retries a scheduled pairing", async () => {
+    const { repositories, projectId, service } = await setup();
+    const created = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-create-3",
+      ...seasonInput,
+    });
+    if (!created.ok) throw new Error(created.code);
+    for (const [agentId, key] of [["CINDER", "entry-cinder-3"], ["EMBER", "entry-ember-3"]] as const) {
+      const entry = await service.registerEntry({
+        projectId,
+        seasonId: created.value.id,
+        actorWalletAddress: contributor,
+        agentId,
+        idempotencyKey: key,
+      });
+      if (!entry.ok) throw new Error(entry.code);
+    }
+    const locked = await service.lockSeason({
+      projectId,
+      seasonId: created.value.id,
+      actorWalletAddress: company,
+      hands: 2,
+      idempotencyKey: "season-lock-3",
+    });
+    if (!locked.ok) throw new Error(locked.code);
+    const scheduledMatchId = locked.value.matches[0]?.id;
+    if (!scheduledMatchId) throw new Error("TEST_SCHEDULE_MISSING");
+
+    const run = await service.runScheduledMatch({
+      projectId,
+      seasonId: created.value.id,
+      scheduledMatchId,
+      actorWalletAddress: company,
+      idempotencyKey: "scheduled-run-3",
+    });
+    expect(run.ok).toBe(true);
+    if (!run.ok) throw new Error(run.code);
+    expect(run.value.matchId).toBe(locked.value.matches[0]?.matchId);
+    const stored = await repositories.projects.getArenaScheduledMatch(projectId, created.value.id, scheduledMatchId);
+    expect(stored?.status).toBe("completed");
+    expect(stored?.attempts).toBe(1);
+
+    await expect(service.runScheduledMatch({
+      projectId,
+      seasonId: created.value.id,
+      scheduledMatchId,
+      actorWalletAddress: company,
+      idempotencyKey: "scheduled-run-3",
+    })).resolves.toEqual(run);
   });
 });

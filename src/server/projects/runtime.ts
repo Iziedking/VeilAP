@@ -61,7 +61,10 @@ export function getArenaMatchService(): ArenaMatchService {
 }
 
 export function getArenaSeasonService(): ArenaSeasonService {
-  return new ArenaSeasonService(dependencies());
+  return new ArenaSeasonService({
+    ...dependencies(),
+    matchService: getArenaMatchService(),
+  });
 }
 
 export function getCheckpointService(): CheckpointService {
