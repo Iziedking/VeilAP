@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readRequestActor } from "@/server/auth/request-actor";
+import { readIdempotencyKey } from "@/server/http/idempotency";
 import { serviceResponse } from "@/server/http/service-response";
 import { getArenaMatchService } from "@/server/projects/runtime";
 
@@ -25,6 +26,7 @@ export async function POST(
       actorWalletAddress: actor.walletAddress,
       matchId,
       handIndex: input.handIndex,
+      idempotencyKey: readIdempotencyKey(request) ?? "",
     }));
   } catch (error) {
     if (error instanceof Error && error.message === "CONFIGURATION_MISSING") {

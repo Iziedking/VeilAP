@@ -11,7 +11,7 @@ const notFoundCodes = new Set([
   "STRATEGY_ARTIFACT_NOT_FOUND",
   "ARENA_MATCH_NOT_FOUND",
 ]);
-const conflictCodes = new Set(["STRATEGY_ARTIFACT_ALREADY_EXISTS"]);
+const conflictCodes = new Set(["STRATEGY_ARTIFACT_ALREADY_EXISTS", "IDEMPOTENCY_KEY_REUSED"]);
 const forbiddenCodes = new Set([
   "PROJECT_ACCESS_REQUIRED",
   "ROLE_FORBIDDEN",
