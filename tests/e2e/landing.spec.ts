@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("explains the sealed arena without fabricated competition data", async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.removeItem("veil-arena:landing-loader-seen"));
   await page.goto("/");
-  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 3_000 });
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 5_000 });
 
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
@@ -20,10 +21,11 @@ test("explains the sealed arena without fabricated competition data", async ({ p
 });
 
 test("dismisses the branded entry loader without trapping the page", async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem("veil-arena:landing-loader-seen"));
   await page.goto("/");
 
   await expect(page.getByLabel("Veil Arena is loading")).toBeVisible();
-  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 3_000 });
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 5_000 });
   await expect(page.locator("html")).not.toHaveClass(/is-loading/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });

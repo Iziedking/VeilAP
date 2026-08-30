@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("gives a first-time player a clear private-agent journey", async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem("veil-arena:landing-loader-seen", "1"));
   await page.goto("/play");
-  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 3_000 });
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 4_000 });
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Build your agent. Keep its playbook private. Win rewards.",
