@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   integer,
   jsonb,
   pgTable,
@@ -18,6 +20,8 @@ export const arenaStrategyArtifacts = pgTable(
     displayName: text("display_name").notNull(),
     artifactCommitment: text("artifact_commitment").notNull(),
     encryptedPolicy: jsonb("encrypted_policy").notNull(),
+    ownerFingerprint: text("owner_fingerprint"),
+    encryptedOwnerWallet: jsonb("encrypted_owner_wallet"),
     status: text("status").notNull().default("sealed"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
@@ -89,6 +93,8 @@ export const arenaSeasons = pgTable(
     locksAt: timestamp("locks_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("open"),
+    entryMode: text("entry_mode").notNull().default("invite_only"),
+    maxEntries: integer("max_entries").notNull().default(16),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     lockedAt: timestamp("locked_at", { withTimezone: true }),
@@ -102,6 +108,8 @@ export const arenaSeasons = pgTable(
       table.projectId,
       table.createIdempotencyKey,
     ),
+    entryModeCheck: check("arena_seasons_entry_mode_check", sql`${table.entryMode} in ('invite_only', 'open')`),
+    maxEntriesCheck: check("arena_seasons_max_entries_check", sql`${table.maxEntries} between 2 and 32`),
   }),
 );
 
@@ -114,12 +122,15 @@ export const arenaSeasonEntries = pgTable(
     agentId: text("agent_id").notNull(),
     displayName: text("display_name").notNull(),
     artifactCommitment: text("artifact_commitment").notNull(),
+    ownerFingerprint: text("owner_fingerprint"),
+    encryptedPayoutWallet: jsonb("encrypted_payout_wallet"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull(),
     idempotencyKey: text("idempotency_key"),
     requestDigest: text("request_digest"),
   },
   (table) => ({
     seasonAgent: uniqueIndex("arena_season_entries_season_agent_idx").on(table.seasonId, table.agentId),
+    seasonOwner: uniqueIndex("arena_season_entries_season_owner_idx").on(table.seasonId, table.ownerFingerprint),
     seasonIdempotency: uniqueIndex("arena_season_entries_season_idempotency_idx").on(
       table.seasonId,
       table.idempotencyKey,
@@ -152,6 +163,60 @@ export const arenaScheduledMatches = pgTable(
     seasonSequence: uniqueIndex("arena_scheduled_matches_season_sequence_idx").on(
       table.seasonId,
       table.sequence,
+    ),
+  }),
+);
+
+export const arenaPrizePools = pgTable(
+  "arena_prize_pools",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    seasonId: text("season_id").notNull(),
+    tokenAddress: text("token_address").notNull(),
+    tokenSymbol: text("token_symbol").notNull(),
+    poolAddress: text("pool_address").notNull(),
+    amountMinor: text("amount_minor").notNull(),
+    sponsorFingerprint: text("sponsor_fingerprint").notNull(),
+    status: text("status").notNull().default("funding_pending"),
+    fundingTransactionHash: text("funding_transaction_hash"),
+    fundingReceiptDigest: text("funding_receipt_digest"),
+    winnerAgentId: text("winner_agent_id"),
+    recipientFingerprint: text("recipient_fingerprint"),
+    encryptedRecipient: jsonb("encrypted_recipient"),
+    settlementTransactionHash: text("settlement_transaction_hash"),
+    settlementReceiptDigest: text("settlement_receipt_digest"),
+    createIdempotencyKey: text("create_idempotency_key"),
+    createRequestDigest: text("create_request_digest"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    projectSeason: uniqueIndex("arena_prize_pools_project_season_idx").on(table.projectId, table.seasonId),
+    projectCreateIdempotency: uniqueIndex("arena_prize_pools_project_create_idempotency_idx").on(
+      table.projectId,
+      table.createIdempotencyKey,
+    ),
+  }),
+);
+
+export const arenaPrizeTransactions = pgTable(
+  "arena_prize_transactions",
+  {
+    transactionHash: text("transaction_hash").primaryKey(),
+    poolId: text("pool_id").notNull(),
+    projectId: text("project_id").notNull(),
+    seasonId: text("season_id").notNull(),
+    operation: text("operation").notNull(),
+    receiptDigest: text("receipt_digest").notNull(),
+    authorizationDigest: text("authorization_digest"),
+    encryptedAuthorization: jsonb("encrypted_authorization"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    poolOperation: uniqueIndex("arena_prize_transactions_pool_operation_idx").on(
+      table.poolId,
+      table.operation,
     ),
   }),
 );

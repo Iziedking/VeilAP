@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { AuthChallenge } from "@/server/auth/challenge";
 import type { EncryptedField } from "@/server/crypto/envelope";
@@ -7,6 +7,8 @@ import {
   arenaStrategyArtifacts,
   arenaMatchReceipts,
   arenaMatchReveals,
+  arenaPrizePools,
+  arenaPrizeTransactions,
   arenaScheduledMatches,
   arenaSeasonEntries,
   arenaSeasons,
@@ -47,8 +49,13 @@ export interface SessionRecord {
   expiresAt: Date;
 }
 
+export interface StoredSessionRecord extends SessionRecord {
+  revokedAt?: Date;
+}
+
 export interface SessionRepository {
   saveSession(record: SessionRecord): Promise<void>;
+  getSession(id: string): Promise<StoredSessionRecord | undefined>;
   revokeSession(id: string, now: Date): Promise<void>;
 }
 
@@ -175,7 +182,7 @@ export interface ChainOperationRecord {
 export interface RevenueEventRecord {
   id: string;
   projectId: string;
-  eventType: "synthetic_revenue";
+  eventType: "reported_revenue";
   encryptedAmount: EncryptedField;
   currency: "USDC";
   createdAt: Date;
@@ -199,6 +206,8 @@ export interface ArenaStrategyArtifactRecord {
   displayName: string;
   artifactCommitment: string;
   encryptedPolicy: EncryptedField;
+  ownerFingerprint?: string;
+  encryptedOwnerWallet?: EncryptedField;
   status: "sealed";
   createdAt: Date;
 }
@@ -241,6 +250,7 @@ export type ArenaMatchRevealRecord = {
 };
 
 export type ArenaSeasonStatus = "open" | "locked" | "completed" | "cancelled";
+export type ArenaSeasonEntryMode = "invite_only" | "open";
 
 export interface ArenaSeasonRecord {
   id: string;
@@ -251,6 +261,8 @@ export interface ArenaSeasonRecord {
   locksAt: Date;
   endsAt: Date;
   status: ArenaSeasonStatus;
+  entryMode?: ArenaSeasonEntryMode;
+  maxEntries?: number;
   createdBy: string;
   createdAt: Date;
   lockedAt?: Date;
@@ -267,6 +279,8 @@ export interface ArenaSeasonEntryRecord {
   agentId: string;
   displayName: string;
   artifactCommitment: string;
+  ownerFingerprint?: string;
+  encryptedPayoutWallet?: EncryptedField;
   joinedAt: Date;
   idempotencyKey?: string;
   requestDigest?: string;
@@ -291,6 +305,45 @@ export interface ArenaScheduledMatchRecord {
   startedAt?: Date;
   completedAt?: Date;
   lastError?: string;
+  createdAt: Date;
+}
+
+export type ArenaPrizePoolStatus = "funding_pending" | "funded" | "settlement_pending" | "settled" | "unknown";
+
+export interface ArenaPrizePoolRecord {
+  id: string;
+  projectId: string;
+  seasonId: string;
+  tokenAddress: string;
+  tokenSymbol: string;
+  poolAddress: string;
+  amountMinor: string;
+  sponsorFingerprint: string;
+  status: ArenaPrizePoolStatus;
+  fundingTransactionHash?: string;
+  fundingReceiptDigest?: string;
+  winnerAgentId?: string;
+  recipientFingerprint?: string;
+  encryptedRecipient?: EncryptedField;
+  settlementTransactionHash?: string;
+  settlementReceiptDigest?: string;
+  createIdempotencyKey?: string;
+  createRequestDigest?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type ArenaPrizeTransactionOperation = "funding" | "settlement";
+
+export interface ArenaPrizeTransactionRecord {
+  transactionHash: string;
+  poolId: string;
+  projectId: string;
+  seasonId: string;
+  operation: ArenaPrizeTransactionOperation;
+  receiptDigest: string;
+  authorizationDigest?: string;
+  encryptedAuthorization?: EncryptedField;
   createdAt: Date;
 }
 
@@ -346,8 +399,15 @@ export interface ProjectRepository extends ProjectKeyRepository {
   listArenaSeasons(projectId: string): Promise<ArenaSeasonRecord[]>;
   saveArenaSeasonEntry(record: ArenaSeasonEntryRecord): Promise<void>;
   getArenaSeasonEntry(projectId: string, seasonId: string, agentId: string): Promise<ArenaSeasonEntryRecord | undefined>;
+  getArenaSeasonEntryByOwnerFingerprint(projectId: string, seasonId: string, ownerFingerprint: string): Promise<ArenaSeasonEntryRecord | undefined>;
   getArenaSeasonEntryByIdempotencyKey(projectId: string, seasonId: string, idempotencyKey: string): Promise<ArenaSeasonEntryRecord | undefined>;
   listArenaSeasonEntries(projectId: string, seasonId: string): Promise<ArenaSeasonEntryRecord[]>;
+  saveArenaEnrollment(input: {
+    artifact: ArenaStrategyArtifactRecord;
+    entry: ArenaSeasonEntryRecord;
+    audit: AuditEventRecord;
+    now: Date;
+  }): Promise<void>;
   saveArenaScheduledMatch(record: ArenaScheduledMatchRecord): Promise<void>;
   getArenaScheduledMatch(projectId: string, seasonId: string, scheduledMatchId: string): Promise<ArenaScheduledMatchRecord | undefined>;
   listArenaScheduledMatches(projectId: string, seasonId: string): Promise<ArenaScheduledMatchRecord[]>;
@@ -366,6 +426,23 @@ export interface ProjectRepository extends ProjectKeyRepository {
     matches: ArenaScheduledMatchRecord[];
     audit: AuditEventRecord;
   }): Promise<void>;
+  saveArenaPrizePool(record: ArenaPrizePoolRecord): Promise<void>;
+  getArenaPrizePool(projectId: string, seasonId: string): Promise<ArenaPrizePoolRecord | undefined>;
+  getArenaPrizePoolByCreateIdempotencyKey(projectId: string, idempotencyKey: string): Promise<ArenaPrizePoolRecord | undefined>;
+  listArenaPrizePools(projectId: string): Promise<ArenaPrizePoolRecord[]>;
+  updateArenaPrizePool(record: ArenaPrizePoolRecord): Promise<void>;
+  prepareArenaPrizeSettlement(input: {
+    pool: ArenaPrizePoolRecord;
+    audit: AuditEventRecord;
+    expectedStatus: ArenaPrizePoolStatus;
+  }): Promise<void>;
+  getArenaPrizeTransaction(transactionHash: string): Promise<ArenaPrizeTransactionRecord | undefined>;
+  confirmArenaPrizePoolTransaction(input: {
+    pool: ArenaPrizePoolRecord;
+    transaction: ArenaPrizeTransactionRecord;
+    audit: AuditEventRecord;
+    expectedStatus: ArenaPrizePoolStatus;
+  }): Promise<void>;
 }
 
 function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$inferSelect): ArenaStrategyArtifactRecord {
@@ -377,6 +454,8 @@ function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$infer
     displayName: row.displayName,
     artifactCommitment: row.artifactCommitment,
     encryptedPolicy: row.encryptedPolicy as EncryptedField,
+    ownerFingerprint: row.ownerFingerprint ?? undefined,
+    encryptedOwnerWallet: row.encryptedOwnerWallet as EncryptedField | undefined,
     status: "sealed",
     createdAt: row.createdAt,
   };
@@ -439,6 +518,11 @@ function arenaSeasonStatus(value: string): ArenaSeasonStatus {
   throw new Error("ARENA_SEASON_STATUS_INVALID");
 }
 
+function arenaSeasonEntryMode(value: string): ArenaSeasonEntryMode {
+  if (value === "invite_only" || value === "open") return value;
+  throw new Error("ARENA_SEASON_ENTRY_MODE_INVALID");
+}
+
 function toArenaSeasonRecord(row: typeof arenaSeasons.$inferSelect): ArenaSeasonRecord {
   return {
     id: row.id,
@@ -449,6 +533,8 @@ function toArenaSeasonRecord(row: typeof arenaSeasons.$inferSelect): ArenaSeason
     locksAt: row.locksAt,
     endsAt: row.endsAt,
     status: arenaSeasonStatus(row.status),
+    entryMode: arenaSeasonEntryMode(row.entryMode),
+    maxEntries: row.maxEntries,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     lockedAt: row.lockedAt ?? undefined,
@@ -467,6 +553,8 @@ function toArenaSeasonEntryRecord(row: typeof arenaSeasonEntries.$inferSelect): 
     agentId: row.agentId,
     displayName: row.displayName,
     artifactCommitment: row.artifactCommitment,
+    ownerFingerprint: row.ownerFingerprint ?? undefined,
+    encryptedPayoutWallet: row.encryptedPayoutWallet as EncryptedField | undefined,
     joinedAt: row.joinedAt,
     idempotencyKey: row.idempotencyKey ?? undefined,
     requestDigest: row.requestDigest ?? undefined,
@@ -497,6 +585,72 @@ function toArenaScheduledMatchRecord(row: typeof arenaScheduledMatches.$inferSel
     completedAt: row.completedAt ?? undefined,
     lastError: row.lastError ?? undefined,
     createdAt: row.createdAt,
+  };
+}
+
+function arenaPrizePoolStatus(value: string): ArenaPrizePoolStatus {
+  if (value === "funding_pending" || value === "funded" || value === "settlement_pending" || value === "settled" || value === "unknown") return value;
+  throw new Error("ARENA_PRIZE_POOL_STATUS_INVALID");
+}
+
+function arenaPrizeTransactionOperation(value: string): ArenaPrizeTransactionOperation {
+  if (value === "funding" || value === "settlement") return value;
+  throw new Error("ARENA_PRIZE_TRANSACTION_OPERATION_INVALID");
+}
+
+function toArenaPrizeTransactionRecord(
+  row: typeof arenaPrizeTransactions.$inferSelect,
+): ArenaPrizeTransactionRecord {
+  return {
+    transactionHash: row.transactionHash,
+    poolId: row.poolId,
+    projectId: row.projectId,
+    seasonId: row.seasonId,
+    operation: arenaPrizeTransactionOperation(row.operation),
+    receiptDigest: row.receiptDigest,
+    authorizationDigest: row.authorizationDigest ?? undefined,
+    encryptedAuthorization: row.encryptedAuthorization as EncryptedField | undefined,
+    createdAt: row.createdAt,
+  };
+}
+
+function databaseErrorText(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  const visited = new Set<object>();
+  while (typeof current === "object" && current !== null && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    for (const key of ["message", "detail", "constraint", "code"]) {
+      if (typeof record[key] === "string") parts.push(record[key]);
+    }
+    current = record.cause;
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+function toArenaPrizePoolRecord(row: typeof arenaPrizePools.$inferSelect): ArenaPrizePoolRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    seasonId: row.seasonId,
+    tokenAddress: row.tokenAddress,
+    tokenSymbol: row.tokenSymbol,
+    poolAddress: row.poolAddress,
+    amountMinor: row.amountMinor,
+    sponsorFingerprint: row.sponsorFingerprint,
+    status: arenaPrizePoolStatus(row.status),
+    fundingTransactionHash: row.fundingTransactionHash ?? undefined,
+    fundingReceiptDigest: row.fundingReceiptDigest ?? undefined,
+    winnerAgentId: row.winnerAgentId ?? undefined,
+    recipientFingerprint: row.recipientFingerprint ?? undefined,
+    encryptedRecipient: row.encryptedRecipient as EncryptedField | undefined,
+    settlementTransactionHash: row.settlementTransactionHash ?? undefined,
+    settlementReceiptDigest: row.settlementReceiptDigest ?? undefined,
+    createIdempotencyKey: row.createIdempotencyKey ?? undefined,
+    createRequestDigest: row.createRequestDigest ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -707,6 +861,18 @@ export function createPostgresRepositories(db: VeilapDatabase): {
     sessions: {
       async saveSession(record) {
         await db.insert(authSessions).values(record);
+      },
+      async getSession(id) {
+        const rows = await db.select().from(authSessions).where(eq(authSessions.id, id)).limit(1);
+        const record = rows[0];
+        if (!record) return undefined;
+        return {
+          id: record.id,
+          walletFingerprint: record.walletFingerprint,
+          issuedAt: record.issuedAt,
+          expiresAt: record.expiresAt,
+          revokedAt: record.revokedAt ?? undefined,
+        };
       },
       async revokeSession(id, now) {
         await db
@@ -1015,6 +1181,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
       async saveArenaSeason(record) {
         await db.insert(arenaSeasons).values({
           ...record,
+          entryMode: record.entryMode ?? "invite_only",
+          maxEntries: record.maxEntries ?? 16,
           lockedAt: record.lockedAt ?? null,
           createIdempotencyKey: record.createIdempotencyKey ?? null,
           createRequestDigest: record.createRequestDigest ?? null,
@@ -1060,6 +1228,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
       async saveArenaSeasonEntry(record) {
         await db.insert(arenaSeasonEntries).values({
           ...record,
+          ownerFingerprint: record.ownerFingerprint ?? null,
+          encryptedPayoutWallet: record.encryptedPayoutWallet ?? null,
           idempotencyKey: record.idempotencyKey ?? null,
           requestDigest: record.requestDigest ?? null,
         });
@@ -1072,6 +1242,18 @@ export function createPostgresRepositories(db: VeilapDatabase): {
             eq(arenaSeasonEntries.projectId, projectId),
             eq(arenaSeasonEntries.seasonId, seasonId),
             eq(arenaSeasonEntries.agentId, agentId),
+          ))
+          .limit(1);
+        return rows[0] ? toArenaSeasonEntryRecord(rows[0]) : undefined;
+      },
+      async getArenaSeasonEntryByOwnerFingerprint(projectId, seasonId, ownerFingerprint) {
+        const rows = await db
+          .select()
+          .from(arenaSeasonEntries)
+          .where(and(
+            eq(arenaSeasonEntries.projectId, projectId),
+            eq(arenaSeasonEntries.seasonId, seasonId),
+            eq(arenaSeasonEntries.ownerFingerprint, ownerFingerprint),
           ))
           .limit(1);
         return rows[0] ? toArenaSeasonEntryRecord(rows[0]) : undefined;
@@ -1095,6 +1277,65 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .where(and(eq(arenaSeasonEntries.projectId, projectId), eq(arenaSeasonEntries.seasonId, seasonId)))
           .orderBy(asc(arenaSeasonEntries.joinedAt));
         return rows.map(toArenaSeasonEntryRecord);
+      },
+      async saveArenaEnrollment(input) {
+        try {
+          await db.transaction(async (tx) => {
+            const seasons = await tx
+              .select()
+              .from(arenaSeasons)
+              .where(and(
+                eq(arenaSeasons.projectId, input.entry.projectId),
+                eq(arenaSeasons.id, input.entry.seasonId),
+              ))
+              .limit(1)
+              .for("update");
+            const season = seasons[0];
+            if (!season) throw new Error("ARENA_SEASON_NOT_FOUND");
+            if (season.status !== "open") throw new Error("ARENA_SEASON_NOT_OPEN");
+            if (season.entryMode !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
+            if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
+            if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
+            const pools = await tx
+              .select({ status: arenaPrizePools.status })
+              .from(arenaPrizePools)
+              .where(and(
+                eq(arenaPrizePools.projectId, input.entry.projectId),
+                eq(arenaPrizePools.seasonId, input.entry.seasonId),
+              ))
+              .limit(1)
+              .for("update");
+            if (pools[0]?.status !== "funded") throw new Error("ARENA_PRIZE_POOL_NOT_FUNDED");
+            const totals = await tx
+              .select({ value: count() })
+              .from(arenaSeasonEntries)
+              .where(and(
+                eq(arenaSeasonEntries.projectId, input.entry.projectId),
+                eq(arenaSeasonEntries.seasonId, input.entry.seasonId),
+              ));
+            if (Number(totals[0]?.value ?? 0) >= season.maxEntries) throw new Error("ARENA_SEASON_FULL");
+            await tx.insert(arenaStrategyArtifacts).values({
+              ...input.artifact,
+              ownerFingerprint: input.artifact.ownerFingerprint ?? null,
+              encryptedOwnerWallet: input.artifact.encryptedOwnerWallet ?? null,
+            });
+            await tx.insert(arenaSeasonEntries).values({
+              ...input.entry,
+              ownerFingerprint: input.entry.ownerFingerprint ?? null,
+              encryptedPayoutWallet: input.entry.encryptedPayoutWallet ?? null,
+              idempotencyKey: input.entry.idempotencyKey ?? null,
+              requestDigest: input.entry.requestDigest ?? null,
+            });
+            await tx.insert(auditEvents).values(input.audit);
+          });
+        } catch (error) {
+          const message = databaseErrorText(error);
+          if (message.includes("arena_season_entries_season_owner_idx")) throw new Error("ARENA_WALLET_ALREADY_ENTERED");
+          if (message.includes("arena_season_entries_season_agent_idx")) throw new Error("ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS");
+          if (message.includes("arena_strategy_artifacts_project_agent_idx")) throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
+          if (message.includes("arena_season_entries_season_idempotency_idx")) throw new Error("ARENA_SEASON_ENTRY_IDEMPOTENCY_ALREADY_EXISTS");
+          throw error;
+        }
       },
       async saveArenaScheduledMatch(record) {
         await db.insert(arenaScheduledMatches).values({
@@ -1197,6 +1438,122 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           await tx.insert(auditEvents).values(input.audit);
         });
       },
+      async saveArenaPrizePool(record) {
+        await db.insert(arenaPrizePools).values({
+          ...record,
+          fundingTransactionHash: record.fundingTransactionHash ?? null,
+          fundingReceiptDigest: record.fundingReceiptDigest ?? null,
+          winnerAgentId: record.winnerAgentId ?? null,
+          recipientFingerprint: record.recipientFingerprint ?? null,
+          encryptedRecipient: record.encryptedRecipient ?? null,
+          settlementTransactionHash: record.settlementTransactionHash ?? null,
+          settlementReceiptDigest: record.settlementReceiptDigest ?? null,
+          createIdempotencyKey: record.createIdempotencyKey ?? null,
+          createRequestDigest: record.createRequestDigest ?? null,
+        });
+      },
+      async getArenaPrizePool(projectId, seasonId) {
+        const rows = await db
+          .select()
+          .from(arenaPrizePools)
+          .where(and(eq(arenaPrizePools.projectId, projectId), eq(arenaPrizePools.seasonId, seasonId)))
+          .limit(1);
+        return rows[0] ? toArenaPrizePoolRecord(rows[0]) : undefined;
+      },
+      async getArenaPrizePoolByCreateIdempotencyKey(projectId, idempotencyKey) {
+        const rows = await db
+          .select()
+          .from(arenaPrizePools)
+          .where(and(eq(arenaPrizePools.projectId, projectId), eq(arenaPrizePools.createIdempotencyKey, idempotencyKey)))
+          .limit(1);
+        return rows[0] ? toArenaPrizePoolRecord(rows[0]) : undefined;
+      },
+      async listArenaPrizePools(projectId) {
+        const rows = await db
+          .select()
+          .from(arenaPrizePools)
+          .where(eq(arenaPrizePools.projectId, projectId))
+          .orderBy(asc(arenaPrizePools.createdAt));
+        return rows.map(toArenaPrizePoolRecord);
+      },
+      async updateArenaPrizePool(record) {
+        await db
+          .update(arenaPrizePools)
+          .set({
+            status: record.status,
+            fundingTransactionHash: record.fundingTransactionHash ?? null,
+            fundingReceiptDigest: record.fundingReceiptDigest ?? null,
+            winnerAgentId: record.winnerAgentId ?? null,
+            recipientFingerprint: record.recipientFingerprint ?? null,
+            encryptedRecipient: record.encryptedRecipient ?? null,
+            settlementTransactionHash: record.settlementTransactionHash ?? null,
+            settlementReceiptDigest: record.settlementReceiptDigest ?? null,
+            updatedAt: record.updatedAt,
+          })
+          .where(and(eq(arenaPrizePools.projectId, record.projectId), eq(arenaPrizePools.id, record.id)));
+      },
+      async prepareArenaPrizeSettlement(input) {
+        await db.transaction(async (tx) => {
+          const updated = await tx
+            .update(arenaPrizePools)
+            .set({
+              status: input.pool.status,
+              winnerAgentId: input.pool.winnerAgentId ?? null,
+              recipientFingerprint: input.pool.recipientFingerprint ?? null,
+              encryptedRecipient: input.pool.encryptedRecipient ?? null,
+              updatedAt: input.pool.updatedAt,
+            })
+            .where(and(
+              eq(arenaPrizePools.projectId, input.pool.projectId),
+              eq(arenaPrizePools.id, input.pool.id),
+              eq(arenaPrizePools.status, input.expectedStatus),
+            ))
+            .returning({ id: arenaPrizePools.id });
+          if (!updated[0]) throw new Error("ARENA_PRIZE_POOL_STATE_CHANGED");
+          await tx.insert(auditEvents).values(input.audit);
+        });
+      },
+      async getArenaPrizeTransaction(transactionHash) {
+        const rows = await db
+          .select()
+          .from(arenaPrizeTransactions)
+          .where(eq(arenaPrizeTransactions.transactionHash, transactionHash))
+          .limit(1);
+        return rows[0] ? toArenaPrizeTransactionRecord(rows[0]) : undefined;
+      },
+      async confirmArenaPrizePoolTransaction(input) {
+        try {
+          await db.transaction(async (tx) => {
+            await tx.insert(arenaPrizeTransactions).values(input.transaction);
+            const updated = await tx
+              .update(arenaPrizePools)
+              .set({
+                status: input.pool.status,
+                fundingTransactionHash: input.pool.fundingTransactionHash ?? null,
+                fundingReceiptDigest: input.pool.fundingReceiptDigest ?? null,
+                winnerAgentId: input.pool.winnerAgentId ?? null,
+                recipientFingerprint: input.pool.recipientFingerprint ?? null,
+                encryptedRecipient: input.pool.encryptedRecipient ?? null,
+                settlementTransactionHash: input.pool.settlementTransactionHash ?? null,
+                settlementReceiptDigest: input.pool.settlementReceiptDigest ?? null,
+                updatedAt: input.pool.updatedAt,
+              })
+              .where(and(
+                eq(arenaPrizePools.projectId, input.pool.projectId),
+                eq(arenaPrizePools.id, input.pool.id),
+                eq(arenaPrizePools.status, input.expectedStatus),
+              ))
+              .returning({ id: arenaPrizePools.id });
+            if (!updated[0]) throw new Error("ARENA_PRIZE_POOL_STATE_CHANGED");
+            await tx.insert(auditEvents).values(input.audit);
+          });
+        } catch (error) {
+          if (databaseErrorText(error).includes("arena_prize_transactions")) {
+            throw new Error("ARENA_PRIZE_TRANSACTION_ALREADY_USED");
+          }
+          throw error;
+        }
+      },
     },
   };
 }
@@ -1225,6 +1582,8 @@ export function createMemoryRepositories(): {
   const arenaSeasonRows = new Map<string, ArenaSeasonRecord>();
   const arenaSeasonEntryRows = new Map<string, ArenaSeasonEntryRecord>();
   const arenaScheduledMatchRows = new Map<string, ArenaScheduledMatchRecord>();
+  const arenaPrizePoolRows = new Map<string, ArenaPrizePoolRecord>();
+  const arenaPrizeTransactionRows = new Map<string, ArenaPrizeTransactionRecord>();
   return {
     nonces: {
       async saveNonce(record) {
@@ -1248,6 +1607,10 @@ export function createMemoryRepositories(): {
       async saveSession(record) {
         if (sessionRows.has(record.id)) throw new Error("SESSION_ALREADY_EXISTS");
         sessionRows.set(record.id, structuredClone(record));
+      },
+      async getSession(id) {
+        const record = sessionRows.get(id);
+        return record ? structuredClone(record) : undefined;
       },
       async revokeSession(id, now) {
         const record = sessionRows.get(id);
@@ -1519,10 +1882,17 @@ export function createMemoryRepositories(): {
         if (record.idempotencyKey && [...arenaSeasonEntryRows.values()].some((row) => row.seasonId === record.seasonId && row.idempotencyKey === record.idempotencyKey)) {
           throw new Error("ARENA_SEASON_ENTRY_IDEMPOTENCY_ALREADY_EXISTS");
         }
+        if (record.ownerFingerprint && [...arenaSeasonEntryRows.values()].some((row) => row.seasonId === record.seasonId && row.ownerFingerprint === record.ownerFingerprint)) {
+          throw new Error("ARENA_WALLET_ALREADY_ENTERED");
+        }
         arenaSeasonEntryRows.set(record.id, structuredClone(record));
       },
       async getArenaSeasonEntry(projectId, seasonId, agentId) {
         const record = [...arenaSeasonEntryRows.values()].find((row) => row.projectId === projectId && row.seasonId === seasonId && row.agentId === agentId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async getArenaSeasonEntryByOwnerFingerprint(projectId, seasonId, ownerFingerprint) {
+        const record = [...arenaSeasonEntryRows.values()].find((row) => row.projectId === projectId && row.seasonId === seasonId && row.ownerFingerprint === ownerFingerprint);
         return record ? structuredClone(record) : undefined;
       },
       async getArenaSeasonEntryByIdempotencyKey(projectId, seasonId, idempotencyKey) {
@@ -1534,6 +1904,28 @@ export function createMemoryRepositories(): {
           .filter((record) => record.projectId === projectId && record.seasonId === seasonId)
           .sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime())
           .map((record) => structuredClone(record));
+      },
+      async saveArenaEnrollment(input) {
+        const season = arenaSeasonRows.get(input.entry.seasonId);
+        if (!season || season.projectId !== input.entry.projectId) throw new Error("ARENA_SEASON_NOT_FOUND");
+        if (season.status !== "open") throw new Error("ARENA_SEASON_NOT_OPEN");
+        if ((season.entryMode ?? "invite_only") !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
+        if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
+        if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
+        const prizePool = [...arenaPrizePoolRows.values()].find((row) => row.projectId === input.entry.projectId && row.seasonId === input.entry.seasonId);
+        if (prizePool?.status !== "funded") throw new Error("ARENA_PRIZE_POOL_NOT_FUNDED");
+        const entries = [...arenaSeasonEntryRows.values()].filter((row) => row.projectId === input.entry.projectId && row.seasonId === input.entry.seasonId);
+        if (entries.length >= (season.maxEntries ?? 16)) throw new Error("ARENA_SEASON_FULL");
+        if (arenaStrategyArtifactRows.has(input.artifact.id) || [...arenaStrategyArtifactRows.values()].some((row) => row.projectId === input.artifact.projectId && row.agentId === input.artifact.agentId)) {
+          throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
+        }
+        if (entries.some((row) => row.agentId === input.entry.agentId)) throw new Error("ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS");
+        if (input.entry.ownerFingerprint && entries.some((row) => row.ownerFingerprint === input.entry.ownerFingerprint)) throw new Error("ARENA_WALLET_ALREADY_ENTERED");
+        if (input.entry.idempotencyKey && entries.some((row) => row.idempotencyKey === input.entry.idempotencyKey)) throw new Error("ARENA_SEASON_ENTRY_IDEMPOTENCY_ALREADY_EXISTS");
+        if (auditRows.some((row) => row.id === input.audit.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
+        arenaStrategyArtifactRows.set(input.artifact.id, structuredClone(input.artifact));
+        arenaSeasonEntryRows.set(input.entry.id, structuredClone(input.entry));
+        auditRows.push(structuredClone(input.audit));
       },
       async saveArenaScheduledMatch(record) {
         if (arenaScheduledMatchRows.has(record.id)) throw new Error("ARENA_SCHEDULED_MATCH_ALREADY_EXISTS");
@@ -1588,6 +1980,64 @@ export function createMemoryRepositories(): {
         }
         arenaSeasonRows.set(input.season.id, structuredClone(input.season));
         for (const match of input.matches) arenaScheduledMatchRows.set(match.id, structuredClone(match));
+        auditRows.push(structuredClone(input.audit));
+      },
+      async saveArenaPrizePool(record) {
+        if (arenaPrizePoolRows.has(record.id)) throw new Error("ARENA_PRIZE_POOL_ALREADY_EXISTS");
+        if ([...arenaPrizePoolRows.values()].some((row) => row.projectId === record.projectId && row.seasonId === record.seasonId)) {
+          throw new Error("ARENA_PRIZE_POOL_ALREADY_EXISTS");
+        }
+        if (record.createIdempotencyKey && [...arenaPrizePoolRows.values()].some((row) => row.projectId === record.projectId && row.createIdempotencyKey === record.createIdempotencyKey)) {
+          throw new Error("ARENA_PRIZE_POOL_IDEMPOTENCY_ALREADY_EXISTS");
+        }
+        arenaPrizePoolRows.set(record.id, structuredClone(record));
+      },
+      async getArenaPrizePool(projectId, seasonId) {
+        const record = [...arenaPrizePoolRows.values()].find((row) => row.projectId === projectId && row.seasonId === seasonId);
+        return record ? structuredClone(record) : undefined;
+      },
+      async getArenaPrizePoolByCreateIdempotencyKey(projectId, idempotencyKey) {
+        const record = [...arenaPrizePoolRows.values()].find((row) => row.projectId === projectId && row.createIdempotencyKey === idempotencyKey);
+        return record ? structuredClone(record) : undefined;
+      },
+      async listArenaPrizePools(projectId) {
+        return [...arenaPrizePoolRows.values()]
+          .filter((record) => record.projectId === projectId)
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async updateArenaPrizePool(record) {
+        if (!arenaPrizePoolRows.has(record.id)) throw new Error("ARENA_PRIZE_POOL_NOT_FOUND");
+        arenaPrizePoolRows.set(record.id, structuredClone(record));
+      },
+      async prepareArenaPrizeSettlement(input) {
+        const current = arenaPrizePoolRows.get(input.pool.id);
+        if (!current || current.projectId !== input.pool.projectId) throw new Error("ARENA_PRIZE_POOL_NOT_FOUND");
+        if (current.status !== input.expectedStatus) throw new Error("ARENA_PRIZE_POOL_STATE_CHANGED");
+        if (auditRows.some((record) => record.id === input.audit.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
+        arenaPrizePoolRows.set(input.pool.id, structuredClone(input.pool));
+        auditRows.push(structuredClone(input.audit));
+      },
+      async getArenaPrizeTransaction(transactionHash) {
+        const record = arenaPrizeTransactionRows.get(transactionHash);
+        return record ? structuredClone(record) : undefined;
+      },
+      async confirmArenaPrizePoolTransaction(input) {
+        const current = arenaPrizePoolRows.get(input.pool.id);
+        if (!current || current.projectId !== input.pool.projectId) throw new Error("ARENA_PRIZE_POOL_NOT_FOUND");
+        if (current.status !== input.expectedStatus) throw new Error("ARENA_PRIZE_POOL_STATE_CHANGED");
+        if (arenaPrizeTransactionRows.has(input.transaction.transactionHash)) {
+          throw new Error("ARENA_PRIZE_TRANSACTION_ALREADY_USED");
+        }
+        if ([...arenaPrizeTransactionRows.values()].some((record) => (
+          record.poolId === input.transaction.poolId
+          && record.operation === input.transaction.operation
+        ))) {
+          throw new Error("ARENA_PRIZE_TRANSACTION_ALREADY_USED");
+        }
+        if (auditRows.some((record) => record.id === input.audit.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
+        arenaPrizeTransactionRows.set(input.transaction.transactionHash, structuredClone(input.transaction));
+        arenaPrizePoolRows.set(input.pool.id, structuredClone(input.pool));
         auditRows.push(structuredClone(input.audit));
       },
     },

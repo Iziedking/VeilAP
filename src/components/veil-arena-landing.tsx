@@ -50,18 +50,26 @@ type PublicMatch = {
 type PublicArena = { matches: PublicMatch[]; leaderboard: LeaderboardEntry[] };
 type ApiEnvelope = { ok: true; value: PublicArena } | { ok: false; code: string };
 
+type SettlementReceipt = {
+  poolId: string;
+  seasonId: string;
+  winnerAgentId: string;
+  fundingReceiptDigest: string;
+  settlementReceiptDigest: string;
+  settledAt: string;
+};
+
+type SettlementEnvelope = { ok: true; value: SettlementReceipt[] } | { ok: false; code: string };
+
 function shortCommitment(value: string): string {
   return value.length > 16 ? value.slice(0, 8) + "..." + value.slice(-6) : value;
 }
 
-export function VeilArenaLanding() {
+export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: string }) {
   const [view, setView] = useState<ArenaView>("arena");
   const [arena, setArena] = useState<PublicArena | null>(null);
-  const [projectId] = useState(() => (
-    typeof window === "undefined"
-      ? ""
-      : new URLSearchParams(window.location.search).get("project")?.trim() ?? ""
-  ));
+  const [settlements, setSettlements] = useState<SettlementReceipt[]>([]);
+  const projectId = defaultProjectId;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -71,14 +79,20 @@ export function VeilArenaLanding() {
     const loadArena = async () => {
       setLoading(true);
       try {
-        const response = await apiFetch("/api/projects/" + encodeURIComponent(projectId) + "/matches");
+        const projectPath = "/api/projects/" + encodeURIComponent(projectId);
+        const [response, settlementResponse] = await Promise.all([
+          apiFetch(projectPath + "/matches"),
+          apiFetch(projectPath + "/settlement-receipts"),
+        ]);
         const body = await response.json() as ApiEnvelope;
+        const settlementBody = await settlementResponse.json() as SettlementEnvelope;
         if (!active) return;
         if (!response.ok || !body.ok) {
           setError(body.ok ? "The arena could not be loaded." : body.code);
           return;
         }
         setArena(body.value);
+        setSettlements(settlementResponse.ok && settlementBody.ok ? settlementBody.value : []);
         setError("");
       } catch {
         if (active) setError("The arena could not be reached.");
@@ -95,6 +109,7 @@ export function VeilArenaLanding() {
   }, [projectId]);
 
   const latestMatch = arena?.matches[0];
+  const latestSettlement = settlements[0];
   const latestPlayers = latestMatch?.players ?? [];
   const latestScore = latestMatch
     ? latestPlayers.map((player) => latestMatch.score[player.agentId] ?? 0).join(" : ")
@@ -107,7 +122,7 @@ export function VeilArenaLanding() {
           <a className="arena-brand" href="#top" aria-label="Veil Arena home"><VeilLogo /></a>
           <div className="arena-nav-actions">
             <a className="arena-button arena-button-quiet" href="#broadcast">[ WATCH ARENA ]</a>
-            <Link className="arena-button arena-button-signal" href="/sign-in">[ SUBMIT AGENT ]</Link>
+            <Link className="arena-button arena-button-signal" href="/play">[ BUILD YOUR AGENT ]</Link>
           </div>
         </div>
       </header>
@@ -116,19 +131,20 @@ export function VeilArenaLanding() {
         <section className="arena-hero" aria-labelledby="arena-hero-title">
           <div className="arena-title-row">
             <span className="arena-hero-mark" aria-hidden="true"><VeilLogo /></span>
-            <h1 id="arena-hero-title">Agents that never show their hand.</h1>
+            <h1 id="arena-hero-title">Build your agent. Never show your hand.</h1>
           </div>
 
           <div className="arena-hero-meta" aria-label="Arena facts">
             <span>STARKNET / SN_MAIN</span>
-            <span>SEASON 00</span>
+            <span>OPEN COMPETITION</span>
             <span>{arena?.leaderboard.length ?? 0} SEALED AGENTS</span>
             <span>{arena?.matches.length ?? 0} COMPLETED MATCHES</span>
+            <span>{settlements.length} PRIVATE PAYOUTS</span>
             <span>{loading ? "SYNCING RECEIPTS" : projectId ? "LIVE RECEIPTS" : "PROJECT NOT SELECTED"}</span>
           </div>
 
           <p className="arena-hero-lede">
-            Sealed poker agents face the same hands. Scores go public. Strategies and winner payouts stay private.
+            Anyone can choose a poker strategy, seal it, and enter a season with a sponsor-authorized private reward. Match results go public. Strategies and payout details stay private.
           </p>
 
           <article className="arena-latest" aria-label="Latest public match receipt">
@@ -150,16 +166,16 @@ export function VeilArenaLanding() {
                 </>
               ) : (
                 <div className="arena-empty-state">
-                  <strong>{error || (projectId ? "NO COMPLETED MATCHES" : "ADD A PROJECT TO VIEW THE ARENA")}</strong>
-                  <p>Run a real match from a persisted strategy pair to publish its receipt here.</p>
+                  <strong>{error || (projectId ? "NO COMPLETED MATCHES" : "ARENA PROJECT NOT CONFIGURED")}</strong>
+                  <p>Only real completed matches publish a receipt here.</p>
                 </div>
               )}
             </div>
           </article>
 
           <div className="arena-hero-actions">
-            <a className="arena-button arena-button-signal" href="#broadcast">[ WATCH MATCH RECEIPTS ]</a>
-            <a className="arena-button arena-button-quiet" href="#proof">[ OPEN MATCH RECEIPT ]</a>
+            <Link className="arena-button arena-button-signal" href="/play">[ BUILD YOUR AGENT ]</Link>
+            <a className="arena-button arena-button-quiet" href="#broadcast">[ WATCH REAL RESULTS ]</a>
           </div>
         </section>
 
@@ -200,8 +216,8 @@ export function VeilArenaLanding() {
                   </article>
                 )) : (
                   <div className="arena-empty-state">
-                    <strong>{projectId ? "NO RECEIPTS YET" : "CONNECT A PROJECT"}</strong>
-                    <p>The arena will show completed matches after the server runs two persisted sealed strategies.</p>
+                    <strong>{projectId ? "NO RECEIPTS YET" : "ARENA PROJECT NOT CONFIGURED"}</strong>
+                    <p>Completed matches appear here after at least two real agents enter and the season runs.</p>
                   </div>
                 )}
               </div>
@@ -219,7 +235,7 @@ export function VeilArenaLanding() {
                     <span role="cell"><code>{shortCommitment(agent.artifactCommitment)}</code><small>SEALED</small></span>
                   </div>
                 ))}
-                {!arena?.leaderboard.length && <div className="arena-empty-state"><strong>NO AGENTS REGISTERED</strong><p>Submit two real strategies to create a public leaderboard.</p></div>}
+                {!arena?.leaderboard.length && <div className="arena-empty-state"><strong>NO AGENTS REGISTERED</strong><p>Enter a funded public season to start the leaderboard.</p></div>}
               </div>
             )}
 
@@ -266,14 +282,44 @@ export function VeilArenaLanding() {
           <div><span>PUBLIC</span><strong>SCORE / RANK / RECEIPT</strong></div>
           <div><span>SEALED</span><strong>POLICY / REASONING</strong></div>
           <div><span>RUNNER</span><strong>TRUSTED V1 OPERATOR</strong></div>
-          <div><span>PRIZE</span><strong>PRIVATE / STRK20</strong></div>
+          <div><span>REWARD</span><strong>PRIVATE / SPONSOR AUTHORIZED</strong></div>
+        </section>
+
+        <section className="arena-settlement" id="settlements" aria-labelledby="settlement-title">
+          <header className="arena-section-head">
+            <div>
+              <span>04 / PRIVATE REWARD</span>
+              <h2 id="settlement-title">REWARD PROOF</h2>
+            </div>
+            <strong>{latestSettlement ? "PAYOUT AUTHORIZED" : "NO SETTLEMENT"}</strong>
+          </header>
+          {latestSettlement ? (
+            <article className="arena-settlement-card">
+              <div className="arena-settlement-main">
+                <span>WINNER PAYOUT</span>
+                <strong>PRIVATE TRANSFER RECORDED</strong>
+                <small>AGENT {shortCommitment(latestSettlement.winnerAgentId)} / SEASON {latestSettlement.seasonId}</small>
+              </div>
+              <div className="arena-settlement-proof">
+                <span>PUBLIC COMMITMENTS</span>
+                <code>FUND {shortCommitment(latestSettlement.fundingReceiptDigest)}</code>
+                <code>SETTLE {shortCommitment(latestSettlement.settlementReceiptDigest)}</code>
+                <small>RECIPIENT STAYS PRIVATE</small>
+              </div>
+            </article>
+          ) : (
+            <div className="arena-empty-state arena-settlement-empty">
+              <strong>{projectId ? "NO REWARDS SETTLED YET" : "ARENA PROJECT NOT CONFIGURED"}</strong>
+              <p>When a season settles, the finalized pool receipt and sponsor authorization are committed publicly. The hidden amount and recipient stay private.</p>
+            </div>
+          )}
         </section>
       </main>
 
       <footer className="arena-footer">
         <VeilLogo />
         <span>SEALED AGENT COMPETITION / STARKNET</span>
-        <span>PUBLIC DATA / NO SYNTHETIC RESULTS</span>
+        <Link href="/arena-console">HOST A SEASON / OPERATOR DESK</Link>
       </footer>
     </div>
   );
