@@ -1,7 +1,7 @@
 import { isLoopbackOrigin } from "@/server/env";
 
-const ALLOWED_METHODS = "GET, POST, OPTIONS";
-const ALLOWED_HEADERS = "Content-Type";
+const ALLOWED_METHODS = "GET, POST, PUT, OPTIONS";
+const ALLOWED_HEADERS = "Content-Type, Idempotency-Key";
 
 function validOrigin(value: string | null): string | undefined {
   if (!value) return undefined;

@@ -14,8 +14,15 @@ export function proxy(request: NextRequest) {
     if (preflight) return preflight;
   }
 
-  const response = NextResponse.next();
   const origin = request.headers.get("origin");
+  if (origin !== null && !isAllowedApiOrigin(origin)) {
+    return NextResponse.json(
+      { ok: false, code: "ORIGIN_NOT_ALLOWED" },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  const response = NextResponse.next();
   if (isAllowedApiOrigin(origin)) {
     for (const [key, value] of apiCorsHeaders(origin)) response.headers.set(key, value);
   }

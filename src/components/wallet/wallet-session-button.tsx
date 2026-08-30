@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api/client";
 import { connectSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
@@ -12,6 +12,7 @@ import { WalletPicker } from "./wallet-picker";
 
 type FlowState =
   | "idle"
+  | "checking-session"
   | "connecting"
   | "awaiting-signature"
   | "verifying"
@@ -43,9 +44,33 @@ function messageFor(code: string): string {
 
 export function WalletSessionButton() {
   const wallets = useDiscoveredWallets();
-  const [flow, setFlow] = useState<FlowState>("idle");
+  const [flow, setFlow] = useState<FlowState>("checking-session");
   const [message, setMessage] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void apiFetch("/api/auth/session")
+      .then(async (response) => {
+        const body = await response.json() as {
+          ok: boolean;
+          value?: { walletAddress?: string };
+        };
+        if (!active) return;
+        if (response.ok && body.ok && body.value?.walletAddress) {
+          setWalletAddress(body.value.walletAddress);
+          setFlow("authenticated");
+          return;
+        }
+        setFlow("idle");
+      })
+      .catch(() => {
+        if (active) setFlow("idle");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function authenticate(wallet: WalletStandardWallet) {
     setMessage("");
@@ -129,22 +154,23 @@ export function WalletSessionButton() {
     return (
       <div className="wallet-authenticated" role="status">
         <span>SESSION VERIFIED</span>
-        <strong>{walletAddress.slice(0, 10)}…{walletAddress.slice(-6)}</strong>
+        <strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong>
         <p>Your wallet proved control. No payment permission was requested.</p>
-        <Link className="sign-in-preview" href="/workspace">Open the proof workspace</Link>
+        <Link className="sign-in-preview" href="/play">Enter the arena</Link>
         <button className="wallet-logout" type="button" onClick={logout}>Sign out</button>
       </div>
     );
   }
 
-  const busy = flow === "connecting" || flow === "awaiting-signature" || flow === "verifying";
+  const busy = flow === "checking-session" || flow === "connecting" || flow === "awaiting-signature" || flow === "verifying";
   return (
     <>
-      <WalletPicker wallets={wallets} disabled={busy} onSelect={authenticate} />
+      {flow !== "checking-session" ? <WalletPicker wallets={wallets} disabled={busy} onSelect={authenticate} /> : null}
       <p className="sign-in-status" aria-live="polite">
-        {flow === "connecting" && "Checking STRK20 support before requesting access…"}
+        {flow === "checking-session" && "Checking your secure session..."}
+        {flow === "connecting" && "Checking STRK20 support before requesting access..."}
         {flow === "awaiting-signature" && "Review the Veil Arena sign-in message in your wallet."}
-        {flow === "verifying" && "Verifying the signed session on Starknet Mainnet…"}
+        {flow === "verifying" && "Verifying the signed session on Starknet Mainnet..."}
         {!busy && message}
         {flow === "idle" && "Choose a wallet. Signing proves control only. It cannot move funds."}
       </p>
