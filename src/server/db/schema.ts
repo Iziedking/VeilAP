@@ -78,6 +78,76 @@ export const arenaMatchReveals = pgTable(
   }),
 );
 
+export const arenaSeasons = pgTable(
+  "arena_seasons",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    name: text("name").notNull(),
+    rulesetVersion: text("ruleset_version").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    locksAt: timestamp("locks_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: text("status").notNull().default("open"),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    createIdempotencyKey: text("create_idempotency_key"),
+    createRequestDigest: text("create_request_digest"),
+    lockIdempotencyKey: text("lock_idempotency_key"),
+    lockRequestDigest: text("lock_request_digest"),
+  },
+  (table) => ({
+    projectCreateIdempotency: uniqueIndex("arena_seasons_project_create_idempotency_idx").on(
+      table.projectId,
+      table.createIdempotencyKey,
+    ),
+  }),
+);
+
+export const arenaSeasonEntries = pgTable(
+  "arena_season_entries",
+  {
+    id: text("id").primaryKey(),
+    seasonId: text("season_id").notNull(),
+    projectId: text("project_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    displayName: text("display_name").notNull(),
+    artifactCommitment: text("artifact_commitment").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull(),
+    idempotencyKey: text("idempotency_key"),
+    requestDigest: text("request_digest"),
+  },
+  (table) => ({
+    seasonAgent: uniqueIndex("arena_season_entries_season_agent_idx").on(table.seasonId, table.agentId),
+    seasonIdempotency: uniqueIndex("arena_season_entries_season_idempotency_idx").on(
+      table.seasonId,
+      table.idempotencyKey,
+    ),
+  }),
+);
+
+export const arenaScheduledMatches = pgTable(
+  "arena_scheduled_matches",
+  {
+    id: text("id").primaryKey(),
+    seasonId: text("season_id").notNull(),
+    projectId: text("project_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    hands: integer("hands").notNull(),
+    leftAgentId: text("left_agent_id").notNull(),
+    rightAgentId: text("right_agent_id").notNull(),
+    status: text("status").notNull().default("scheduled"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    seasonSequence: uniqueIndex("arena_scheduled_matches_season_sequence_idx").on(
+      table.seasonId,
+      table.sequence,
+    ),
+  }),
+);
+
 export const authNonces = pgTable("auth_nonces", {
   nonce: text("nonce").primaryKey(),
   walletFingerprint: text("wallet_fingerprint").notNull(),

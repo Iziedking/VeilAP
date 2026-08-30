@@ -1,0 +1,420 @@
+import { randomUUID } from "node:crypto";
+
+import { commitment } from "@/domain/canonical";
+import { authorizeProject } from "@/server/authorization/authorize";
+import type {
+  ArenaScheduledMatchRecord,
+  ArenaSeasonEntryRecord,
+  ArenaSeasonRecord,
+  ProjectRepository,
+} from "@/server/db/repositories";
+import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
+
+export type ArenaSeasonServiceErrorCode =
+  | "INVALID_INPUT"
+  | "PROJECT_NOT_FOUND"
+  | "PROJECT_ACCESS_REQUIRED"
+  | "ROLE_FORBIDDEN"
+  | "ARENA_SEASON_NOT_FOUND"
+  | "ARENA_SEASON_ALREADY_LOCKED"
+  | "ARENA_SEASON_TOO_SMALL"
+  | "STRATEGY_ARTIFACT_NOT_FOUND"
+  | "ARENA_SEASON_ENTRY_ALREADY_EXISTS"
+  | "IDEMPOTENCY_KEY_REUSED"
+  | "PERSISTENCE_FAILED";
+
+export type ArenaSeasonServiceResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; code: ArenaSeasonServiceErrorCode };
+
+export interface ArenaSeasonView {
+  id: string;
+  projectId: string;
+  name: string;
+  rulesetVersion: string;
+  startsAt: string;
+  locksAt: string;
+  endsAt: string;
+  status: ArenaSeasonRecord["status"];
+  createdAt: string;
+  lockedAt?: string;
+}
+
+export interface ArenaSeasonEntryView {
+  id: string;
+  seasonId: string;
+  agentId: string;
+  displayName: string;
+  artifactCommitment: string;
+  joinedAt: string;
+}
+
+export interface ArenaScheduledMatchView {
+  id: string;
+  seasonId: string;
+  sequence: number;
+  hands: number;
+  leftAgentId: string;
+  rightAgentId: string;
+  status: ArenaScheduledMatchRecord["status"];
+  createdAt: string;
+}
+
+export interface ArenaSeasonScheduleView {
+  season: ArenaSeasonView;
+  entries: ArenaSeasonEntryView[];
+  matches: ArenaScheduledMatchView[];
+}
+
+export interface ArenaSeasonServiceDependencies {
+  repositories: ProjectRepository;
+  walletHashPepper: string;
+  now?: () => Date;
+  idFactory?: () => string;
+}
+
+const idempotencyKeyPattern = /^[\x21-\x7e]{8,200}$/;
+const rulesetPattern = /^[a-z0-9][a-z0-9._-]{0,39}$/;
+
+function mapAuthorizationCode(code: string): ArenaSeasonServiceErrorCode {
+  return code === "PROJECT_ACCESS_REQUIRED" ? "PROJECT_ACCESS_REQUIRED" : "ROLE_FORBIDDEN";
+}
+
+function mapPersistenceError(error: unknown): ArenaSeasonServiceErrorCode {
+  if (!(error instanceof Error)) return "PERSISTENCE_FAILED";
+  if (error.message === "ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS") return "ARENA_SEASON_ENTRY_ALREADY_EXISTS";
+  if (error.message === "ARENA_SEASON_NOT_OPEN") return "ARENA_SEASON_ALREADY_LOCKED";
+  if (error.message.includes("IDEMPOTENCY")) return "IDEMPOTENCY_KEY_REUSED";
+  return "PERSISTENCE_FAILED";
+}
+
+function parseDate(value: string): Date | undefined {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : undefined;
+}
+
+function validKey(value: string): boolean {
+  return idempotencyKeyPattern.test(value);
+}
+
+function normalizeSchedule(
+  season: ArenaSeasonRecord,
+  entries: ArenaSeasonEntryRecord[],
+  matches: ArenaScheduledMatchRecord[],
+): ArenaSeasonScheduleView {
+  return {
+    season: {
+      id: season.id,
+      projectId: season.projectId,
+      name: season.name,
+      rulesetVersion: season.rulesetVersion,
+      startsAt: season.startsAt.toISOString(),
+      locksAt: season.locksAt.toISOString(),
+      endsAt: season.endsAt.toISOString(),
+      status: season.status,
+      createdAt: season.createdAt.toISOString(),
+      lockedAt: season.lockedAt?.toISOString(),
+    },
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      seasonId: entry.seasonId,
+      agentId: entry.agentId,
+      displayName: entry.displayName,
+      artifactCommitment: entry.artifactCommitment,
+      joinedAt: entry.joinedAt.toISOString(),
+    })),
+    matches: matches.map((match) => ({
+      id: match.id,
+      seasonId: match.seasonId,
+      sequence: match.sequence,
+      hands: match.hands,
+      leftAgentId: match.leftAgentId,
+      rightAgentId: match.rightAgentId,
+      status: match.status,
+      createdAt: match.createdAt.toISOString(),
+    })),
+  };
+}
+
+export class ArenaSeasonService {
+  private readonly repositories: ProjectRepository;
+  private readonly walletHashPepper: string;
+  private readonly now: () => Date;
+  private readonly idFactory: () => string;
+
+  constructor(dependencies: ArenaSeasonServiceDependencies) {
+    this.repositories = dependencies.repositories;
+    this.walletHashPepper = dependencies.walletHashPepper;
+    this.now = dependencies.now ?? (() => new Date());
+    this.idFactory = dependencies.idFactory ?? randomUUID;
+  }
+
+  async createSeason(input: {
+    projectId: string;
+    actorWalletAddress: string;
+    idempotencyKey: string;
+    name: string;
+    rulesetVersion: string;
+    startsAt: string;
+    locksAt: string;
+    endsAt: string;
+  }): Promise<ArenaSeasonServiceResult<ArenaSeasonView>> {
+    const projectId = input.projectId.trim();
+    const name = input.name.trim();
+    const rulesetVersion = input.rulesetVersion.trim();
+    const startsAt = parseDate(input.startsAt);
+    const locksAt = parseDate(input.locksAt);
+    const endsAt = parseDate(input.endsAt);
+    if (!projectId || !name || name.length > 120 || !rulesetPattern.test(rulesetVersion) || !startsAt || !locksAt || !endsAt || !(startsAt < locksAt && locksAt < endsAt) || !validKey(input.idempotencyKey)) {
+      return { ok: false, code: "INVALID_INPUT" };
+    }
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "create_arena_season",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+
+      const requestDigest = commitment({
+        actorFingerprint,
+        name,
+        rulesetVersion,
+        startsAt: startsAt.toISOString(),
+        locksAt: locksAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+      });
+      const existing = await this.repositories.getArenaSeasonByCreateIdempotencyKey(projectId, input.idempotencyKey);
+      if (existing) return existing.createRequestDigest === requestDigest ? { ok: true, value: this.view(existing) } : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+
+      const createdAt = this.now();
+      const record: ArenaSeasonRecord = {
+        id: this.idFactory(),
+        projectId,
+        name,
+        rulesetVersion,
+        startsAt,
+        locksAt,
+        endsAt,
+        status: "open",
+        createdBy: actorFingerprint,
+        createdAt,
+        createIdempotencyKey: input.idempotencyKey,
+        createRequestDigest: requestDigest,
+      };
+      await this.repositories.saveArenaSeason(record);
+      await this.repositories.saveAuditEvent({
+        id: this.idFactory(),
+        projectId,
+        actorFingerprint,
+        eventType: "arena_season_created",
+        payloadDigest: commitment({
+          seasonId: record.id,
+          name,
+          rulesetVersion,
+          startsAt: startsAt.toISOString(),
+          locksAt: locksAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+        }),
+        createdAt,
+      });
+      return { ok: true, value: this.view(record) };
+    } catch (error) {
+      return { ok: false, code: mapPersistenceError(error) };
+    }
+  }
+
+  async registerEntry(input: {
+    projectId: string;
+    actorWalletAddress: string;
+    seasonId: string;
+    agentId: string;
+    idempotencyKey: string;
+  }): Promise<ArenaSeasonServiceResult<ArenaSeasonEntryView>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    const agentId = input.agentId.trim();
+    if (!projectId || !seasonId || !agentId || agentId.length > 80 || !validKey(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const season = await this.repositories.getArenaSeason(projectId, seasonId);
+      if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "register_arena_entry",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+      if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_ALREADY_LOCKED" };
+
+      const artifact = await this.repositories.getArenaStrategyArtifact(projectId, agentId);
+      if (!artifact) return { ok: false, code: "STRATEGY_ARTIFACT_NOT_FOUND" };
+      const requestDigest = commitment({ actorFingerprint, seasonId, agentId, artifactCommitment: artifact.artifactCommitment });
+      const existingByKey = await this.repositories.getArenaSeasonEntryByIdempotencyKey(projectId, seasonId, input.idempotencyKey);
+      if (existingByKey) return existingByKey.requestDigest === requestDigest ? { ok: true, value: this.entryView(existingByKey) } : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+      const existingAgent = await this.repositories.getArenaSeasonEntry(projectId, seasonId, agentId);
+      if (existingAgent) return existingAgent.artifactCommitment === artifact.artifactCommitment
+        ? { ok: true, value: this.entryView(existingAgent) }
+        : { ok: false, code: "ARENA_SEASON_ENTRY_ALREADY_EXISTS" };
+
+      const record: ArenaSeasonEntryRecord = {
+        id: this.idFactory(),
+        seasonId,
+        projectId,
+        agentId,
+        displayName: artifact.displayName,
+        artifactCommitment: artifact.artifactCommitment,
+        joinedAt: this.now(),
+        idempotencyKey: input.idempotencyKey,
+        requestDigest,
+      };
+      await this.repositories.saveArenaSeasonEntry(record);
+      await this.repositories.saveAuditEvent({
+        id: this.idFactory(),
+        projectId,
+        actorFingerprint,
+        eventType: "arena_season_entry_registered",
+        payloadDigest: commitment({ seasonId, agentId, artifactCommitment: artifact.artifactCommitment }),
+        createdAt: this.now(),
+      });
+      return { ok: true, value: this.entryView(record) };
+    } catch (error) {
+      return { ok: false, code: mapPersistenceError(error) };
+    }
+  }
+
+  async lockSeason(input: {
+    projectId: string;
+    actorWalletAddress: string;
+    seasonId: string;
+    hands: number;
+    idempotencyKey: string;
+  }): Promise<ArenaSeasonServiceResult<ArenaSeasonScheduleView>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    if (!projectId || !seasonId || !Number.isInteger(input.hands) || input.hands < 1 || input.hands > 100 || !validKey(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const season = await this.repositories.getArenaSeason(projectId, seasonId);
+      if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "lock_arena_season",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+
+      const entries = await this.repositories.listArenaSeasonEntries(projectId, seasonId);
+      const requestDigest = commitment({ actorFingerprint, seasonId, hands: input.hands, entries: entries.map((entry) => [entry.agentId, entry.artifactCommitment]) });
+      if (season.lockIdempotencyKey) {
+        if (season.lockIdempotencyKey !== input.idempotencyKey || season.lockRequestDigest !== requestDigest) return { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+        return { ok: true, value: normalizeSchedule(season, entries, await this.repositories.listArenaScheduledMatches(projectId, seasonId)) };
+      }
+      if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_ALREADY_LOCKED" };
+      if (entries.length < 2) return { ok: false, code: "ARENA_SEASON_TOO_SMALL" };
+
+      const orderedEntries = [...entries].sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime() || left.agentId.localeCompare(right.agentId));
+      const createdAt = this.now();
+      const matches: ArenaScheduledMatchRecord[] = [];
+      let sequence = 1;
+      for (let leftIndex = 0; leftIndex < orderedEntries.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < orderedEntries.length; rightIndex += 1) {
+          matches.push({
+            id: this.idFactory(),
+            seasonId,
+            projectId,
+            sequence,
+            hands: input.hands,
+            leftAgentId: orderedEntries[leftIndex].agentId,
+            rightAgentId: orderedEntries[rightIndex].agentId,
+            status: "scheduled",
+            createdAt,
+          });
+          sequence += 1;
+        }
+      }
+      const lockedSeason: ArenaSeasonRecord = {
+        ...season,
+        status: "locked",
+        lockedAt: createdAt,
+        lockIdempotencyKey: input.idempotencyKey,
+        lockRequestDigest: requestDigest,
+      };
+      await this.repositories.saveArenaSeasonSchedule({
+        season: lockedSeason,
+        matches,
+        audit: {
+          id: this.idFactory(),
+          projectId,
+          actorFingerprint,
+          eventType: "arena_season_locked",
+          payloadDigest: commitment({ seasonId, entryCount: entries.length, matchCount: matches.length, hands: input.hands }),
+          createdAt,
+        },
+      });
+      return { ok: true, value: normalizeSchedule(lockedSeason, entries, matches) };
+    } catch (error) {
+      if (error instanceof Error && error.message === "ARENA_SEASON_NOT_OPEN") {
+        const current = await this.repositories.getArenaSeason(projectId, seasonId);
+        if (current?.status === "locked" && current.lockIdempotencyKey === input.idempotencyKey) {
+          return { ok: true, value: normalizeSchedule(current, await this.repositories.listArenaSeasonEntries(projectId, seasonId), await this.repositories.listArenaScheduledMatches(projectId, seasonId)) };
+        }
+        return { ok: false, code: "ARENA_SEASON_ALREADY_LOCKED" };
+      }
+      return { ok: false, code: mapPersistenceError(error) };
+    }
+  }
+
+  async getPublicSchedule(projectId: string, seasonId: string): Promise<ArenaSeasonServiceResult<ArenaSeasonScheduleView>> {
+    try {
+      const season = await this.repositories.getArenaSeason(projectId.trim(), seasonId.trim());
+      if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      return {
+        ok: true,
+        value: normalizeSchedule(
+          season,
+          await this.repositories.listArenaSeasonEntries(projectId, seasonId),
+          await this.repositories.listArenaScheduledMatches(projectId, seasonId),
+        ),
+      };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async listPublicSeasons(projectId: string): Promise<ArenaSeasonServiceResult<ArenaSeasonView[]>> {
+    try {
+      const project = await this.repositories.getProject(projectId.trim());
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const records = await this.repositories.listArenaSeasons(projectId);
+      return { ok: true, value: records.map((record) => this.view(record)) };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  private view(record: ArenaSeasonRecord): ArenaSeasonView {
+    return normalizeSchedule(record, [], []).season;
+  }
+
+  private entryView(record: ArenaSeasonEntryRecord): ArenaSeasonEntryView {
+    return {
+      id: record.id,
+      seasonId: record.seasonId,
+      agentId: record.agentId,
+      displayName: record.displayName,
+      artifactCommitment: record.artifactCommitment,
+      joinedAt: record.joinedAt.toISOString(),
+    };
+  }
+}

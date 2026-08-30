@@ -71,6 +71,13 @@
       "when": 1788135600000,
       "tag": "0009_arena_operator_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788139200000,
+      "tag": "0010_arena_seasons_and_schedule",
+      "breakpoints": true
     }
   ]
 }

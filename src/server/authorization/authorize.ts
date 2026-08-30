@@ -11,6 +11,9 @@ export type AuthorizationAction =
   | "submit_strategy"
   | "run_arena_match"
   | "reveal_losing_action"
+  | "create_arena_season"
+  | "register_arena_entry"
+  | "lock_arena_season"
   | "submit_checkpoint"
   | "read_checkpoint";
 
@@ -51,6 +54,9 @@ export async function authorizeProject(
     || (input.action === "submit_strategy" && hasRole(roles, "contributor"))
     || (input.action === "run_arena_match" && (hasRole(roles, "company") || hasRole(roles, "reviewer")))
     || (input.action === "reveal_losing_action" && (hasRole(roles, "company") || hasRole(roles, "reviewer")))
+    || (input.action === "create_arena_season" && hasRole(roles, "company"))
+    || (input.action === "register_arena_entry" && (hasRole(roles, "company") || hasRole(roles, "reviewer") || hasRole(roles, "contributor")))
+    || (input.action === "lock_arena_season" && (hasRole(roles, "company") || hasRole(roles, "reviewer")))
     || (input.action === "submit_checkpoint" && hasRole(roles, "contributor"));
 
   if (!allowed) return { ok: false, code: "ROLE_FORBIDDEN" };

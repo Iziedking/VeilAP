@@ -100,11 +100,11 @@ The repository also contains tested infrastructure from the earlier VeilAP direc
 
 The following are not complete yet:
 
-- tournament scheduling;
+- executing scheduled matches through a worker;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
-The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, real transcript inclusion proofs, authorized selective losing-action disclosure, and refusal paths for illegal or failed agent decisions. Submission and match execution return only public commitment metadata. These are not yet the production tournament scheduler or settlement flow.
+The current arena slice now includes a deterministic heads-up hold'em engine, a constrained typed policy boundary, authenticated contributor submission, encrypted strategy artifact persistence, server-generated match seeds encrypted at rest, duplicate deals with seat swapping, persisted public match receipts, a public leaderboard read model, score calculation, real transcript inclusion proofs, authorized selective losing-action disclosure, durable season entry snapshots, deterministic round-robin scheduling, transactional season locking, and refusal paths for illegal or failed agent decisions. Submission, scheduling, and match execution return only public commitment metadata. The runner still needs to consume scheduled matches, and settlement remains a separate phase.
 
 ## Product routes
 
@@ -117,6 +117,10 @@ Authenticated contributors submit a strategy through `POST /api/projects/:projec
 Company or reviewer members run a real sealed match through `POST /api/projects/:projectId/matches` with two submitted agent IDs and a hand count. The write must include a unique `Idempotency-Key` header. The server creates the seed, runs both decrypted policies in the deterministic engine, encrypts the seed, and persists the public receipt. Retrying the same key and request returns the stored result; reusing a key for different input is rejected. `GET /api/projects/:projectId/matches` returns only the public receipt feed and leaderboard projection.
 
 Company or reviewer members can reveal one losing transcript leaf through `POST /api/projects/:projectId/matches/:matchId/reveal` with a one-based `handIndex` and a unique `Idempotency-Key` header. The server replays the encrypted seed, verifies the selected losing action against its action commitment and transcript root, then persists only that selective reveal. Retrying the same key and request returns the stored reveal. Receipts created before hand counts were persisted remain eligible for public viewing but fail closed for replay-based disclosure.
+
+Company members create a season through `POST /api/projects/:projectId/seasons` with its name, ruleset version, and UTC start, lock, and end times. The write requires an `Idempotency-Key` header. A contributor, reviewer, or company member registers an existing sealed artifact through `POST /api/projects/:projectId/seasons/:seasonId/entries`, also with an idempotency key. The entry stores the artifact commitment and display name as a season snapshot, so later artifact changes cannot rewrite the season roster. `GET /api/projects/:projectId/seasons` and `GET /api/projects/:projectId/seasons/:seasonId` expose only public season metadata, commitments, entries, and scheduled pairings.
+
+Company or reviewer members lock a season through `POST /api/projects/:projectId/seasons/:seasonId/lock` with a hand count and idempotency key. Locking requires at least two real sealed entries, orders them deterministically, creates every unique pair once, and commits the season and schedule in one database transaction. Locking does not execute matches or move funds.
 
 Incomplete routes are described as incomplete. The preview never claims to move funds.
 
