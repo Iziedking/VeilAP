@@ -4,8 +4,8 @@ Veil Arena uses Vercel for the browser application and one AWS EC2 VM for the AP
 
 Production addresses:
 
-- browser: `https://veila.xyz`
-- API: `https://api.veila.xyz`
+- browser: `https://veilap.xyz`
+- API: `https://api.veilap.xyz`
 
 Do not configure the Vercel browser to call a plain HTTP VM address. Browsers will block mixed content and secure cookies will not behave correctly.
 
@@ -14,9 +14,9 @@ Do not configure the Vercel browser to call a plain HTTP VM address. Browsers wi
 ```text
 Player browser
   | HTTPS
-  +--> veila.xyz                 Vercel browser deployment
+  +--> veilap.xyz                Vercel browser deployment
   |
-  +--> api.veila.xyz             Caddy on EC2
+  +--> api.veilap.xyz            Caddy on EC2
           |
           +--> Next.js API       private Docker network
           +--> PostgreSQL 16     private Docker network and EBS volume
@@ -87,7 +87,7 @@ chmod 600 /opt/veil-arena/config/veil-arena.env
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Private PostgreSQL service |
 | `DATABASE_POOL_MAX` | App connection limit; keep low on a small VM |
 | `STARKNET_RPC_URL` | Server-only Mainnet RPC |
-| `VEILAP_APP_ORIGIN` | Exact browser origin, `https://veila.xyz` |
+| `VEILAP_APP_ORIGIN` | Exact browser origin, `https://veilap.xyz` |
 | `VEILAP_SESSION_SECRET` | At least 64 random characters |
 | `VEILAP_WALLET_HASH_PEPPER` | At least 64 independent random characters |
 | `VEILAP_KMS_KEY_ID` | Full customer-managed KMS key ARN |
@@ -98,7 +98,7 @@ chmod 600 /opt/veil-arena/config/veil-arena.env
 | `VEILAP_ARENA_WORKER_WALLET_ADDRESS` | Existing project company or reviewer wallet |
 | `NEXT_PUBLIC_STARKNET_CHAIN_ID` | Must be `SN_MAIN` for the sprint |
 | `NEXT_PUBLIC_STRK20_POOL_ADDRESS` | Pinned official STRK20 pool |
-| `VEIL_API_DOMAIN` | `api.veila.xyz` after DNS is ready |
+| `VEIL_API_DOMAIN` | `api.veilap.xyz` after DNS is ready |
 
 Generate the session secret, wallet pepper, worker secret, and receipt keys independently. Never reuse one value for another purpose.
 
@@ -108,7 +108,7 @@ Connect `Iziedking/VeilAP` and deploy `main`. Configure:
 
 | Variable | Value |
 | --- | --- |
-| `NEXT_PUBLIC_VEIL_API_ORIGIN` | `https://api.veila.xyz` |
+| `NEXT_PUBLIC_VEIL_API_ORIGIN` | `https://api.veilap.xyz` |
 | `NEXT_PUBLIC_VEIL_ARENA_PROJECT_ID` | The real persisted public arena project ID |
 | `NEXT_PUBLIC_STARKNET_CHAIN_ID` | `SN_MAIN` |
 | `NEXT_PUBLIC_STRK20_POOL_ADDRESS` | Official pinned pool address |
@@ -138,7 +138,7 @@ The deploy job builds a release-specific Docker image, starts the database, appl
 
 ## DNS and TLS
 
-Create an `A` record for `api.veila.xyz` that points to a stable Elastic IP attached to the EC2 instance. Set `VEIL_API_DOMAIN=api.veila.xyz`. Caddy obtains and renews the certificate automatically after public DNS resolves and ports 80 and 443 reach the VM.
+Create an `A` record for `api.veilap.xyz` that points to a stable Elastic IP attached to the EC2 instance. Set `VEIL_API_DOMAIN=api.veilap.xyz`. Caddy obtains and renews the certificate automatically after public DNS resolves and ports 80 and 443 reach the VM.
 
 Before DNS is ready, `VEIL_API_DOMAIN=:80` can support a VM-only HTTP smoke test. Do not connect the HTTPS Vercel frontend to that temporary endpoint.
 
@@ -199,8 +199,8 @@ git push origin main
 Watch the `Verify and deploy Veil Arena` workflow. After it succeeds, verify:
 
 ```bash
-curl --fail-with-body --silent --show-error https://api.veila.xyz/api/health
-curl --fail-with-body --silent --show-error https://api.veila.xyz/api/internal/arena/readiness \
+curl --fail-with-body --silent --show-error https://api.veilap.xyz/api/health
+curl --fail-with-body --silent --show-error https://api.veilap.xyz/api/internal/arena/readiness \
   -H "x-veil-arena-worker-secret: $VEILAP_ARENA_WORKER_SECRET"
 ```
 

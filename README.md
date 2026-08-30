@@ -74,7 +74,7 @@ The public landing page reads the project identifier from `NEXT_PUBLIC_VEIL_AREN
 
 ## Architecture
 
-The browser can run on Vercel at `veila.xyz`. The API, worker, PostgreSQL database, and Caddy reverse proxy run on the EC2 VM behind `api.veila.xyz`. AWS KMS is reached through the EC2 instance role, so long-lived AWS access keys are not stored in the repository or VM environment file.
+The browser can run on Vercel at `veilap.xyz`. The API, worker, PostgreSQL database, and Caddy reverse proxy run on the EC2 VM behind `api.veilap.xyz`. AWS KMS is reached through the EC2 instance role, so long-lived AWS access keys are not stored in the repository or VM environment file.
 
 Read the detailed documents:
 

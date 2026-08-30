@@ -93,10 +93,10 @@ jobs:
           chmod 644 "$HOME/.ssh/known_hosts"
 
       - name: Package release
-        run: tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=.env --exclude=.env.* --exclude=deploy/veil-arena.env --exclude=playwright-report --exclude=test-results --exclude=ui-artifacts -czf "veil-arena-${RELEASE_SHA}.tgz" .
+        run: tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=.env --exclude=.env.* --exclude=deploy/veil-arena.env --exclude=playwright-report --exclude=test-results --exclude=ui-artifacts -czf "$RUNNER_TEMP/veil-arena-${RELEASE_SHA}.tgz" .
 
       - name: Copy release to VM
-        run: scp -i "$HOME/.ssh/veil-vm" -o IdentitiesOnly=yes "veil-arena-${RELEASE_SHA}.tgz" "$VEIL_VM_USER@$VEIL_VM_HOST:/tmp/veil-arena-${RELEASE_SHA}.tgz"
+        run: scp -i "$HOME/.ssh/veil-vm" -o IdentitiesOnly=yes "$RUNNER_TEMP/veil-arena-${RELEASE_SHA}.tgz" "$VEIL_VM_USER@$VEIL_VM_HOST:/tmp/veil-arena-${RELEASE_SHA}.tgz"
 
       - name: Activate release on VM
         shell: bash

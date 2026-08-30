@@ -7,7 +7,7 @@ Do not advance a live season while health, readiness, database backup, wallet pl
 ## Before every live demo or season
 
 1. Confirm the GitHub deployment and Vercel deployment both succeeded for the same reviewed commit.
-2. Confirm `https://api.veila.xyz/api/health` reports persisted mode and a reachable database.
+2. Confirm `https://api.veilap.xyz/api/health` reports persisted mode and a reachable database.
 3. Confirm the protected readiness endpoint reports every check as true.
 4. Confirm the worker timer is active and has no recent failures.
 5. Confirm the public project ID in Vercel matches the intended database project.
@@ -33,7 +33,7 @@ Logs must not include strategy policies, payout addresses, transfer authorizatio
 Public liveness:
 
 ```bash
-curl --fail-with-body --silent --show-error https://api.veila.xyz/api/health
+curl --fail-with-body --silent --show-error https://api.veilap.xyz/api/health
 ```
 
 Protected arena readiness from the VM:

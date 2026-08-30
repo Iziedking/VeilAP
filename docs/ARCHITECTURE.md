@@ -88,7 +88,7 @@ Wallet identity is normalized as a Starknet felt before comparison. Database joi
 
 ## Network boundary
 
-The browser calls `https://api.veila.xyz` with credentials. The API permits only the exact configured `VEILAP_APP_ORIGIN`, supports credentialed CORS, and returns no wildcard origin.
+The browser calls `https://api.veilap.xyz` with credentials. The API permits only the exact configured `VEILAP_APP_ORIGIN`, supports credentialed CORS, and returns no wildcard origin.
 
 The API and database share a private Docker network. PostgreSQL has no host port. Caddy is the only public container. The systemd worker calls Caddy through VM loopback.
 
