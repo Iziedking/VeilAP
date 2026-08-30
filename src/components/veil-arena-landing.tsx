@@ -32,6 +32,10 @@ type PublicMatch = {
   seedCommitment: string;
   transcriptRoot: string;
   handCount: number | null;
+  signedReceipt?: {
+    publicKeyId: string;
+    signature: string;
+  };
   selectiveReveal?: {
     action: "fold" | "check" | "call" | "raise";
     agentId: string;
@@ -131,7 +135,7 @@ export function VeilArenaLanding() {
             <header>
               <span><i className="arena-live-dot" /> LATEST ARENA DECISION</span>
               <span>{latestMatch?.matchId ?? "NO MATCH"}</span>
-              <span>{projectId ? "PERSISTED DATA" : "AWAITING PROJECT"}</span>
+              <span>{latestMatch?.signedReceipt ? "SIGNED RECEIPT" : projectId ? "PERSISTED DATA" : "AWAITING PROJECT"}</span>
             </header>
             <div className="arena-latest-body">
               {latestMatch ? (
@@ -142,7 +146,7 @@ export function VeilArenaLanding() {
                     <small>POLICIES SEALED</small>
                   </div>
                   <p>Duplicate deals complete. Seats reversed. Result committed. {latestMatch.selectiveReveal ? "One losing action is disclosed." : "No action is disclosed."}</p>
-                  <small className="arena-latest-receipt">TRANSCRIPT ROOT {shortCommitment(latestMatch.transcriptRoot)}</small>
+                    <small className="arena-latest-receipt">TRANSCRIPT ROOT {shortCommitment(latestMatch.transcriptRoot)} / {latestMatch.signedReceipt ? "SIGNED" : "LEGACY RECEIPT"}</small>
                 </>
               ) : (
                 <div className="arena-empty-state">
@@ -192,7 +196,7 @@ export function VeilArenaLanding() {
                       <div><strong>{match.players[1]?.displayName.toUpperCase()}</strong><b>{match.score[match.players[1]?.agentId ?? ""] ?? 0}</b></div>
                     </div>
                     <div className="arena-match-progress is-complete"><i /></div>
-                    <footer><span>RECEIPT COMMITTED</span><strong>SEATS SWAPPED</strong></footer>
+                    <footer><span>{match.signedReceipt ? "RECEIPT SIGNED" : "RECEIPT COMMITTED"}</span><strong>SEATS SWAPPED</strong></footer>
                   </article>
                 )) : (
                   <div className="arena-empty-state">
@@ -247,7 +251,7 @@ export function VeilArenaLanding() {
               <span>PUBLIC PROOF</span>
               <strong>TRANSCRIPT ROOT</strong>
               <p>{latestMatch ? shortCommitment(latestMatch.transcriptRoot) : "NOT AVAILABLE"}</p>
-              <code>{latestMatch ? "SEED " + shortCommitment(latestMatch.seedCommitment) : "NO SEALED RUN"}</code>
+              <code>{latestMatch ? "SEED " + shortCommitment(latestMatch.seedCommitment) + " / " + (latestMatch.signedReceipt ? "SIGNED " + latestMatch.signedReceipt.publicKeyId : "LEGACY") : "NO SEALED RUN"}</code>
             </article>
             <article>
               <span>LOSING MOVE</span>

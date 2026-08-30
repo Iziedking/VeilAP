@@ -12,6 +12,8 @@ import type {
   ProjectRepository,
 } from "@/server/db/repositories";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
+import { arenaMatchReceiptPayloadSchema, type SignedArenaMatchReceipt } from "@/server/receipts/schemas";
+import { verifySignedArenaMatchReceipt, type ReceiptSigner } from "@/server/receipts/signing";
 
 export type ArenaMatchServiceErrorCode =
   | "INVALID_INPUT"
@@ -27,6 +29,7 @@ export type ArenaMatchServiceErrorCode =
   | "REVEAL_HAND_NOT_FOUND"
   | "NO_LOSING_AGENT"
   | "TRANSCRIPT_PROOF_INVALID"
+  | "SIGNING_UNAVAILABLE"
   | "PERSISTENCE_FAILED"
   | "ENCRYPTION_FAILED";
 
@@ -47,6 +50,7 @@ export interface PublicArenaMatchView {
   seedCommitment: string;
   transcriptRoot: string;
   handCount: number | null;
+  signedReceipt?: SignedArenaMatchReceipt;
   selectiveReveal?: PublicArenaRevealView;
   createdAt: string;
 }
@@ -86,6 +90,7 @@ export interface PublicArenaView {
 export interface ArenaMatchServiceDependencies {
   repositories: ProjectRepository;
   keyProvider: KeyProvider;
+  signer?: ReceiptSigner;
   walletHashPepper: string;
   now?: () => Date;
   idFactory?: () => string;
@@ -117,6 +122,7 @@ function mapRevealCode(code: string): ArenaMatchServiceErrorCode {
 
 function mapError(error: unknown): ArenaMatchServiceErrorCode {
   if (!(error instanceof Error)) return "PERSISTENCE_FAILED";
+  if (error.message.startsWith("RECEIPT_")) return "SIGNING_UNAVAILABLE";
   if (error.message === "ENVELOPE_AUTH_FAILED" || error.message.includes("KEY_")) return "ENCRYPTION_FAILED";
   if (error.message === "ARENA_MATCH_ALREADY_EXISTS") return "PERSISTENCE_FAILED";
   return "PERSISTENCE_FAILED";
@@ -169,6 +175,7 @@ function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRe
     seedCommitment: receipt.seedCommitment,
     transcriptRoot: receipt.transcriptRoot,
     handCount: record.handCount ?? null,
+    signedReceipt: record.signedReceipt as SignedArenaMatchReceipt | undefined,
     selectiveReveal: reveal ? publicReveal(reveal) : undefined,
     createdAt: record.createdAt.toISOString(),
   };
@@ -177,6 +184,7 @@ function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRe
 export class ArenaMatchService {
   private readonly repositories: ProjectRepository;
   private readonly keyProvider: KeyProvider;
+  private readonly signer?: ReceiptSigner;
   private readonly walletHashPepper: string;
   private readonly now: () => Date;
   private readonly idFactory: () => string;
@@ -185,6 +193,7 @@ export class ArenaMatchService {
   constructor(dependencies: ArenaMatchServiceDependencies) {
     this.repositories = dependencies.repositories;
     this.keyProvider = dependencies.keyProvider;
+    this.signer = dependencies.signer;
     this.walletHashPepper = dependencies.walletHashPepper;
     this.now = dependencies.now ?? (() => new Date());
     this.idFactory = dependencies.idFactory ?? randomUUID;
@@ -223,6 +232,7 @@ export class ArenaMatchService {
         action: "run_arena_match",
       });
       if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+      if (!this.signer) return { ok: false, code: "SIGNING_UNAVAILABLE" };
 
       const [leftRecord, rightRecord] = await Promise.all([
         this.repositories.getArenaStrategyArtifact(projectId, leftAgentId),
@@ -252,6 +262,22 @@ export class ArenaMatchService {
       if (!result.ok) return { ok: false, code: mapRunCode(result.code) };
 
       const createdAt = this.now();
+      const signedReceipt = this.signer.signArenaMatchReceipt(arenaMatchReceiptPayloadSchema.parse({
+        schemaVersion: 1,
+        audience: "arena",
+        matchId: result.value.publicReceipt.matchId,
+        engineVersion: result.value.publicReceipt.engineVersion,
+        artifactCommitments: result.value.publicReceipt.artifactCommitments,
+        score: result.value.publicReceipt.score,
+        winner: winnerFor(result.value.publicReceipt.score),
+        seedCommitment: result.value.publicReceipt.seedCommitment,
+        transcriptRoot: result.value.publicReceipt.transcriptRoot,
+        handCount: input.hands,
+        issuedAt: createdAt.toISOString(),
+      }));
+      if (!verifySignedArenaMatchReceipt(signedReceipt, this.signer.publicKey().publicKey)) {
+        throw new Error("RECEIPT_SIGNING_SELF_CHECK_FAILED");
+      }
       const encryptedSeed = encryptField(
         seed,
         { projectId, recordType: "arena_match", recordId: matchId, fieldName: "seed" },
@@ -265,6 +291,7 @@ export class ArenaMatchService {
         leftDisplayName: leftRecord.displayName,
         rightDisplayName: rightRecord.displayName,
         publicReceipt: result.value.publicReceipt,
+        signedReceipt,
         encryptedSeed,
         handCount: input.hands,
         status: "completed",

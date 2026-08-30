@@ -208,6 +208,7 @@ export interface ArenaMatchReceiptRecord {
   leftDisplayName: string;
   rightDisplayName: string;
   publicReceipt: unknown;
+  signedReceipt?: unknown;
   encryptedSeed: EncryptedField;
   handCount?: number;
   status: "completed";
@@ -301,6 +302,7 @@ function toArenaMatchReceiptRecord(row: typeof arenaMatchReceipts.$inferSelect):
     leftDisplayName: row.leftDisplayName,
     rightDisplayName: row.rightDisplayName,
     publicReceipt: row.publicReceipt,
+    signedReceipt: row.signedReceipt ?? undefined,
     encryptedSeed: row.encryptedSeed as EncryptedField,
     handCount: row.handCount ?? undefined,
     status: "completed",
@@ -772,6 +774,7 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           leftDisplayName: record.leftDisplayName,
           rightDisplayName: record.rightDisplayName,
           publicReceipt: record.publicReceipt,
+          signedReceipt: record.signedReceipt ?? null,
           encryptedSeed: record.encryptedSeed,
           handCount: record.handCount ?? null,
           status: record.status,

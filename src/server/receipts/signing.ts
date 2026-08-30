@@ -1,7 +1,14 @@
 import { createPrivateKey, createPublicKey, sign, timingSafeEqual, verify } from "node:crypto";
 
 import { canonicalize, commitment } from "@/domain/canonical";
-import { signedReceiptSchema, type ReceiptPayload, type SignedReceipt } from "./schemas";
+import {
+  signedArenaMatchReceiptSchema,
+  signedReceiptSchema,
+  type ArenaMatchReceiptPayload,
+  type ReceiptPayload,
+  type SignedArenaMatchReceipt,
+  type SignedReceipt,
+} from "./schemas";
 
 export interface ReceiptPublicKey {
   algorithm: "ed25519";
@@ -11,6 +18,7 @@ export interface ReceiptPublicKey {
 
 export interface ReceiptSigner {
   signPayload(payload: ReceiptPayload): SignedReceipt;
+  signArenaMatchReceipt(payload: ArenaMatchReceiptPayload): SignedArenaMatchReceipt;
   publicKey(): ReceiptPublicKey;
 }
 
@@ -46,21 +54,32 @@ export function createReceiptSigner(config: ReceiptSignerConfig): ReceiptSigner 
 
   return {
     signPayload(payload) {
-      const parsed = signedPayload(payload);
-      const serialized = canonicalize(parsed);
-      const signature = sign(null, Buffer.from(serialized, "utf8"), privateKey).toString("base64url");
-      return signedReceiptSchema.parse({
-        payload: parsed,
-        signature,
-        algorithm: "ed25519",
-        publicKeyId,
-        payloadDigest: commitment(parsed),
-      });
+      return signReceiptPayload(signedReceiptSchema, signedPayload(payload), privateKey, publicKeyId);
+    },
+    signArenaMatchReceipt(payload) {
+      return signReceiptPayload(signedArenaMatchReceiptSchema, payload, privateKey, publicKeyId);
     },
     publicKey() {
       return { algorithm: "ed25519", publicKey: config.publicKeyBase64, publicKeyId };
     },
   };
+}
+
+function signReceiptPayload<T extends { payload: unknown; signature: string; algorithm: "ed25519"; publicKeyId: string; payloadDigest: string }>(
+  schema: { parse(value: unknown): T },
+  payload: unknown,
+  privateKey: ReturnType<typeof createPrivateKey>,
+  publicKeyId: string,
+): T {
+  const serialized = canonicalize(payload);
+  const signature = sign(null, Buffer.from(serialized, "utf8"), privateKey).toString("base64url");
+  return schema.parse({
+    payload,
+    signature,
+    algorithm: "ed25519",
+    publicKeyId,
+    payloadDigest: commitment(payload),
+  });
 }
 
 function signedPayload(payload: ReceiptPayload): ReceiptPayload {
@@ -86,4 +105,21 @@ export function verifySignedReceipt(
   const publicKey = createPublicKey({ key: decodeKey(publicKeyBase64, "RECEIPT_PUBLIC_KEY"), type: "spki", format: "der" });
   const serialized = canonicalize(value.payload);
   return verify(null, Buffer.from(serialized, "utf8"), publicKey, Buffer.from(value.signature, "base64url"));
+}
+
+export function verifySignedArenaMatchReceipt(
+  receipt: SignedArenaMatchReceipt,
+  publicKeyBase64: string,
+): boolean {
+  try {
+    const parsed = signedArenaMatchReceiptSchema.safeParse(receipt);
+    if (!parsed.success) return false;
+    const value = parsed.data;
+    if (commitment(value.payload) !== value.payloadDigest) return false;
+    const publicKey = createPublicKey({ key: decodeKey(publicKeyBase64, "RECEIPT_PUBLIC_KEY"), type: "spki", format: "der" });
+    const serialized = canonicalize(value.payload);
+    return verify(null, Buffer.from(serialized, "utf8"), publicKey, Buffer.from(value.signature, "base64url"));
+  } catch {
+    return false;
+  }
 }

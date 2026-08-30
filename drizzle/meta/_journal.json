@@ -57,6 +57,13 @@
       "when": 1788048600000,
       "tag": "0007_arena_match_reveals",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788049200000,
+      "tag": "0008_arena_match_receipt_signatures",
+      "breakpoints": true
     }
   ]
 }

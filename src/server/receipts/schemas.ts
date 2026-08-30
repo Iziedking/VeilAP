@@ -57,9 +57,30 @@ export const auditorReceiptPayloadSchema = z.object({
   expiresAt: timestampSchema,
 }).strict();
 
+export const arenaMatchReceiptPayloadSchema = z.object({
+  schemaVersion: z.literal(1),
+  audience: z.literal("arena"),
+  matchId: z.string().min(1).max(160),
+  engineVersion: z.string().min(1).max(160),
+  artifactCommitments: z.record(z.string().min(1).max(80), digestSchema).refine(
+    (value) => Object.keys(value).length === 2,
+    "ARENA_RECEIPT_PLAYERS_INVALID",
+  ),
+  score: z.record(z.string().min(1).max(80), z.number().int().nonnegative()).refine(
+    (value) => Object.keys(value).length === 2,
+    "ARENA_RECEIPT_SCORE_INVALID",
+  ),
+  winner: z.union([z.literal("tie"), z.string().min(1).max(80)]),
+  seedCommitment: digestSchema,
+  transcriptRoot: digestSchema,
+  handCount: z.number().int().min(1).max(100),
+  issuedAt: timestampSchema,
+}).strict();
+
 export type CompanyReceiptPayload = z.infer<typeof companyReceiptPayloadSchema>;
 export type ContributorReceiptPayload = z.infer<typeof contributorReceiptPayloadSchema>;
 export type AuditorReceiptPayload = z.infer<typeof auditorReceiptPayloadSchema>;
+export type ArenaMatchReceiptPayload = z.infer<typeof arenaMatchReceiptPayloadSchema>;
 export type ReceiptPayload = CompanyReceiptPayload | ContributorReceiptPayload | AuditorReceiptPayload;
 export type ReceiptAudience = ReceiptPayload["audience"];
 
@@ -87,4 +108,13 @@ export const signedReceiptSchema = z.object({
   payloadDigest: digestSchema,
 }).strict();
 
+export const signedArenaMatchReceiptSchema = z.object({
+  payload: arenaMatchReceiptPayloadSchema,
+  signature: z.string().min(1),
+  algorithm: z.literal("ed25519"),
+  publicKeyId: z.string().regex(/^receipt-key-[0-9a-f]{16}$/),
+  payloadDigest: digestSchema,
+}).strict();
+
 export type SignedReceipt = z.infer<typeof signedReceiptSchema>;
+export type SignedArenaMatchReceipt = z.infer<typeof signedArenaMatchReceiptSchema>;

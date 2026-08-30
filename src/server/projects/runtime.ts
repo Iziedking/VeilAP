@@ -38,6 +38,12 @@ function dependencies() {
     repositories: getAuthRepositories().projects,
     keyProvider: projectKeyProvider(),
     walletHashPepper: config.walletHashPepper ?? "veilap-preview-wallet-pepper-0123456789012345",
+    signer: config.receiptSigningPrivateKey && config.receiptSigningPublicKey
+      ? createReceiptSigner({
+        privateKeyBase64: config.receiptSigningPrivateKey,
+        publicKeyBase64: config.receiptSigningPublicKey,
+      })
+      : undefined,
   };
 }
 

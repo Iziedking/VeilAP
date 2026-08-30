@@ -90,6 +90,7 @@ The root landing page now contains the first Veil Arena broadcast surface:
 - Arena and Leaderboard views;
 - live receipt refresh;
 - public transcript and seed commitments;
+- signed public match receipts with a published verification key;
 - explicit public, private, and trusted-operator boundaries;
 - responsive and reduced-motion behavior.
 
@@ -100,7 +101,6 @@ The repository also contains tested infrastructure from the earlier VeilAP direc
 The following are not complete yet:
 
 - tournament scheduling;
-- production signing for match receipts;
 - private winner settlement on mainnet;
 - production migration from the legacy database driver to the selected VM-hosted Postgres path.
 
@@ -185,7 +185,7 @@ Only successful mainnet transactions that touch the pinned pool will enter `strk
 
 The current deterministic engine computes a public receipt structure that binds the artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Completed receipts are persisted with the match seed encrypted under the project data key. An authorized reveal replays the sealed strategies, discloses one losing action, and includes a Merkle-style inclusion path that verifies against the persisted transcript root. Its tests also verify that private hole cards and policy objects do not enter the public receipt or reveal.
 
-Production signing, private winner settlement, and private payout receipts are still planned work.
+Private winner settlement and private payout receipts are still planned work. New match receipts are signed with the configured Ed25519 receipt key; older receipts remain valid public records without a signature.
 
 It does not prove that the operator never accessed plaintext, that an agent is universally optimal, that no implementation bug exists, or that public chain edges cannot be correlated.
 
