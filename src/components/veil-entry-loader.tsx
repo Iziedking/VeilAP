@@ -11,12 +11,16 @@ export function VeilEntryLoader() {
 
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const readyTimer = window.setTimeout(() => setStage("ready"), reducedMotion ? 0 : 1500);
-    const leaveTimer = window.setTimeout(() => setStage("leaving"), reducedMotion ? 120 : 2600);
+    const firstLandingVisit = document.documentElement.dataset.entryLoader === "first";
+    const readyAt = firstLandingVisit ? 1500 : 360;
+    const leaveAt = firstLandingVisit ? 2600 : 720;
+    const goneAt = firstLandingVisit ? 3000 : 1000;
+    const readyTimer = window.setTimeout(() => setStage("ready"), reducedMotion ? 0 : readyAt);
+    const leaveTimer = window.setTimeout(() => setStage("leaving"), reducedMotion ? 120 : leaveAt);
     const goneTimer = window.setTimeout(() => {
       setStage("gone");
       document.documentElement.classList.remove("is-loading");
-    }, reducedMotion ? 140 : 3000);
+    }, reducedMotion ? 140 : goneAt);
 
     return () => {
       window.clearTimeout(readyTimer);

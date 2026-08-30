@@ -34,7 +34,19 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en" className={`${arenaDisplay.variable} ${arenaMono.variable} has-js is-loading`} suppressHydrationWarning>
       <body>
         <Script id="veil-loader-init" strategy="beforeInteractive">
-          {`document.documentElement.classList.add("has-js", "is-loading");`}
+          {`(() => {
+  const root = document.documentElement;
+  root.classList.add("has-js", "is-loading");
+  const firstVisitKey = "veil-arena:landing-loader-seen";
+  let isFirstLandingVisit = false;
+  try {
+    isFirstLandingVisit = window.location.pathname === "/" && window.localStorage.getItem(firstVisitKey) !== "1";
+    if (isFirstLandingVisit) window.localStorage.setItem(firstVisitKey, "1");
+  } catch {
+    isFirstLandingVisit = false;
+  }
+  root.dataset.entryLoader = isFirstLandingVisit ? "first" : "quick";
+})();`}
         </Script>
         <VeilEntryLoader />
         {children}
