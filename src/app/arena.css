@@ -12,7 +12,7 @@
   overflow-x: hidden;
   background: var(--arena-paper);
   color: var(--arena-ink);
-  font-family: var(--body);
+  font-family: var(--arena-mono);
   font-synthesis: none;
 }
 
@@ -52,9 +52,10 @@
   background: var(--arena-panel);
   color: var(--arena-ink);
   box-shadow: 6px 6px 0 var(--arena-ink);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: .04em;
+  text-transform: uppercase;
   transition: transform 100ms steps(2, end), box-shadow 100ms steps(2, end), background 100ms steps(2, end);
 }
 
@@ -79,11 +80,12 @@
 
 .arena-hero h1 {
   margin: 0;
-  font-family: var(--body);
-  font-size: clamp(42px, 5.6vw, 76px);
-  font-weight: 780;
-  line-height: .96;
-  letter-spacing: -.055em;
+  font-family: var(--arena-display);
+  font-size: clamp(34px, 4.1vw, 52px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .arena-hero-meta {
@@ -102,7 +104,7 @@
   margin: 40px 0 0;
   color: var(--arena-dim);
   font-size: clamp(16px, 1.4vw, 18px);
-  line-height: 1.55;
+  line-height: 1.35;
   letter-spacing: 0;
 }
 
@@ -132,13 +134,13 @@
 
 .arena-latest-body { padding: 28px; }
 .arena-latest-result { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
-.arena-latest-result strong { font-family: var(--body); font-size: 17px; font-weight: 760; }
+.arena-latest-result strong { font-family: var(--arena-display); font-size: 15px; font-weight: 700; }
 .arena-latest-result span { padding: 7px 9px 6px; background: var(--arena-signal); color: var(--arena-signal-ink); font-size: 12px; font-weight: 400; letter-spacing: .03em; }
 .arena-latest-result small { color: var(--arena-dim); font-size: 11px; letter-spacing: .03em; }
-.arena-latest-body p { margin: 17px 0 0; color: var(--arena-dim); font-size: 14px; line-height: 1.55; }
+.arena-latest-body p { margin: 17px 0 0; color: var(--arena-dim); font-size: 13px; line-height: 1.45; }
 .arena-latest-receipt { display: block; margin-top: 14px; color: var(--arena-dim); font-size: 10px; letter-spacing: .02em; }
 .arena-empty-state { min-height: 120px; padding: 20px; display: flex; flex-direction: column; justify-content: center; border: 1px dashed var(--arena-rule); color: var(--arena-dim); }
-.arena-empty-state strong { color: var(--arena-ink); font-family: var(--body); font-size: 15px; font-weight: 750; }
+.arena-empty-state strong { color: var(--arena-ink); font-family: var(--arena-display); font-size: 13px; }
 .arena-empty-state p { margin: 10px 0 0; }
 
 .arena-cells { margin-top: 22px; display: flex; gap: 4px; }
@@ -151,7 +153,7 @@
 .arena-broadcast { padding: 86px 0 108px; border-top: 2px solid var(--arena-ink); }
 .arena-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; padding-bottom: 28px; border-bottom: 2px solid var(--arena-ink); }
 .arena-section-head span { color: var(--arena-dim); font-size: 11px; font-weight: 400; letter-spacing: .03em; }
-.arena-section-head h2 { margin: 15px 0 0; font-family: var(--body); font-size: clamp(32px, 3.8vw, 50px); font-weight: 780; line-height: 1; letter-spacing: -.04em; }
+.arena-section-head h2 { margin: 15px 0 0; font-family: var(--arena-display); font-size: clamp(30px, 3.4vw, 44px); font-weight: 700; line-height: 1; letter-spacing: 0; }
 .arena-section-head > strong { padding-bottom: 5px; font-size: 11px; font-weight: 400; letter-spacing: .03em; }
 
 .arena-console { margin-top: 30px; border: 2px solid var(--arena-ink); background: var(--arena-panel); box-shadow: 8px 8px 0 var(--arena-ink); }
@@ -174,7 +176,7 @@
 .arena-match-versus > div:first-child { border-right: 1px solid var(--arena-rule); }
 .arena-match-versus > div:last-child { border-left: 1px solid var(--arena-rule); }
 .arena-match-versus strong, .arena-match-versus b { display: block; }
-.arena-match-versus strong { overflow: hidden; text-overflow: ellipsis; font-family: var(--body); font-size: 15px; font-weight: 760; letter-spacing: 0; white-space: nowrap; }
+.arena-match-versus strong { overflow: hidden; text-overflow: ellipsis; font-family: var(--arena-display); font-size: 14px; letter-spacing: 0; white-space: nowrap; }
 .arena-match-versus b { margin-top: 18px; font-size: 28px; }
 .arena-match-versus > span { color: var(--arena-dim); font-size: 11px; }
 .arena-match-progress { height: 9px; margin: 0 14px; border: 1px solid var(--arena-ink); background: repeating-linear-gradient(90deg, transparent 0 17px, var(--arena-rule) 17px 18px); }
@@ -191,7 +193,7 @@
 .arena-leader-head { min-height: 46px; color: var(--arena-dim); font-size: 10px; font-weight: 400; letter-spacing: .03em; text-transform: uppercase; }
 .arena-leader-row:not(.arena-leader-head) > span:first-child { font-family: var(--arena-display); font-size: 14px; }
 .arena-leader-row strong, .arena-leader-row small { display: block; }
-.arena-leader-row strong { font-family: var(--body); font-size: 14px; font-weight: 760; }
+.arena-leader-row strong { font-family: var(--arena-display); font-size: 13px; }
 .arena-leader-row small { margin-top: 5px; color: var(--arena-dim); font-size: 10px; letter-spacing: .02em; }
 .arena-leader-row b { font-size: 16px; }
 .arena-leader-row code { font-family: var(--arena-mono); font-size: 11px; }
@@ -209,9 +211,9 @@
 .arena-proof-grid article.is-signal { background: var(--arena-signal); color: var(--arena-signal-ink); }
 .arena-proof-grid article > span { color: var(--arena-dim); font-size: 10px; font-weight: 400; letter-spacing: .03em; }
 .arena-proof-grid article.is-signal > span { color: #75401f; }
-.arena-proof-grid article > strong { margin-top: 28px; font-family: var(--body); font-size: clamp(17px, 1.6vw, 21px); font-weight: 780; letter-spacing: -.02em; }
-.arena-proof-grid article > p { margin: auto 0 0; color: var(--arena-dim); font-size: 14px; line-height: 1.55; }
-.arena-proof-grid article.is-signal > p { color: var(--arena-signal-ink); font-size: 16px; font-weight: 800; }
+.arena-proof-grid article > strong { margin-top: 28px; font-family: var(--arena-display); font-size: clamp(14px, 1.4vw, 18px); letter-spacing: 0; }
+.arena-proof-grid article > p { margin: auto 0 0; color: var(--arena-dim); font-size: 12px; line-height: 1.45; }
+.arena-proof-grid article.is-signal > p { color: var(--arena-signal-ink); font-size: 15px; font-weight: 800; }
 .arena-proof-grid article > code,
 .arena-proof-grid article > small { margin-top: 15px; font-family: var(--arena-mono); font-size: 10px; letter-spacing: .02em; }
 .arena-redaction { height: 10px; margin-top: 18px; display: block; background: var(--arena-ink); }
@@ -224,7 +226,7 @@
 .arena-settlement-main span,
 .arena-settlement-proof span { color: var(--arena-dim); font-size: 10px; letter-spacing: .03em; }
 .arena-settlement-main span { color: #75401f; }
-.arena-settlement-main strong { margin-top: 28px; font-family: var(--body); font-size: clamp(24px, 3vw, 40px); font-weight: 780; line-height: 1; letter-spacing: -.035em; }
+.arena-settlement-main strong { margin-top: 28px; font-family: var(--arena-display); font-size: clamp(22px, 3vw, 38px); line-height: 1; }
 .arena-settlement-main small { margin-top: auto; font-size: 10px; letter-spacing: .02em; }
 .arena-settlement-proof code { margin-top: 19px; font-family: var(--arena-mono); font-size: 11px; }
 .arena-settlement-proof code + code { margin-top: 8px; }
@@ -235,7 +237,7 @@
 .arena-boundary div { min-height: 112px; padding: 20px max(20px, calc((100vw - 1320px) / 8)); display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--arena-ink); }
 .arena-boundary div:last-child { border-right: 0; }
 .arena-boundary span { color: var(--arena-dim); font-size: 10px; letter-spacing: .03em; }
-.arena-boundary strong { font-size: 13px; line-height: 1.45; letter-spacing: 0; }
+.arena-boundary strong { font-size: 12px; line-height: 1.4; letter-spacing: 0; }
 
 .arena-footer { min-height: 124px; padding: 28px max(24px, calc((100vw - 1320px) / 2)); display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 36px; background: var(--arena-ink); color: var(--arena-panel); }
 .arena-footer .veil-logo-mark { width: 34px; height: 34px; }
@@ -265,7 +267,7 @@
   .arena-hero { padding: 48px 0 78px; }
   .arena-title-row { gap: 17px; }
   .arena-hero-mark { width: 43px; height: 43px; margin-top: 3px; }
-  .arena-hero h1 { font-size: clamp(35px, 10vw, 54px); letter-spacing: -.045em; }
+  .arena-hero h1 { font-size: clamp(29px, 8.5vw, 44px); letter-spacing: 0; }
   .arena-hero-meta { margin-left: 60px; gap: 8px 15px; font-size: 10px; }
   .arena-hero-lede { margin-top: 32px; font-size: 15px; }
   .arena-latest { margin-top: 42px; box-shadow: 5px 5px 0 var(--arena-ink); }
@@ -279,7 +281,7 @@
 
   .arena-broadcast, .arena-proof, .arena-settlement { padding: 62px 0 76px; }
   .arena-section-head { align-items: flex-start; flex-direction: column; gap: 18px; }
-  .arena-section-head h2 { font-size: 34px; }
+  .arena-section-head h2 { font-size: 30px; }
   .arena-console { box-shadow: 5px 5px 0 var(--arena-ink); }
   .arena-console-top { display: block; }
   .arena-view-switch button { min-width: 0; flex: 1; }
@@ -301,7 +303,7 @@
   .arena-proof-grid { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--arena-ink); }
   .arena-proof-grid article { min-height: 200px; border-right: 0; border-bottom: 1px solid var(--arena-ink); }
   .arena-proof-grid article:last-child { border-bottom: 0; }
-  .arena-proof-grid article > strong { font-size: 20px; }
+  .arena-proof-grid article > strong { font-size: 18px; }
 
   .arena-settlement-card { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--arena-ink); }
   .arena-settlement-main { min-height: 160px; border-right: 0; border-bottom: 1px solid var(--arena-ink); }
@@ -318,9 +320,9 @@
 @media (max-width: 420px) {
   .arena-page .arena-brand .veil-logo-lockup { gap: 7px; }
   .arena-page .arena-brand .veil-logo-mark { width: 27px; height: 27px; }
-  .arena-page .arena-brand .veil-logo-wordmark { font-size: 10px; letter-spacing: 0; }
-  .arena-nav-actions .arena-button { padding-inline: 9px; font-size: 10px; }
-  .arena-hero h1 { font-size: 36px; }
+  .arena-page .arena-brand .veil-logo-wordmark { font-size: 9px; letter-spacing: 0; }
+  .arena-nav-actions .arena-button { padding-inline: 9px; font-size: 9px; }
+  .arena-hero h1 { font-size: 28px; }
   .arena-hero-meta { margin-left: 0; }
   .arena-cells i { width: 16px; }
 }
