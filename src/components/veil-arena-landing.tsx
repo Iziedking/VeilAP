@@ -1,325 +1,173 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import {
+  competitionPhase,
+  type ApiEnvelope,
+  type CompetitionSchedule,
+  type CompetitionSummary,
+  type ScheduledMatch,
+} from "@/components/arena/arena-types";
 import { VeilLogo } from "@/components/veil-logo";
 import { apiFetch } from "@/lib/api/client";
 
-type ArenaView = "arena" | "leaderboard";
-
-type LeaderboardEntry = {
-  agentId: string;
-  artifactCommitment: string;
-  displayName: string;
-  losses: number;
-  points: number;
-  wins: number;
-  matches: number;
-  ties: number;
-};
-
-type PublicMatch = {
-  matchId: string;
-  engineVersion: string;
-  players: Array<{
-    agentId: string;
-    displayName: string;
-    artifactCommitment: string;
-  }>;
-  score: Record<string, number>;
-  winner: string | "tie";
-  seedCommitment: string;
-  transcriptRoot: string;
-  handCount: number | null;
-  signedReceipt?: {
-    publicKeyId: string;
-    signature: string;
-  };
-  selectiveReveal?: {
-    action: "fold" | "check" | "call" | "raise";
-    agentId: string;
-    handIndex: number;
-    handNumber: number;
-    position: "button" | "big_blind";
-    transcriptRoot: string;
-  };
-  createdAt: string;
-};
-
-type PublicArena = { matches: PublicMatch[]; leaderboard: LeaderboardEntry[] };
-type ApiEnvelope = { ok: true; value: PublicArena } | { ok: false; code: string };
-
-type SettlementReceipt = {
-  poolId: string;
-  seasonId: string;
-  winnerAgentId: string;
-  fundingReceiptDigest: string;
-  settlementReceiptDigest: string;
-  settledAt: string;
-};
-
-type SettlementEnvelope = { ok: true; value: SettlementReceipt[] } | { ok: false; code: string };
-
-function shortCommitment(value: string): string {
-  return value.length > 16 ? value.slice(0, 8) + "..." + value.slice(-6) : value;
+function featuredCompetition(competitions: CompetitionSummary[]): CompetitionSummary | null {
+  return competitions.find((competition) => competitionPhase(competition) === "live")
+    ?? competitions.find((competition) => competitionPhase(competition) === "open")
+    ?? competitions[0]
+    ?? null;
 }
 
-export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: string }) {
-  const [view, setView] = useState<ArenaView>("arena");
-  const [arena, setArena] = useState<PublicArena | null>(null);
-  const [settlements, setSettlements] = useState<SettlementReceipt[]>([]);
-  const projectId = defaultProjectId;
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+function featuredMatch(schedule: CompetitionSchedule | null): ScheduledMatch | null {
+  if (!schedule) return null;
+  return schedule.matches.find((match) => match.status === "running")
+    ?? [...schedule.matches].reverse().find((match) => match.status === "completed")
+    ?? schedule.matches[0]
+    ?? null;
+}
+
+function matchName(schedule: CompetitionSchedule | null, agentId?: string): string {
+  if (!agentId) return "Waiting for draw";
+  return schedule?.entries.find((entry) => entry.agentId === agentId)?.displayName ?? agentId;
+}
+
+export function VeilArenaLanding() {
+  const [competitions, setCompetitions] = useState<CompetitionSummary[]>([]);
+  const [schedule, setSchedule] = useState<CompetitionSchedule | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
-    if (!projectId) return;
     let active = true;
-    const loadArena = async () => {
-      setLoading(true);
+    const load = async () => {
       try {
-        const projectPath = "/api/projects/" + encodeURIComponent(projectId);
-        const [response, settlementResponse] = await Promise.all([
-          apiFetch(projectPath + "/matches"),
-          apiFetch(projectPath + "/settlement-receipts"),
-        ]);
-        const body = await response.json() as ApiEnvelope;
-        const settlementBody = await settlementResponse.json() as SettlementEnvelope;
-        if (!active) return;
-        if (!response.ok || !body.ok) {
-          setError(body.ok ? "The arena could not be loaded." : body.code);
-          return;
+        const response = await apiFetch("/api/competitions");
+        const body = await response.json() as ApiEnvelope<CompetitionSummary[]>;
+        if (!response.ok || !body.ok) throw new Error("COMPETITIONS_UNAVAILABLE");
+        const featured = featuredCompetition(body.value);
+        let nextSchedule: CompetitionSchedule | null = null;
+        if (featured) {
+          const scheduleResponse = await apiFetch(`/api/projects/${encodeURIComponent(featured.projectId)}/seasons/${encodeURIComponent(featured.id)}`);
+          const scheduleBody = await scheduleResponse.json() as ApiEnvelope<CompetitionSchedule>;
+          if (scheduleResponse.ok && scheduleBody.ok) nextSchedule = scheduleBody.value;
         }
-        setArena(body.value);
-        setSettlements(settlementResponse.ok && settlementBody.ok ? settlementBody.value : []);
-        setError("");
+        if (!active) return;
+        setCompetitions(body.value);
+        setSchedule(nextSchedule);
+        setState("ready");
       } catch {
-        if (active) setError("The arena could not be reached.");
-      } finally {
-        if (active) setLoading(false);
+        if (active) setState("error");
       }
     };
-    void loadArena();
-    const interval = window.setInterval(() => void loadArena(), 5000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [projectId]);
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, []);
 
-  const latestMatch = arena?.matches[0];
-  const latestSettlement = settlements[0];
-  const latestPlayers = latestMatch?.players ?? [];
-  const latestScore = latestMatch
-    ? latestPlayers.map((player) => latestMatch.score[player.agentId] ?? 0).join(" : ")
-    : "";
+  const featured = useMemo(() => featuredCompetition(competitions), [competitions]);
+  const match = featuredMatch(schedule);
+  const openCount = competitions.filter((competition) => competitionPhase(competition) === "open").length;
+  const liveCount = competitions.filter((competition) => competitionPhase(competition) === "live").length;
+  const roomHref = featured ? `/arena/${encodeURIComponent(featured.projectId)}/${encodeURIComponent(featured.id)}` : "/arena";
+  const matchHref = featured && match ? `${roomHref}/match/${encodeURIComponent(match.id)}` : roomHref;
 
   return (
     <div className="arena-page">
       <header className="arena-nav">
         <div className="arena-nav-inner">
-          <a className="arena-brand" href="#top" aria-label="Veil Arena home"><VeilLogo /></a>
-          <div className="arena-nav-actions">
-            <a className="arena-button arena-button-quiet" href="#broadcast">Watch the arena</a>
-            <Link className="arena-button arena-button-signal" href="/play">Enter a competition</Link>
-          </div>
+          <Link className="arena-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
+          <nav aria-label="Main navigation">
+            <Link href="/arena">Arena</Link>
+            <a href="#how-to-play">How to play</a>
+            <Link href="/arena-console">Host</Link>
+          </nav>
+          <Link className="arena-nav-cta" href="/play">Build your agent</Link>
         </div>
       </header>
 
-      <main id="top">
-        <section className="arena-hero" aria-labelledby="arena-hero-title">
-          <div className="arena-title-row">
-            <span className="arena-hero-mark" aria-hidden="true"><VeilLogo /></span>
-            <h1 id="arena-hero-title">Build an agent. Keep its strategy private.</h1>
+      <main>
+        <section className="arena-home-hero" aria-labelledby="arena-hero-title">
+          <div className="arena-home-copy">
+            <span className="arena-home-kicker"><i /> PRIVATE AGENT POKER / STARKNET</span>
+            <h1 id="arena-hero-title">Your agent plays. Its strategy stays sealed.</h1>
+            <p>Build a poker agent with any coding assistant, enter an open competition, and watch every result. Opponents never see how your agent thinks.</p>
+            <div className="arena-home-actions">
+              <Link className="arena-button arena-button-signal" href="/play">Build and enter</Link>
+              <Link className="arena-button" href="/arena">Watch the arena</Link>
+            </div>
+            <dl className="arena-home-stats">
+              <div><dt>Open now</dt><dd>{state === "loading" ? "--" : String(openCount).padStart(2, "0")}</dd></div>
+              <div><dt>Live tables</dt><dd>{state === "loading" ? "--" : String(liveCount).padStart(2, "0")}</dd></div>
+              <div><dt>Public strategies</dt><dd>00</dd></div>
+            </dl>
           </div>
 
-          <div className="arena-hero-meta" aria-label="Arena facts">
-            <span>STARKNET</span>
-            <span>OPEN COMPETITION</span>
-            <span>{arena?.leaderboard.length ?? 0} SEALED AGENTS</span>
-            <span>{arena?.matches.length ?? 0} COMPLETED MATCHES</span>
-            <span>{settlements.length} PRIVATE PAYOUTS</span>
-            <span>{loading ? "SYNCING RECEIPTS" : projectId ? "LIVE RECEIPTS" : "PROJECT NOT SELECTED"}</span>
-          </div>
-
-          <p className="arena-hero-lede">
-            Give AGENT.md to a coding agent and it will build your poker package. You approve the entry. Veil Arena publishes the match result while keeping the strategy and payout details private.
-          </p>
-
-          <article className="arena-latest" aria-label="Latest public match receipt">
+          <article className="arena-home-preview" aria-label="Featured competition">
             <header>
-              <span><i className="arena-live-dot" /> LATEST ARENA DECISION</span>
-              <span>{latestMatch?.matchId ?? "NO MATCH"}</span>
-              <span>{latestMatch?.signedReceipt ? "SIGNED RECEIPT" : projectId ? "PERSISTED DATA" : "AWAITING PROJECT"}</span>
+              <span>ARENA PREVIEW</span>
+              <strong><i /> {featured ? competitionPhase(featured) : state}</strong>
             </header>
-            <div className="arena-latest-body">
-              {latestMatch ? (
-                <>
-                  <div className="arena-latest-result">
-                    <strong>{latestPlayers.map((player) => player.displayName.toUpperCase()).join(" / ")}</strong>
-                    <span>SCORE {latestScore}</span>
-                    <small>POLICIES SEALED</small>
-                  </div>
-                  <p>Each match uses duplicate deals and reversed seats. The receipt records the result while both policies stay sealed. {latestMatch.selectiveReveal ? "One losing action is available for audit." : "No action has been revealed."}</p>
-                    <small className="arena-latest-receipt">TRANSCRIPT ROOT {shortCommitment(latestMatch.transcriptRoot)} / {latestMatch.signedReceipt ? "SIGNED" : "LEGACY RECEIPT"}</small>
-                </>
-              ) : (
-                <div className="arena-empty-state">
-                  <strong>{error || (projectId ? "NO COMPLETED MATCHES" : "ARENA PROJECT NOT CONFIGURED")}</strong>
-                  <p>A receipt appears here after the first match finishes.</p>
+            {featured ? (
+              <>
+                <div className="arena-preview-title">
+                  <span>{(featured.templateId ?? "custom").replaceAll("_", " ")}</span>
+                  <h2>{featured.name}</h2>
+                  <small>{featured.entryCount}/{featured.maxEntries} sealed agents</small>
                 </div>
-              )}
-            </div>
-          </article>
-
-          <div className="arena-hero-actions">
-            <Link className="arena-button arena-button-signal" href="/play">Enter a competition</Link>
-            <a className="arena-button arena-button-quiet" href="#broadcast">View match results</a>
-          </div>
-        </section>
-
-        <section className="arena-broadcast" id="broadcast" aria-labelledby="broadcast-title">
-          <header className="arena-section-head">
-            <div>
-              <span>02 / LIVE COMPETITION</span>
-              <h2 id="broadcast-title">PUBLIC ARENA</h2>
-            </div>
-            <strong><i className="arena-live-dot" /> {arena?.matches.length ?? 0} MATCH RECEIPTS</strong>
-          </header>
-
-          <div className="arena-console">
-            <div className="arena-console-top">
-              <div className="arena-view-switch" role="group" aria-label="Broadcast view">
-                <button type="button" className={view === "arena" ? "active" : ""} aria-pressed={view === "arena"} onClick={() => setView("arena")}>[ ARENA ]</button>
-                <button type="button" className={view === "leaderboard" ? "active" : ""} aria-pressed={view === "leaderboard"} onClick={() => setView("leaderboard")}>[ LEADERBOARD ]</button>
-              </div>
-              <div className="arena-console-facts">
-                <span>{arena?.matches.length ?? 0} MATCHES PERSISTED</span>
-                <span>ENGINE {latestMatch?.engineVersion ?? "WAITING"}</span>
-                <span>POLICIES / SEALED</span>
-              </div>
-            </div>
-
-            {view === "arena" ? (
-              <div className="arena-match-grid">
-                {arena?.matches.length ? arena.matches.map((match) => (
-                  <article className="arena-match-card is-settled" key={match.matchId}>
-                    <header><span>{match.matchId}</span><strong>SETTLED</strong></header>
-                    <div className="arena-match-versus">
-                      <div><strong>{match.players[0]?.displayName.toUpperCase()}</strong><b>{match.score[match.players[0]?.agentId ?? ""] ?? 0}</b></div>
-                      <span>VS</span>
-                      <div><strong>{match.players[1]?.displayName.toUpperCase()}</strong><b>{match.score[match.players[1]?.agentId ?? ""] ?? 0}</b></div>
-                    </div>
-                    <div className="arena-match-progress is-complete"><i /></div>
-                    <footer><span>{match.signedReceipt ? "RECEIPT SIGNED" : "RECEIPT COMMITTED"}</span><strong>SEATS SWAPPED</strong></footer>
-                  </article>
-                )) : (
-                  <div className="arena-empty-state">
-                    <strong>{projectId ? "NO RECEIPTS YET" : "ARENA PROJECT NOT CONFIGURED"}</strong>
-                    <p>Matches appear here after at least two agents enter and the operator starts the draw.</p>
-                  </div>
-                )}
-              </div>
+                <div className="arena-preview-table">
+                  <div><span>SEAT A</span><strong>{matchName(schedule, match?.leftAgentId)}</strong></div>
+                  <b>VS</b>
+                  <div><span>SEAT B</span><strong>{matchName(schedule, match?.rightAgentId)}</strong></div>
+                </div>
+                <dl>
+                  <div><dt>Match</dt><dd>{match ? String(match.sequence).padStart(2, "0") : "Draw open"}</dd></div>
+                  <div><dt>Status</dt><dd>{match?.status ?? "Taking entries"}</dd></div>
+                  <div><dt>Progress</dt><dd>{featured.completedMatchCount}/{featured.matchCount}</dd></div>
+                </dl>
+                <Link href={matchHref}>{match?.status === "completed" ? "Watch verified replay" : match?.status === "running" ? "Open live table" : "Open competition"}<span>→</span></Link>
+              </>
             ) : (
-              <div className="arena-leaderboard" role="table" aria-label="Public leaderboard">
-                <div className="arena-leader-row arena-leader-head" role="row">
-                  <span role="columnheader">Rank</span><span role="columnheader">Agent</span><span role="columnheader">Record</span><span role="columnheader">Points</span><span role="columnheader">Artifact</span>
-                </div>
-                {arena?.leaderboard.map((agent, index) => (
-                  <div className={"arena-leader-row " + (index === 0 ? "is-first" : "")} role="row" key={agent.agentId}>
-                    <span role="cell">{String(index + 1).padStart(2, "0")}</span>
-                    <span role="cell"><strong>{agent.displayName.toUpperCase()}</strong><small>{agent.agentId}</small></span>
-                    <span role="cell">{agent.wins} / {agent.losses} / {agent.ties}</span>
-                    <span role="cell"><b>{agent.points}</b></span>
-                    <span role="cell"><code>{shortCommitment(agent.artifactCommitment)}</code><small>SEALED</small></span>
-                  </div>
-                ))}
-                {!arena?.leaderboard.length && <div className="arena-empty-state"><strong>NO AGENTS REGISTERED</strong><p>The leaderboard starts when agents enter an open competition. A reward is optional.</p></div>}
+              <div className="arena-preview-empty">
+                <strong>{state === "error" ? "Arena unavailable" : "The next table is being prepared"}</strong>
+                <p>No sample scores are shown here. A real competition appears as soon as an operator publishes it.</p>
+                <Link href="/arena-console">Host a competition →</Link>
               </div>
             )}
-
-            <div className="arena-live-line" aria-live="polite">
-              <span>NOW</span>
-              <strong>{latestMatch ? latestMatch.matchId + " / RECEIPT VERIFIED" : "WAITING FOR A PERSISTED RECEIPT"}</strong>
-              <small>STRATEGY FIELDS SEALED</small>
-            </div>
-          </div>
+          </article>
         </section>
 
-        <section className="arena-proof" id="proof" aria-labelledby="proof-title">
-          <header className="arena-section-head">
-            <div>
-              <span>03 / SELECTIVE REVEAL</span>
-              <h2 id="proof-title">MATCH RECEIPT</h2>
-            </div>
-            <strong>{latestMatch ? latestMatch.matchId + " / VERIFIED" : "NO RECEIPT"}</strong>
+        <section className="arena-home-how" id="how-to-play" aria-labelledby="how-title">
+          <header>
+            <span>HOW TO ENTER</span>
+            <h2 id="how-title">One guide. Any coding agent.</h2>
+            <p>You do not need to write the package by hand.</p>
           </header>
-
-          <div className="arena-proof-grid">
-            <article>
-              <span>WINNER</span>
-              <strong>POLICY SEALED</strong>
-              <p>{latestMatch ? "The receipt names the winner without publishing its strategy." : "The winner will appear after the first match finishes."}</p>
-              <i className="arena-redaction" aria-hidden="true" />
-            </article>
-            <article className="is-signal">
-              <span>PUBLIC PROOF</span>
-              <strong>TRANSCRIPT ROOT</strong>
-              <p>{latestMatch ? shortCommitment(latestMatch.transcriptRoot) : "NOT AVAILABLE"}</p>
-              <code>{latestMatch ? "SEED " + shortCommitment(latestMatch.seedCommitment) + " / " + (latestMatch.signedReceipt ? "SIGNED " + latestMatch.signedReceipt.publicKeyId : "LEGACY") : "NO SEALED RUN"}</code>
-            </article>
-            <article>
-              <span>LOSING MOVE</span>
-              <strong>{latestMatch?.selectiveReveal ? latestMatch.selectiveReveal.action.toUpperCase() : "SEALED"}</strong>
-              <p>{latestMatch?.selectiveReveal ? "One losing action is available for audit." : "An authorized reviewer can reveal one losing action without opening either strategy."}</p>
-              <small>{latestMatch?.selectiveReveal ? "LEAF " + String(latestMatch.selectiveReveal.handIndex).padStart(2, "0") + " / PROOF ATTACHED" : "WINNER STRATEGY STAYS SEALED"}</small>
-            </article>
-          </div>
+          <ol>
+            <li><span>01</span><strong>Copy AGENT.md</strong><p>It contains the game interface, legal inputs, and package rules.</p><a href="/AGENT.md" download>Download guide ↘</a></li>
+            <li><span>02</span><strong>Give it to your coding agent</strong><p>Ask it to build, test, and return one private Veil agent package.</p></li>
+            <li><span>03</span><strong>Approve the entry</strong><p>Choose a competition, review the commitment, and sign with your wallet.</p><Link href="/play">Start your entry →</Link></li>
+          </ol>
         </section>
 
-        <section className="arena-boundary" id="privacy" aria-label="Privacy boundary">
-          <div><span>PUBLIC</span><strong>SCORE / RANK / RECEIPT</strong></div>
-          <div><span>SEALED</span><strong>POLICY / REASONING</strong></div>
-          <div><span>RUNNER</span><strong>TRUSTED V1 OPERATOR</strong></div>
-          <div><span>REWARD</span><strong>PRIVATE / SPONSOR AUTHORIZED</strong></div>
+        <section className="arena-home-privacy" aria-label="Privacy boundary">
+          <div><span>PUBLIC</span><strong>Scores, standings, receipts</strong></div>
+          <div><span>SEALED</span><strong>Policy, cards, reasoning</strong></div>
+          <div><span>AUDIT</span><strong>One losing action when authorized</strong></div>
+          <div><span>REWARD</span><strong>Optional and privately settled</strong></div>
         </section>
 
-        <section className="arena-settlement" id="settlements" aria-labelledby="settlement-title">
-          <header className="arena-section-head">
-            <div>
-              <span>04 / PRIVATE REWARD</span>
-              <h2 id="settlement-title">REWARD PROOF</h2>
-            </div>
-            <strong>{latestSettlement ? "PAYOUT AUTHORIZED" : "NO SETTLEMENT"}</strong>
-          </header>
-          {latestSettlement ? (
-            <article className="arena-settlement-card">
-              <div className="arena-settlement-main">
-                <span>WINNER PAYOUT</span>
-                <strong>PRIVATE TRANSFER RECORDED</strong>
-                <small>AGENT {shortCommitment(latestSettlement.winnerAgentId)} / SEASON {latestSettlement.seasonId}</small>
-              </div>
-              <div className="arena-settlement-proof">
-                <span>PUBLIC COMMITMENTS</span>
-                <code>FUND {shortCommitment(latestSettlement.fundingReceiptDigest)}</code>
-                <code>SETTLE {shortCommitment(latestSettlement.settlementReceiptDigest)}</code>
-                <small>RECIPIENT STAYS PRIVATE</small>
-              </div>
-            </article>
-          ) : (
-            <div className="arena-empty-state arena-settlement-empty">
-              <strong>{projectId ? "NO REWARDS SETTLED YET" : "ARENA PROJECT NOT CONFIGURED"}</strong>
-              <p>After a sponsored season pays out, the public receipt confirms settlement. The amount and recipient remain private.</p>
-            </div>
-          )}
+        <section className="arena-home-host">
+          <span>RUN THE NEXT TABLE</span>
+          <h2>Choose a format. Open the doors.</h2>
+          <p>Start with a playground, open league, duel, gauntlet, championship, or your own approved rules. A reward is optional.</p>
+          <Link className="arena-button arena-button-signal" href="/arena-console">Host a competition</Link>
         </section>
       </main>
 
       <footer className="arena-footer">
         <VeilLogo />
         <span>SEALED AGENT COMPETITION / STARKNET</span>
-        <Link href="/arena-console">Host a competition</Link>
+        <Link href="/arena">Open arena</Link>
       </footer>
     </div>
   );
