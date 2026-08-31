@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { AuthChallenge } from "@/server/auth/challenge";
 import { parseTournamentRules, type TournamentRules } from "@/domain/arena/tournament-rules";
@@ -222,6 +222,7 @@ export interface ArenaMatchReceiptRecord {
   leftDisplayName: string;
   rightDisplayName: string;
   publicReceipt: unknown;
+  publicHandReceipts?: unknown[];
   signedReceipt?: unknown;
   encryptedSeed: EncryptedField;
   handCount?: number;
@@ -422,6 +423,7 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getArenaSeasonByCreateIdempotencyKey(projectId: string, idempotencyKey: string): Promise<ArenaSeasonRecord | undefined>;
   updateArenaSeason(record: ArenaSeasonRecord): Promise<void>;
   listArenaSeasons(projectId: string): Promise<ArenaSeasonRecord[]>;
+  listAllArenaSeasons(): Promise<ArenaSeasonRecord[]>;
   saveArenaSeasonEntry(record: ArenaSeasonEntryRecord): Promise<void>;
   getArenaSeasonEntry(projectId: string, seasonId: string, agentId: string): Promise<ArenaSeasonEntryRecord | undefined>;
   getArenaSeasonEntryByOwnerFingerprint(projectId: string, seasonId: string, ownerFingerprint: string): Promise<ArenaSeasonEntryRecord | undefined>;
@@ -505,6 +507,7 @@ function toArenaMatchReceiptRecord(row: typeof arenaMatchReceipts.$inferSelect):
     leftDisplayName: row.leftDisplayName,
     rightDisplayName: row.rightDisplayName,
     publicReceipt: row.publicReceipt,
+    publicHandReceipts: Array.isArray(row.publicHandReceipts) ? row.publicHandReceipts : [],
     signedReceipt: row.signedReceipt ?? undefined,
     encryptedSeed: row.encryptedSeed as EncryptedField,
     handCount: row.handCount ?? undefined,
@@ -1162,6 +1165,7 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           leftDisplayName: record.leftDisplayName,
           rightDisplayName: record.rightDisplayName,
           publicReceipt: record.publicReceipt,
+          publicHandReceipts: record.publicHandReceipts ?? [],
           signedReceipt: record.signedReceipt ?? null,
           encryptedSeed: record.encryptedSeed,
           handCount: record.handCount ?? null,
@@ -1289,6 +1293,13 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .from(arenaSeasons)
           .where(eq(arenaSeasons.projectId, projectId))
           .orderBy(asc(arenaSeasons.createdAt));
+        return rows.map(toArenaSeasonRecord);
+      },
+      async listAllArenaSeasons() {
+        const rows = await db
+          .select()
+          .from(arenaSeasons)
+          .orderBy(desc(arenaSeasons.createdAt));
         return rows.map(toArenaSeasonRecord);
       },
       async saveArenaSeasonEntry(record) {
@@ -2062,6 +2073,11 @@ export function createMemoryRepositories(): {
         return [...arenaSeasonRows.values()]
           .filter((record) => record.projectId === projectId)
           .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async listAllArenaSeasons() {
+        return [...arenaSeasonRows.values()]
+          .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
           .map((record) => structuredClone(record));
       },
       async saveArenaSeasonEntry(record) {

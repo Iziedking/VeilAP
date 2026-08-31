@@ -99,6 +99,13 @@ export interface ArenaSeasonScheduleView {
   matches: ArenaScheduledMatchView[];
 }
 
+export interface ArenaCompetitionSummaryView extends ArenaSeasonView {
+  projectName: string;
+  matchCount: number;
+  completedMatchCount: number;
+  runningMatchCount: number;
+}
+
 export interface ArenaSeasonServiceDependencies {
   repositories: ProjectRepository;
   keyProvider: KeyProvider;
@@ -642,6 +649,31 @@ export class ArenaSeasonService {
         [],
         (await this.repositories.getArenaPrizePool(projectId, record.id))?.status,
       ).season));
+      return { ok: true, value: values };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async listAllPublicSeasons(): Promise<ArenaSeasonServiceResult<ArenaCompetitionSummaryView[]>> {
+    try {
+      const records = await this.repositories.listAllArenaSeasons();
+      const values = await Promise.all(records.map(async (record) => {
+        const [project, entries, matches, prizePool] = await Promise.all([
+          this.repositories.getProject(record.projectId),
+          this.repositories.listArenaSeasonEntries(record.projectId, record.id),
+          this.repositories.listArenaScheduledMatches(record.projectId, record.id),
+          this.repositories.getArenaPrizePool(record.projectId, record.id),
+        ]);
+        const season = normalizeSchedule(record, entries, matches, prizePool?.status).season;
+        return {
+          ...season,
+          projectName: project?.name ?? "Veil Arena",
+          matchCount: matches.length,
+          completedMatchCount: matches.filter((match) => match.status === "completed").length,
+          runningMatchCount: matches.filter((match) => match.status === "running").length,
+        } satisfies ArenaCompetitionSummaryView;
+      }));
       return { ok: true, value: values };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };

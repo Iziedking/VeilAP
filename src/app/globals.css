@@ -2,6 +2,7 @@
 @import "./arena.css";
 @import "./arena-console.css";
 @import "./play.css";
+@import "./arena-hub.css";
 
 :root {
   --paper: #e8e9ed;
