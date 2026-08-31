@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { RpcProvider } from "starknet";
+import { constants, RpcProvider } from "starknet";
 import { z } from "zod";
 
 import type { AuthChallenge } from "@/server/auth/challenge";
@@ -27,7 +27,7 @@ const bodySchema = z.object({
     nonce: z.string().startsWith("0x").max(130),
     walletAddress: z.string().min(3).max(80),
     origin: z.string().url().max(2_048),
-    chainId: z.literal("SN_MAIN"),
+    chainId: z.literal(constants.StarknetChainId.SN_MAIN),
     issuedAt: z.string().datetime(),
     expiresAt: z.string().datetime(),
     typedData: z.unknown(),
