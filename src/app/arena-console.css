@@ -32,7 +32,7 @@
 
 .operator-project-bar { min-height: 80px; padding: 15px 18px; display: grid; grid-template-columns: 125px minmax(0, 1fr) auto; gap: 18px; align-items: center; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 6px 6px 0 var(--signal); }
 .operator-project-bar label, .operator-form label, .operator-lock-bar label { display: grid; gap: 8px; color: var(--ink-soft); font-size: 8px; letter-spacing: .9px; }
-.operator-project-bar input, .operator-form input, .operator-lock-bar input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); font-family: var(--arena-mono); font-size: 11px; }
+.operator-project-bar input, .operator-form input, .operator-form select, .operator-lock-bar input, .operator-lock-bar select { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); font-family: var(--arena-mono); font-size: 11px; }
 .operator-project-bar input::placeholder, .operator-form input::placeholder { color: #8a8991; }
 .operator-button { min-height: 46px; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; gap: 26px; border: 2px solid var(--ink); border-radius: 0; cursor: pointer; font-family: var(--arena-mono); font-size: 9px; letter-spacing: .65px; }
 .operator-button span { color: var(--signal); font-size: 17px; }
@@ -63,6 +63,19 @@
 .operator-form { padding: 22px 19px; display: grid; grid-template-columns: 1.4fr .8fr 1fr; gap: 18px; border-bottom: 1px solid var(--rule); }
 .operator-form label:first-child { grid-column: span 2; }
 .operator-form .operator-button { align-self: end; }
+.operator-template-fieldset { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; }
+.operator-template-fieldset legend { margin-bottom: 10px; color: var(--ink-soft); font-size: 8px; letter-spacing: .9px; }
+.operator-template-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.operator-template-card { min-height: 126px; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; text-align: left; }
+.operator-template-card:hover, .operator-template-card.is-selected { background: rgba(242,165,114,.2); box-shadow: inset 5px 0 var(--signal); }
+.operator-template-card span { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; letter-spacing: .7px; text-transform: uppercase; }
+.operator-template-card strong { font-family: var(--arena-display); font-size: 14px; line-height: 1.2; text-transform: uppercase; }
+.operator-template-card small { margin-top: auto; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 8px; line-height: 1.4; }
+.operator-rule-preview { grid-column: 1 / -1; padding: 14px 16px; display: grid; gap: 6px; border: 1px solid var(--ink); background: rgba(242,165,114,.12); }
+.operator-rule-preview span, .operator-rule-preview small { color: var(--signal-dark); font-size: 8px; letter-spacing: .7px; }
+.operator-rule-preview strong { font-family: var(--arena-display); font-size: 15px; text-transform: uppercase; }
+.operator-rule-preview small { color: var(--ink-soft); line-height: 1.5; }
+.operator-rule-preview.is-error { background: #ead4c9; color: var(--signal-dark); }
 .operator-season-list { padding: 20px 19px 4px; }
 .operator-subhead { margin-bottom: 6px; display: flex; justify-content: space-between; color: var(--ink-soft); font-size: 8px; letter-spacing: 1px; }
 .operator-subhead small { color: var(--green); font-size: inherit; }
@@ -147,6 +160,7 @@
   .operator-grid { grid-template-columns: 1fr; }
   .operator-panel-wide { grid-column: auto; }
   .operator-form { grid-template-columns: 1fr 1fr; }
+  .operator-template-grid { grid-template-columns: 1fr 1fr; }
   .operator-form label:first-child { grid-column: 1 / -1; }
   .operator-form .operator-button { grid-column: 1 / -1; }
   .operator-schedule-meta { grid-template-columns: 1fr 1fr; gap: 12px 0; padding-block: 15px; }
@@ -176,6 +190,9 @@
   .operator-project-bar .operator-button { width: 100%; margin-top: 13px; }
   .operator-panel-head { padding-inline: 14px; }
   .operator-form { display: block; padding-inline: 14px; }
+  .operator-template-grid { display: grid; grid-template-columns: 1fr; }
+  .operator-template-card { min-height: 112px; }
+  .operator-rule-preview { margin-top: 16px; }
   .operator-form label { margin-top: 15px; }
   .operator-form label:first-child { margin-top: 0; }
   .operator-form .operator-button { width: 100%; margin-top: 18px; }

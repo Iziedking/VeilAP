@@ -10,7 +10,8 @@ import { getArenaSeasonService } from "@/server/projects/runtime";
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  hands: z.number().int().min(1).max(100),
+  hands: z.number().int().min(1).max(100).optional(),
+  benchmarkAgentId: z.string().trim().min(1).max(80).optional(),
 }).strict();
 
 export async function POST(

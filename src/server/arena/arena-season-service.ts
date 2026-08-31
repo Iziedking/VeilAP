@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
+import {
+  buildTournamentSchedule,
+  estimateTournamentWorkload,
+  resolveTournamentRules,
+  tournamentRulesCommitment,
+  type CustomTournamentRulesInput,
+  type TournamentRules,
+  type TournamentTemplateId,
+  type TournamentWorkload,
+} from "@/domain/arena/tournament-rules";
 import { authorizeProject } from "@/server/authorization/authorize";
 import { encryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
@@ -25,6 +35,8 @@ export type ArenaSeasonServiceErrorCode =
   | "ARENA_SEASON_ALREADY_LOCKED"
   | "ARENA_SEASON_TOO_SMALL"
   | "ARENA_SEASON_FULL"
+  | "ARENA_PRIZE_POOL_NOT_FUNDED"
+  | "ARENA_BENCHMARK_REQUIRED"
   | "ARENA_WALLET_ALREADY_ENTERED"
   | "STRATEGY_ARTIFACT_NOT_FOUND"
   | "ARENA_SEASON_ENTRY_ALREADY_EXISTS"
@@ -49,6 +61,11 @@ export interface ArenaSeasonView {
   status: ArenaSeasonRecord["status"];
   entryMode: "invite_only" | "open";
   maxEntries: number;
+  templateId?: TournamentTemplateId;
+  templateVersion?: number;
+  rules?: TournamentRules;
+  rulesCommitment?: string;
+  workload?: TournamentWorkload;
   entryCount: number;
   prizeStatus?: ArenaPrizePoolStatus;
   createdAt: string;
@@ -121,6 +138,9 @@ function normalizeSchedule(
   matches: ArenaScheduledMatchRecord[],
   prizeStatus?: ArenaPrizePoolStatus,
 ): ArenaSeasonScheduleView {
+  const workload = season.rulesSnapshot && entries.length >= season.rulesSnapshot.minEntries
+    ? estimateTournamentWorkload({ rules: season.rulesSnapshot, entryCount: entries.length })
+    : undefined;
   return {
     season: {
       id: season.id,
@@ -133,6 +153,11 @@ function normalizeSchedule(
       status: season.status,
       entryMode: season.entryMode ?? "invite_only",
       maxEntries: season.maxEntries ?? 16,
+      templateId: season.templateId,
+      templateVersion: season.templateVersion,
+      rules: season.rulesSnapshot,
+      rulesCommitment: season.rulesCommitment,
+      workload,
       entryCount: entries.length,
       prizeStatus,
       createdAt: season.createdAt.toISOString(),
@@ -182,22 +207,44 @@ export class ArenaSeasonService {
     actorWalletAddress: string;
     idempotencyKey: string;
     name: string;
-    rulesetVersion: string;
+    rulesetVersion?: string;
     startsAt: string;
     locksAt: string;
     endsAt: string;
     entryMode?: "invite_only" | "open";
     maxEntries?: number;
+    templateId?: TournamentTemplateId;
+    customRules?: CustomTournamentRulesInput;
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonView>> {
     const projectId = input.projectId.trim();
     const name = input.name.trim();
-    const rulesetVersion = input.rulesetVersion.trim();
+    const rulesetVersion = input.rulesetVersion?.trim() || "holdem-sealed-v0.2";
     const startsAt = parseDate(input.startsAt);
     const locksAt = parseDate(input.locksAt);
     const endsAt = parseDate(input.endsAt);
-    const entryMode = input.entryMode ?? "invite_only";
-    const maxEntries = input.maxEntries ?? 16;
-    if (!projectId || !name || name.length > 120 || !rulesetPattern.test(rulesetVersion) || !startsAt || !locksAt || !endsAt || !(startsAt < locksAt && locksAt < endsAt) || (entryMode !== "invite_only" && entryMode !== "open") || !Number.isInteger(maxEntries) || maxEntries < 2 || maxEntries > 32 || !validKey(input.idempotencyKey)) {
+    let rules: TournamentRules;
+    try {
+      rules = resolveTournamentRules({
+        templateId: input.templateId ?? "custom",
+        custom: input.templateId
+          ? input.customRules
+          : {
+            pairingMode: "round_robin",
+            entryMode: input.entryMode ?? "invite_only",
+            maxEntries: input.maxEntries ?? 16,
+            handsPerMatch: 8,
+            encountersPerPair: 1,
+            resubmissionPolicy: "fixed",
+            rewardPolicy: "optional",
+          },
+      });
+    } catch {
+      return { ok: false, code: "INVALID_INPUT" };
+    }
+    const entryMode = rules.entryMode;
+    const maxEntries = rules.maxEntries;
+    const rulesCommitment = tournamentRulesCommitment(rules);
+    if (!projectId || !name || name.length > 120 || !rulesetPattern.test(rulesetVersion) || !startsAt || !locksAt || !endsAt || !(startsAt < locksAt && locksAt < endsAt) || !validKey(input.idempotencyKey)) {
       return { ok: false, code: "INVALID_INPUT" };
     }
 
@@ -221,6 +268,8 @@ export class ArenaSeasonService {
         endsAt: endsAt.toISOString(),
         entryMode,
         maxEntries,
+        rules,
+        rulesCommitment,
       });
       const existing = await this.repositories.getArenaSeasonByCreateIdempotencyKey(projectId, input.idempotencyKey);
       if (existing) return existing.createRequestDigest === requestDigest ? { ok: true, value: this.view(existing) } : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
@@ -237,6 +286,10 @@ export class ArenaSeasonService {
         status: "open",
         entryMode,
         maxEntries,
+        templateId: rules.templateId,
+        templateVersion: rules.templateVersion,
+        rulesSnapshot: rules,
+        rulesCommitment,
         createdBy: actorFingerprint,
         createdAt,
         createIdempotencyKey: input.idempotencyKey,
@@ -257,6 +310,9 @@ export class ArenaSeasonService {
           endsAt: endsAt.toISOString(),
           entryMode,
           maxEntries,
+          templateId: rules.templateId,
+          templateVersion: rules.templateVersion,
+          rulesCommitment,
         }),
         createdAt,
       });
@@ -333,6 +389,7 @@ export class ArenaSeasonService {
             { dataKey, wrappedKey: project.wrappedDataKey },
           )
           : undefined,
+        version: 1,
         joinedAt: this.now(),
         idempotencyKey: input.idempotencyKey,
         requestDigest,
@@ -356,12 +413,13 @@ export class ArenaSeasonService {
     projectId: string;
     actorWalletAddress: string;
     seasonId: string;
-    hands: number;
+    hands?: number;
+    benchmarkAgentId?: string;
     idempotencyKey: string;
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonScheduleView>> {
     const projectId = input.projectId.trim();
     const seasonId = input.seasonId.trim();
-    if (!projectId || !seasonId || !Number.isInteger(input.hands) || input.hands < 1 || input.hands > 100 || !validKey(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
+    if (!projectId || !seasonId || !validKey(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
 
     try {
       const project = await this.repositories.getProject(projectId);
@@ -377,36 +435,61 @@ export class ArenaSeasonService {
       if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
 
       const entries = await this.repositories.listArenaSeasonEntries(projectId, seasonId);
-      const requestDigest = commitment({ actorFingerprint, seasonId, hands: input.hands, entries: entries.map((entry) => [entry.agentId, entry.artifactCommitment]) });
+      let rules: TournamentRules;
+      try {
+        rules = season.rulesSnapshot ?? resolveTournamentRules({
+          templateId: "custom",
+          custom: {
+            pairingMode: "round_robin",
+            entryMode: season.entryMode ?? "invite_only",
+            maxEntries: season.maxEntries ?? 16,
+            handsPerMatch: input.hands ?? 8,
+            encountersPerPair: 1,
+            resubmissionPolicy: "fixed",
+            rewardPolicy: "optional",
+          },
+        });
+      } catch {
+        return { ok: false, code: "INVALID_INPUT" };
+      }
+      if (rules.rewardPolicy === "funded_before_start") {
+        const prize = await this.repositories.getArenaPrizePool(projectId, seasonId);
+        if (prize?.status !== "funded") return { ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" };
+      }
+      const rulesCommitment = season.rulesCommitment ?? tournamentRulesCommitment(rules);
+      const benchmarkAgentId = input.benchmarkAgentId?.trim() || undefined;
+      const requestDigest = commitment({ actorFingerprint, seasonId, rulesCommitment, benchmarkAgentId: benchmarkAgentId ?? null, entries: entries.map((entry) => [entry.agentId, entry.artifactCommitment]) });
       if (season.lockIdempotencyKey) {
         if (season.lockIdempotencyKey !== input.idempotencyKey || season.lockRequestDigest !== requestDigest) return { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
         return { ok: true, value: normalizeSchedule(season, entries, await this.repositories.listArenaScheduledMatches(projectId, seasonId)) };
       }
       if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_ALREADY_LOCKED" };
-      if (entries.length < 2) return { ok: false, code: "ARENA_SEASON_TOO_SMALL" };
+      if (entries.length < rules.minEntries) return { ok: false, code: "ARENA_SEASON_TOO_SMALL" };
 
       const orderedEntries = [...entries].sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime() || left.agentId.localeCompare(right.agentId));
       const createdAt = this.now();
-      const matches: ArenaScheduledMatchRecord[] = [];
-      let sequence = 1;
-      for (let leftIndex = 0; leftIndex < orderedEntries.length; leftIndex += 1) {
-        for (let rightIndex = leftIndex + 1; rightIndex < orderedEntries.length; rightIndex += 1) {
-          matches.push({
+      let generatedSchedule: ReturnType<typeof buildTournamentSchedule>;
+      try {
+        generatedSchedule = buildTournamentSchedule({ rules, entries: orderedEntries, benchmarkAgentId });
+      } catch (error) {
+        if (error instanceof Error && error.message === "TOURNAMENT_BENCHMARK_REQUIRED") {
+          return { ok: false, code: "ARENA_BENCHMARK_REQUIRED" };
+        }
+        return { ok: false, code: "INVALID_INPUT" };
+      }
+      const matches: ArenaScheduledMatchRecord[] = generatedSchedule.map((pairing) => ({
             id: this.idFactory(),
             seasonId,
             projectId,
-            sequence,
-            hands: input.hands,
-            leftAgentId: orderedEntries[leftIndex].agentId,
-            rightAgentId: orderedEntries[rightIndex].agentId,
+            sequence: pairing.sequence,
+            hands: pairing.hands,
+            leftAgentId: pairing.leftAgentId,
+            rightAgentId: pairing.rightAgentId,
             status: "scheduled",
             matchId: this.idFactory(),
             attempts: 0,
             createdAt,
-          });
-          sequence += 1;
-        }
-      }
+      }));
       const lockedSeason: ArenaSeasonRecord = {
         ...season,
         status: "locked",
@@ -422,7 +505,7 @@ export class ArenaSeasonService {
           projectId,
           actorFingerprint,
           eventType: "arena_season_locked",
-          payloadDigest: commitment({ seasonId, entryCount: entries.length, matchCount: matches.length, hands: input.hands }),
+          payloadDigest: commitment({ seasonId, entryCount: entries.length, matchCount: matches.length, rulesCommitment, benchmarkAgentId: benchmarkAgentId ?? null }),
           createdAt,
         },
       });

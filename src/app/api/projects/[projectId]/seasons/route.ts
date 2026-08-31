@@ -11,12 +11,22 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  rulesetVersion: z.string().trim().min(1).max(40),
+  rulesetVersion: z.string().trim().min(1).max(40).optional(),
   startsAt: z.string().min(1),
   locksAt: z.string().min(1),
   endsAt: z.string().min(1),
   entryMode: z.enum(["invite_only", "open"]).default("invite_only"),
   maxEntries: z.number().int().min(2).max(32).default(16),
+  templateId: z.enum(["playground", "open_league", "duel_series", "benchmark_gauntlet", "championship", "custom"]).optional(),
+  customRules: z.object({
+    pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
+    entryMode: z.enum(["invite_only", "open"]),
+    maxEntries: z.number().int().min(2).max(32),
+    handsPerMatch: z.number().int().min(1).max(100),
+    encountersPerPair: z.number().int().min(1).max(5),
+    resubmissionPolicy: z.enum(["replace_until_lock", "fixed"]),
+    rewardPolicy: z.enum(["optional", "funded_before_start"]),
+  }).strict().optional(),
 }).strict();
 
 export async function POST(

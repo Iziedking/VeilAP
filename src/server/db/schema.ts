@@ -95,6 +95,10 @@ export const arenaSeasons = pgTable(
     status: text("status").notNull().default("open"),
     entryMode: text("entry_mode").notNull().default("invite_only"),
     maxEntries: integer("max_entries").notNull().default(16),
+    templateId: text("template_id"),
+    templateVersion: integer("template_version"),
+    rulesSnapshot: jsonb("rules_snapshot"),
+    rulesCommitment: text("rules_commitment"),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     lockedAt: timestamp("locked_at", { withTimezone: true }),
@@ -110,6 +114,10 @@ export const arenaSeasons = pgTable(
     ),
     entryModeCheck: check("arena_seasons_entry_mode_check", sql`${table.entryMode} in ('invite_only', 'open')`),
     maxEntriesCheck: check("arena_seasons_max_entries_check", sql`${table.maxEntries} between 2 and 32`),
+    templateVersionCheck: check(
+      "arena_seasons_template_version_check",
+      sql`${table.templateVersion} is null or ${table.templateVersion} > 0`,
+    ),
   }),
 );
 
@@ -124,6 +132,7 @@ export const arenaSeasonEntries = pgTable(
     artifactCommitment: text("artifact_commitment").notNull(),
     ownerFingerprint: text("owner_fingerprint"),
     encryptedPayoutWallet: jsonb("encrypted_payout_wallet"),
+    version: integer("version").notNull().default(1),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull(),
     idempotencyKey: text("idempotency_key"),
     requestDigest: text("request_digest"),
@@ -135,6 +144,34 @@ export const arenaSeasonEntries = pgTable(
       table.seasonId,
       table.idempotencyKey,
     ),
+  }),
+);
+
+export const arenaEntryVersions = pgTable(
+  "arena_entry_versions",
+  {
+    id: text("id").primaryKey(),
+    entryId: text("entry_id").notNull(),
+    seasonId: text("season_id").notNull(),
+    projectId: text("project_id").notNull(),
+    version: integer("version").notNull(),
+    agentId: text("agent_id").notNull(),
+    displayName: text("display_name").notNull(),
+    artifactCommitment: text("artifact_commitment").notNull(),
+    status: text("status").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    idempotencyKey: text("idempotency_key"),
+    requestDigest: text("request_digest"),
+  },
+  (table) => ({
+    entryVersion: uniqueIndex("arena_entry_versions_entry_version_idx").on(table.entryId, table.version),
+    seasonIdempotency: uniqueIndex("arena_entry_versions_season_idempotency_idx").on(
+      table.seasonId,
+      table.idempotencyKey,
+    ),
+    statusCheck: check("arena_entry_versions_status_check", sql`${table.status} in ('active', 'retired')`),
+    versionCheck: check("arena_entry_versions_version_check", sql`${table.version} > 0`),
   }),
 );
 

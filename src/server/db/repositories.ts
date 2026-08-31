@@ -1,9 +1,11 @@
 import { and, asc, count, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { AuthChallenge } from "@/server/auth/challenge";
+import { parseTournamentRules, type TournamentRules } from "@/domain/arena/tournament-rules";
 import type { EncryptedField } from "@/server/crypto/envelope";
 import type { VeilapDatabase } from "./client";
 import {
+  arenaEntryVersions,
   arenaStrategyArtifacts,
   arenaMatchReceipts,
   arenaMatchReveals,
@@ -263,6 +265,10 @@ export interface ArenaSeasonRecord {
   status: ArenaSeasonStatus;
   entryMode?: ArenaSeasonEntryMode;
   maxEntries?: number;
+  templateId?: TournamentRules["templateId"];
+  templateVersion?: number;
+  rulesSnapshot?: TournamentRules;
+  rulesCommitment?: string;
   createdBy: string;
   createdAt: Date;
   lockedAt?: Date;
@@ -281,7 +287,26 @@ export interface ArenaSeasonEntryRecord {
   artifactCommitment: string;
   ownerFingerprint?: string;
   encryptedPayoutWallet?: EncryptedField;
+  version: number;
   joinedAt: Date;
+  idempotencyKey?: string;
+  requestDigest?: string;
+}
+
+export type ArenaEntryVersionStatus = "active" | "retired";
+
+export interface ArenaEntryVersionRecord {
+  id: string;
+  entryId: string;
+  seasonId: string;
+  projectId: string;
+  version: number;
+  agentId: string;
+  displayName: string;
+  artifactCommitment: string;
+  status: ArenaEntryVersionStatus;
+  submittedAt: Date;
+  retiredAt?: Date;
   idempotencyKey?: string;
   requestDigest?: string;
 }
@@ -402,9 +427,18 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getArenaSeasonEntryByOwnerFingerprint(projectId: string, seasonId: string, ownerFingerprint: string): Promise<ArenaSeasonEntryRecord | undefined>;
   getArenaSeasonEntryByIdempotencyKey(projectId: string, seasonId: string, idempotencyKey: string): Promise<ArenaSeasonEntryRecord | undefined>;
   listArenaSeasonEntries(projectId: string, seasonId: string): Promise<ArenaSeasonEntryRecord[]>;
+  listArenaEntryVersions(projectId: string, seasonId: string, entryId: string): Promise<ArenaEntryVersionRecord[]>;
   saveArenaEnrollment(input: {
     artifact: ArenaStrategyArtifactRecord;
     entry: ArenaSeasonEntryRecord;
+    audit: AuditEventRecord;
+    now: Date;
+  }): Promise<void>;
+  replaceArenaEnrollment(input: {
+    artifact: ArenaStrategyArtifactRecord;
+    entry: ArenaSeasonEntryRecord;
+    previousVersion: number;
+    version: ArenaEntryVersionRecord;
     audit: AuditEventRecord;
     now: Date;
   }): Promise<void>;
@@ -535,6 +569,10 @@ function toArenaSeasonRecord(row: typeof arenaSeasons.$inferSelect): ArenaSeason
     status: arenaSeasonStatus(row.status),
     entryMode: arenaSeasonEntryMode(row.entryMode),
     maxEntries: row.maxEntries,
+    templateId: row.templateId as TournamentRules["templateId"] | undefined,
+    templateVersion: row.templateVersion ?? undefined,
+    rulesSnapshot: row.rulesSnapshot ? parseTournamentRules(row.rulesSnapshot) : undefined,
+    rulesCommitment: row.rulesCommitment ?? undefined,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     lockedAt: row.lockedAt ?? undefined,
@@ -555,7 +593,31 @@ function toArenaSeasonEntryRecord(row: typeof arenaSeasonEntries.$inferSelect): 
     artifactCommitment: row.artifactCommitment,
     ownerFingerprint: row.ownerFingerprint ?? undefined,
     encryptedPayoutWallet: row.encryptedPayoutWallet as EncryptedField | undefined,
+    version: row.version,
     joinedAt: row.joinedAt,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    requestDigest: row.requestDigest ?? undefined,
+  };
+}
+
+function arenaEntryVersionStatus(value: string): ArenaEntryVersionStatus {
+  if (value === "active" || value === "retired") return value;
+  throw new Error("ARENA_ENTRY_VERSION_STATUS_INVALID");
+}
+
+function toArenaEntryVersionRecord(row: typeof arenaEntryVersions.$inferSelect): ArenaEntryVersionRecord {
+  return {
+    id: row.id,
+    entryId: row.entryId,
+    seasonId: row.seasonId,
+    projectId: row.projectId,
+    version: row.version,
+    agentId: row.agentId,
+    displayName: row.displayName,
+    artifactCommitment: row.artifactCommitment,
+    status: arenaEntryVersionStatus(row.status),
+    submittedAt: row.submittedAt,
+    retiredAt: row.retiredAt ?? undefined,
     idempotencyKey: row.idempotencyKey ?? undefined,
     requestDigest: row.requestDigest ?? undefined,
   };
@@ -1183,6 +1245,10 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           ...record,
           entryMode: record.entryMode ?? "invite_only",
           maxEntries: record.maxEntries ?? 16,
+          templateId: record.templateId ?? null,
+          templateVersion: record.templateVersion ?? null,
+          rulesSnapshot: record.rulesSnapshot ?? null,
+          rulesCommitment: record.rulesCommitment ?? null,
           lockedAt: record.lockedAt ?? null,
           createIdempotencyKey: record.createIdempotencyKey ?? null,
           createRequestDigest: record.createRequestDigest ?? null,
@@ -1226,12 +1292,29 @@ export function createPostgresRepositories(db: VeilapDatabase): {
         return rows.map(toArenaSeasonRecord);
       },
       async saveArenaSeasonEntry(record) {
-        await db.insert(arenaSeasonEntries).values({
-          ...record,
-          ownerFingerprint: record.ownerFingerprint ?? null,
-          encryptedPayoutWallet: record.encryptedPayoutWallet ?? null,
-          idempotencyKey: record.idempotencyKey ?? null,
-          requestDigest: record.requestDigest ?? null,
+        await db.transaction(async (tx) => {
+          await tx.insert(arenaSeasonEntries).values({
+            ...record,
+            ownerFingerprint: record.ownerFingerprint ?? null,
+            encryptedPayoutWallet: record.encryptedPayoutWallet ?? null,
+            idempotencyKey: record.idempotencyKey ?? null,
+            requestDigest: record.requestDigest ?? null,
+          });
+          await tx.insert(arenaEntryVersions).values({
+            id: `${record.id}:v${record.version}`,
+            entryId: record.id,
+            seasonId: record.seasonId,
+            projectId: record.projectId,
+            version: record.version,
+            agentId: record.agentId,
+            displayName: record.displayName,
+            artifactCommitment: record.artifactCommitment,
+            status: "active",
+            submittedAt: record.joinedAt,
+            retiredAt: null,
+            idempotencyKey: record.idempotencyKey ?? null,
+            requestDigest: record.requestDigest ?? null,
+          });
         });
       },
       async getArenaSeasonEntry(projectId, seasonId, agentId) {
@@ -1278,6 +1361,18 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(asc(arenaSeasonEntries.joinedAt));
         return rows.map(toArenaSeasonEntryRecord);
       },
+      async listArenaEntryVersions(projectId, seasonId, entryId) {
+        const rows = await db
+          .select()
+          .from(arenaEntryVersions)
+          .where(and(
+            eq(arenaEntryVersions.projectId, projectId),
+            eq(arenaEntryVersions.seasonId, seasonId),
+            eq(arenaEntryVersions.entryId, entryId),
+          ))
+          .orderBy(asc(arenaEntryVersions.version));
+        return rows.map(toArenaEntryVersionRecord);
+      },
       async saveArenaEnrollment(input) {
         try {
           await db.transaction(async (tx) => {
@@ -1316,6 +1411,21 @@ export function createPostgresRepositories(db: VeilapDatabase): {
               idempotencyKey: input.entry.idempotencyKey ?? null,
               requestDigest: input.entry.requestDigest ?? null,
             });
+            await tx.insert(arenaEntryVersions).values({
+              id: `${input.entry.id}:v${input.entry.version}`,
+              entryId: input.entry.id,
+              seasonId: input.entry.seasonId,
+              projectId: input.entry.projectId,
+              version: input.entry.version,
+              agentId: input.entry.agentId,
+              displayName: input.entry.displayName,
+              artifactCommitment: input.entry.artifactCommitment,
+              status: "active",
+              submittedAt: input.now,
+              retiredAt: null,
+              idempotencyKey: input.entry.idempotencyKey ?? null,
+              requestDigest: input.entry.requestDigest ?? null,
+            });
             await tx.insert(auditEvents).values(input.audit);
           });
         } catch (error) {
@@ -1324,6 +1434,95 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           if (message.includes("arena_season_entries_season_agent_idx")) throw new Error("ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS");
           if (message.includes("arena_strategy_artifacts_project_agent_idx")) throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
           if (message.includes("arena_season_entries_season_idempotency_idx")) throw new Error("ARENA_SEASON_ENTRY_IDEMPOTENCY_ALREADY_EXISTS");
+          throw error;
+        }
+      },
+      async replaceArenaEnrollment(input) {
+        try {
+          await db.transaction(async (tx) => {
+            const seasons = await tx
+              .select()
+              .from(arenaSeasons)
+              .where(and(
+                eq(arenaSeasons.projectId, input.entry.projectId),
+                eq(arenaSeasons.id, input.entry.seasonId),
+              ))
+              .limit(1)
+              .for("update");
+            const season = seasons[0];
+            if (!season) throw new Error("ARENA_SEASON_NOT_FOUND");
+            if (season.status !== "open") throw new Error("ARENA_SEASON_NOT_OPEN");
+            if (season.entryMode !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
+            if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
+            if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
+            const rules = season.rulesSnapshot ? parseTournamentRules(season.rulesSnapshot) : undefined;
+            if (rules?.resubmissionPolicy !== "replace_until_lock") {
+              throw new Error("ARENA_RESUBMISSION_FORBIDDEN");
+            }
+
+            const currentRows = await tx
+              .select()
+              .from(arenaSeasonEntries)
+              .where(and(
+                eq(arenaSeasonEntries.id, input.entry.id),
+                eq(arenaSeasonEntries.projectId, input.entry.projectId),
+                eq(arenaSeasonEntries.seasonId, input.entry.seasonId),
+              ))
+              .limit(1)
+              .for("update");
+            const current = currentRows[0];
+            if (!current) throw new Error("ARENA_SEASON_ENTRY_NOT_FOUND");
+            if (current.ownerFingerprint !== input.entry.ownerFingerprint) throw new Error("ARENA_ENTRY_OWNER_MISMATCH");
+            if (current.version !== input.previousVersion) throw new Error("ARENA_ENTRY_VERSION_CONFLICT");
+
+            await tx.insert(arenaStrategyArtifacts).values({
+              ...input.artifact,
+              ownerFingerprint: input.artifact.ownerFingerprint ?? null,
+              encryptedOwnerWallet: input.artifact.encryptedOwnerWallet ?? null,
+            });
+            const retired = await tx
+              .update(arenaEntryVersions)
+              .set({ status: "retired", retiredAt: input.now })
+              .where(and(
+                eq(arenaEntryVersions.entryId, input.entry.id),
+                eq(arenaEntryVersions.version, input.previousVersion),
+                eq(arenaEntryVersions.status, "active"),
+              ))
+              .returning({ id: arenaEntryVersions.id });
+            if (retired.length !== 1) throw new Error("ARENA_ENTRY_VERSION_CONFLICT");
+
+            const updated = await tx
+              .update(arenaSeasonEntries)
+              .set({
+                agentId: input.entry.agentId,
+                displayName: input.entry.displayName,
+                artifactCommitment: input.entry.artifactCommitment,
+                encryptedPayoutWallet: input.entry.encryptedPayoutWallet ?? null,
+                version: input.entry.version,
+                idempotencyKey: input.entry.idempotencyKey ?? null,
+                requestDigest: input.entry.requestDigest ?? null,
+              })
+              .where(and(
+                eq(arenaSeasonEntries.id, input.entry.id),
+                eq(arenaSeasonEntries.version, input.previousVersion),
+              ))
+              .returning({ id: arenaSeasonEntries.id });
+            if (updated.length !== 1) throw new Error("ARENA_ENTRY_VERSION_CONFLICT");
+
+            await tx.insert(arenaEntryVersions).values({
+              ...input.version,
+              retiredAt: input.version.retiredAt ?? null,
+              idempotencyKey: input.version.idempotencyKey ?? null,
+              requestDigest: input.version.requestDigest ?? null,
+            });
+            await tx.insert(auditEvents).values(input.audit);
+          });
+        } catch (error) {
+          const message = databaseErrorText(error);
+          if (message.includes("arena_strategy_artifacts_project_agent_idx")) throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
+          if (message.includes("arena_entry_versions_season_idempotency_idx")) throw new Error("ARENA_SEASON_ENTRY_IDEMPOTENCY_ALREADY_EXISTS");
+          if (message.includes("arena_entry_versions_one_active_idx")) throw new Error("ARENA_ENTRY_VERSION_CONFLICT");
+          if (message.includes("arena_season_entries_season_agent_idx")) throw new Error("ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS");
           throw error;
         }
       },
@@ -1571,6 +1770,7 @@ export function createMemoryRepositories(): {
   const arenaMatchRevealRows = new Map<string, ArenaMatchRevealRecord>();
   const arenaSeasonRows = new Map<string, ArenaSeasonRecord>();
   const arenaSeasonEntryRows = new Map<string, ArenaSeasonEntryRecord>();
+  const arenaEntryVersionRows = new Map<string, ArenaEntryVersionRecord>();
   const arenaScheduledMatchRows = new Map<string, ArenaScheduledMatchRecord>();
   const arenaPrizePoolRows = new Map<string, ArenaPrizePoolRecord>();
   const arenaPrizeTransactionRows = new Map<string, ArenaPrizeTransactionRecord>();
@@ -1876,6 +2076,20 @@ export function createMemoryRepositories(): {
           throw new Error("ARENA_WALLET_ALREADY_ENTERED");
         }
         arenaSeasonEntryRows.set(record.id, structuredClone(record));
+        arenaEntryVersionRows.set(`${record.id}:v${record.version}`, {
+          id: `${record.id}:v${record.version}`,
+          entryId: record.id,
+          seasonId: record.seasonId,
+          projectId: record.projectId,
+          version: record.version,
+          agentId: record.agentId,
+          displayName: record.displayName,
+          artifactCommitment: record.artifactCommitment,
+          status: "active",
+          submittedAt: record.joinedAt,
+          idempotencyKey: record.idempotencyKey,
+          requestDigest: record.requestDigest,
+        });
       },
       async getArenaSeasonEntry(projectId, seasonId, agentId) {
         const record = [...arenaSeasonEntryRows.values()].find((row) => row.projectId === projectId && row.seasonId === seasonId && row.agentId === agentId);
@@ -1893,6 +2107,12 @@ export function createMemoryRepositories(): {
         return [...arenaSeasonEntryRows.values()]
           .filter((record) => record.projectId === projectId && record.seasonId === seasonId)
           .sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async listArenaEntryVersions(projectId, seasonId, entryId) {
+        return [...arenaEntryVersionRows.values()]
+          .filter((record) => record.projectId === projectId && record.seasonId === seasonId && record.entryId === entryId)
+          .sort((left, right) => left.version - right.version)
           .map((record) => structuredClone(record));
       },
       async saveArenaEnrollment(input) {
@@ -1913,6 +2133,60 @@ export function createMemoryRepositories(): {
         if (auditRows.some((row) => row.id === input.audit.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
         arenaStrategyArtifactRows.set(input.artifact.id, structuredClone(input.artifact));
         arenaSeasonEntryRows.set(input.entry.id, structuredClone(input.entry));
+        const version: ArenaEntryVersionRecord = {
+          id: `${input.entry.id}:v${input.entry.version}`,
+          entryId: input.entry.id,
+          seasonId: input.entry.seasonId,
+          projectId: input.entry.projectId,
+          version: input.entry.version,
+          agentId: input.entry.agentId,
+          displayName: input.entry.displayName,
+          artifactCommitment: input.entry.artifactCommitment,
+          status: "active",
+          submittedAt: input.now,
+          idempotencyKey: input.entry.idempotencyKey,
+          requestDigest: input.entry.requestDigest,
+        };
+        arenaEntryVersionRows.set(version.id, structuredClone(version));
+        auditRows.push(structuredClone(input.audit));
+      },
+      async replaceArenaEnrollment(input) {
+        const season = arenaSeasonRows.get(input.entry.seasonId);
+        if (!season || season.projectId !== input.entry.projectId) throw new Error("ARENA_SEASON_NOT_FOUND");
+        if (season.status !== "open") throw new Error("ARENA_SEASON_NOT_OPEN");
+        if ((season.entryMode ?? "invite_only") !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
+        if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
+        if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
+        if (season.rulesSnapshot?.resubmissionPolicy !== "replace_until_lock") {
+          throw new Error("ARENA_RESUBMISSION_FORBIDDEN");
+        }
+        const current = arenaSeasonEntryRows.get(input.entry.id);
+        if (!current || current.projectId !== input.entry.projectId || current.seasonId !== input.entry.seasonId) {
+          throw new Error("ARENA_SEASON_ENTRY_NOT_FOUND");
+        }
+        if (current.ownerFingerprint !== input.entry.ownerFingerprint) throw new Error("ARENA_ENTRY_OWNER_MISMATCH");
+        if (current.version !== input.previousVersion) throw new Error("ARENA_ENTRY_VERSION_CONFLICT");
+        if (arenaStrategyArtifactRows.has(input.artifact.id) || [...arenaStrategyArtifactRows.values()].some((row) => row.projectId === input.artifact.projectId && row.agentId === input.artifact.agentId)) {
+          throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
+        }
+        if ([...arenaSeasonEntryRows.values()].some((row) => row.id !== input.entry.id && row.seasonId === input.entry.seasonId && row.agentId === input.entry.agentId)) {
+          throw new Error("ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS");
+        }
+        if ([...arenaEntryVersionRows.values()].some((row) => row.seasonId === input.entry.seasonId && row.idempotencyKey === input.entry.idempotencyKey)) {
+          throw new Error("ARENA_SEASON_ENTRY_IDEMPOTENCY_ALREADY_EXISTS");
+        }
+        const currentVersion = arenaEntryVersionRows.get(`${input.entry.id}:v${input.previousVersion}`);
+        if (!currentVersion || currentVersion.status !== "active") throw new Error("ARENA_ENTRY_VERSION_CONFLICT");
+        if (auditRows.some((row) => row.id === input.audit.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
+
+        arenaStrategyArtifactRows.set(input.artifact.id, structuredClone(input.artifact));
+        arenaEntryVersionRows.set(currentVersion.id, {
+          ...structuredClone(currentVersion),
+          status: "retired",
+          retiredAt: input.now,
+        });
+        arenaSeasonEntryRows.set(input.entry.id, structuredClone(input.entry));
+        arenaEntryVersionRows.set(input.version.id, structuredClone(input.version));
         auditRows.push(structuredClone(input.audit));
       },
       async saveArenaScheduledMatch(record) {

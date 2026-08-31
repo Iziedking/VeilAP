@@ -82,6 +82,16 @@ describe("ArenaSeasonService", () => {
       projectId,
       actorWalletAddress: company,
       idempotencyKey: "season-create-1",
+      templateId: "custom",
+      customRules: {
+        pairingMode: "round_robin",
+        entryMode: "invite_only",
+        maxEntries: 3,
+        handsPerMatch: 5,
+        encountersPerPair: 1,
+        resubmissionPolicy: "fixed",
+        rewardPolicy: "optional",
+      },
       ...seasonInput,
     });
     expect(created.ok).toBe(true);
@@ -101,7 +111,6 @@ describe("ArenaSeasonService", () => {
       projectId,
       seasonId: created.value.id,
       actorWalletAddress: company,
-      hands: 5,
       idempotencyKey: "season-lock-1",
     });
     expect(locked.ok).toBe(true);
@@ -118,14 +127,13 @@ describe("ArenaSeasonService", () => {
       projectId,
       seasonId: created.value.id,
       actorWalletAddress: company,
-      hands: 5,
       idempotencyKey: "season-lock-1",
     })).resolves.toEqual(locked);
     await expect(service.lockSeason({
       projectId,
       seasonId: created.value.id,
       actorWalletAddress: company,
-      hands: 6,
+      benchmarkAgentId: "CINDER",
       idempotencyKey: "season-lock-1",
     })).resolves.toEqual({ ok: false, code: "IDEMPOTENCY_KEY_REUSED" });
   });
@@ -136,6 +144,7 @@ describe("ArenaSeasonService", () => {
       projectId,
       actorWalletAddress: company,
       idempotencyKey: "season-create-2",
+      templateId: "playground",
       ...seasonInput,
     });
     if (!created.ok) throw new Error(created.code);
@@ -150,7 +159,6 @@ describe("ArenaSeasonService", () => {
       projectId,
       seasonId: created.value.id,
       actorWalletAddress: company,
-      hands: 5,
       idempotencyKey: "season-lock-2",
     })).resolves.toEqual({ ok: false, code: "ARENA_SEASON_TOO_SMALL" });
   });
@@ -161,6 +169,16 @@ describe("ArenaSeasonService", () => {
       projectId,
       actorWalletAddress: company,
       idempotencyKey: "season-create-3",
+      templateId: "custom",
+      customRules: {
+        pairingMode: "duel_series",
+        entryMode: "invite_only",
+        maxEntries: 2,
+        handsPerMatch: 2,
+        encountersPerPair: 1,
+        resubmissionPolicy: "fixed",
+        rewardPolicy: "optional",
+      },
       ...seasonInput,
     });
     if (!created.ok) throw new Error(created.code);
@@ -178,7 +196,6 @@ describe("ArenaSeasonService", () => {
       projectId,
       seasonId: created.value.id,
       actorWalletAddress: company,
-      hands: 2,
       idempotencyKey: "season-lock-3",
     });
     if (!locked.ok) throw new Error(locked.code);

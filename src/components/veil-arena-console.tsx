@@ -10,6 +10,16 @@ import {
   createArenaTransferAuthorization,
   type ArenaTransferPlan,
 } from "@/domain/arena/transfer-authorization";
+import {
+  TOURNAMENT_TEMPLATES,
+  resolveTournamentRules,
+  type TournamentPairingMode,
+  type TournamentResubmissionPolicy,
+  type TournamentRewardPolicy,
+  type TournamentRules,
+  type TournamentTemplateId,
+  type TournamentWorkload,
+} from "@/domain/arena/tournament-rules";
 import { apiFetch } from "@/lib/api/client";
 import {
   createPrivateTransferActions,
@@ -36,6 +46,11 @@ type Season = {
   status: "open" | "locked" | "completed" | "cancelled";
   entryMode: "invite_only" | "open";
   maxEntries: number;
+  templateId?: TournamentTemplateId;
+  templateVersion?: number;
+  rules?: TournamentRules;
+  rulesCommitment?: string;
+  workload?: TournamentWorkload;
   entryCount: number;
   prizeStatus?: "funding_pending" | "funded" | "settlement_pending" | "settled" | "unknown";
   createdAt: string;
@@ -117,6 +132,7 @@ const errorCopy: Record<string, string> = {
   PROJECT_NOT_FOUND: "That project was not found in the connected database.",
   ARENA_SEASON_NOT_FOUND: "That season no longer exists.",
   ARENA_SEASON_TOO_SMALL: "At least two agents must enter before you can lock the draw.",
+  ARENA_BENCHMARK_REQUIRED: "Choose one enrolled agent as the sealed benchmark before locking this gauntlet.",
   ARENA_SEASON_ALREADY_LOCKED: "This season is already locked.",
   ARENA_SEASON_NOT_LOCKED: "Lock the season before running a scheduled pairing.",
   ARENA_SEASON_NOT_ACTIVE: "You can add a prize only while the competition is open or locked.",
@@ -125,7 +141,7 @@ const errorCopy: Record<string, string> = {
   ARENA_PRIZE_POOL_NOT_FOUND: "This competition does not have a prize yet.",
   ARENA_PRIZE_POOL_ALREADY_EXISTS: "This season already has a prize pool.",
   ARENA_PRIZE_POOL_ALREADY_FUNDED: "Sponsor funding is already recorded for this pool.",
-  ARENA_PRIZE_POOL_NOT_FUNDED: "Confirm the sponsor funding transaction before preparing a settlement.",
+  ARENA_PRIZE_POOL_NOT_FUNDED: "This format requires a funded reward before the roster can be locked.",
   ARENA_PRIZE_POOL_NOT_SETTLEMENT_READY: "Prepare the winner settlement before confirming its transaction.",
   ARENA_PRIZE_POOL_ALREADY_SETTLED: "This prize pool has already been settled.",
   ARENA_MATCH_NOT_COMPLETE: "Finish every pairing before selecting the winner.",
@@ -207,13 +223,18 @@ export function VeilArenaConsole() {
   const [settlementPrepared, setSettlementPrepared] = useState(false);
   const [settlementWalletOutcome, setSettlementWalletOutcome] = useState<Strk20Outcome | null>(null);
   const [seasonName, setSeasonName] = useState("");
-  const [rulesetVersion, setRulesetVersion] = useState("holdem-v1");
+  const [templateId, setTemplateId] = useState<TournamentTemplateId>("playground");
   const [startsAt, setStartsAt] = useState("");
   const [locksAt, setLocksAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [entryMode, setEntryMode] = useState<Season["entryMode"]>("open");
-  const [maxEntries, setMaxEntries] = useState("16");
-  const [hands, setHands] = useState("18");
+  const [maxEntries, setMaxEntries] = useState("8");
+  const [customPairingMode, setCustomPairingMode] = useState<TournamentPairingMode>("round_robin");
+  const [customHands, setCustomHands] = useState("8");
+  const [customEncounters, setCustomEncounters] = useState("1");
+  const [customResubmission, setCustomResubmission] = useState<TournamentResubmissionPolicy>("replace_until_lock");
+  const [customReward, setCustomReward] = useState<TournamentRewardPolicy>("optional");
+  const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
   const [tokenAddress, setTokenAddress] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("USDC");
   const [prizeAmount, setPrizeAmount] = useState("");
@@ -225,6 +246,24 @@ export function VeilArenaConsole() {
 
   const openSeasons = useMemo(() => seasons.filter((season) => season.status === "open"), [seasons]);
   const lockedMatches = schedule?.matches ?? [];
+  const draftRules = useMemo(() => {
+    try {
+      return resolveTournamentRules({
+        templateId,
+        custom: templateId === "custom" ? {
+          pairingMode: customPairingMode,
+          entryMode,
+          maxEntries: Number(maxEntries),
+          handsPerMatch: Number(customHands),
+          encountersPerPair: Number(customEncounters),
+          resubmissionPolicy: customResubmission,
+          rewardPolicy: customReward,
+        } : undefined,
+      });
+    } catch {
+      return null;
+    }
+  }, [customEncounters, customHands, customPairingMode, customResubmission, customReward, entryMode, maxEntries, templateId]);
 
   useEffect(() => () => fundingAccount?.unsubscribeChange?.(), [fundingAccount]);
 
@@ -335,9 +374,8 @@ export function VeilArenaConsole() {
     const starts = toIso(startsAt);
     const locks = toIso(locksAt);
     const ends = toIso(endsAt);
-    const entryLimit = Number(maxEntries);
-    if (!seasonName.trim() || !starts || !locks || !ends || !(starts < locks && locks < ends) || !Number.isInteger(entryLimit) || entryLimit < 2 || entryLimit > 32) {
-      setError("Add a name, choose 2 to 32 entries, and set the dates in this order: start, lock, end.");
+    if (!seasonName.trim() || !starts || !locks || !ends || !(starts < locks && locks < ends) || !draftRules) {
+      setError("Add a name, choose valid tournament rules, and set the dates in this order: start, lock, end.");
       return;
     }
     setBusy("create");
@@ -347,7 +385,22 @@ export function VeilArenaConsole() {
       const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": freshKey("season") },
-        body: JSON.stringify({ name: seasonName.trim(), rulesetVersion: rulesetVersion.trim(), startsAt: starts, locksAt: locks, endsAt: ends, entryMode, maxEntries: entryLimit }),
+        body: JSON.stringify({
+          name: seasonName.trim(),
+          startsAt: starts,
+          locksAt: locks,
+          endsAt: ends,
+          templateId,
+          customRules: templateId === "custom" ? {
+            pairingMode: customPairingMode,
+            entryMode,
+            maxEntries: Number(maxEntries),
+            handsPerMatch: Number(customHands),
+            encountersPerPair: Number(customEncounters),
+            resubmissionPolicy: customResubmission,
+            rewardPolicy: customReward,
+          } : undefined,
+        }),
       });
       const body = await readEnvelope<Season>(response);
       if (!response.ok || !body.ok) {
@@ -394,9 +447,9 @@ export function VeilArenaConsole() {
 
   async function lockSeason() {
     if (!schedule) return;
-    const handCount = Number(hands);
-    if (!Number.isInteger(handCount) || handCount < 1 || handCount > 100) {
-      setError("Hands must be a whole number from 1 to 100.");
+    const needsBenchmark = schedule.season.rules?.pairingMode === "gauntlet";
+    if (needsBenchmark && !benchmarkAgentId) {
+      setError("Choose one enrolled agent as the benchmark before locking the gauntlet.");
       return;
     }
     setBusy("lock");
@@ -406,7 +459,7 @@ export function VeilArenaConsole() {
       const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(schedule.season.id)}/lock`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": freshKey("lock") },
-        body: JSON.stringify({ hands: handCount }),
+        body: JSON.stringify(needsBenchmark ? { benchmarkAgentId } : {}),
       });
       const body = await readEnvelope<Schedule>(response);
       if (!response.ok || !body.ok) {
@@ -795,18 +848,47 @@ export function VeilArenaConsole() {
             <section className="operator-panel operator-panel-wide" aria-labelledby="season-create-title">
               <header className="operator-panel-head"><div><span>02 / COMPETITION SETUP</span><h2 id="season-create-title">Create a season</h2></div><strong>{seasons.length} SAVED</strong></header>
               <form className="operator-form" onSubmit={(event) => void createSeason(event)}>
+                <fieldset className="operator-template-fieldset">
+                  <legend>CHOOSE A FORMAT</legend>
+                  <div className="operator-template-grid">
+                    {TOURNAMENT_TEMPLATES.map((template) => (
+                      <button
+                        type="button"
+                        key={template.id}
+                        className={`operator-template-card ${templateId === template.id ? "is-selected" : ""}`}
+                        aria-pressed={templateId === template.id}
+                        onClick={() => setTemplateId(template.id)}
+                      >
+                        <span>{template.name}</span>
+                        <strong>{template.summary}</strong>
+                        <small>{template.bestFor}</small>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
                 <label>SEASON NAME<input value={seasonName} onChange={(event) => setSeasonName(event.target.value)} placeholder="Season 01" required /></label>
-                <label>RULESET<input value={rulesetVersion} onChange={(event) => setRulesetVersion(event.target.value)} required /></label>
                 <label>STARTS AT<input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required /></label>
                 <label>LOCKS AT<input type="datetime-local" value={locksAt} onChange={(event) => setLocksAt(event.target.value)} required /></label>
                 <label>ENDS AT<input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required /></label>
-                <label>WHO CAN ENTER<select value={entryMode} onChange={(event) => setEntryMode(event.target.value as Season["entryMode"])}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PROJECT MEMBERS ONLY</option></select></label>
-                <label>ENTRY LIMIT<input type="number" min="2" max="32" value={maxEntries} onChange={(event) => setMaxEntries(event.target.value)} required /></label>
+                {templateId === "custom" ? <>
+                  <label>PAIRING STYLE<select value={customPairingMode} onChange={(event) => setCustomPairingMode(event.target.value as TournamentPairingMode)}><option value="round_robin">EVERY AGENT MEETS</option><option value="duel_series">TWO-AGENT SERIES</option><option value="gauntlet">BENCHMARK GAUNTLET</option></select></label>
+                  <label>WHO CAN ENTER<select value={entryMode} onChange={(event) => setEntryMode(event.target.value as Season["entryMode"])}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PROJECT MEMBERS ONLY</option></select></label>
+                  <label>ENTRY LIMIT<input type="number" min="2" max="32" value={maxEntries} onChange={(event) => setMaxEntries(event.target.value)} required /></label>
+                  <label>HANDS PER MATCH<input type="number" min="1" max="100" value={customHands} onChange={(event) => setCustomHands(event.target.value)} required /></label>
+                  <label>MEETINGS PER PAIR<input type="number" min="1" max="5" value={customEncounters} onChange={(event) => setCustomEncounters(event.target.value)} required /></label>
+                  <label>AGENT UPDATES<select value={customResubmission} onChange={(event) => setCustomResubmission(event.target.value as TournamentResubmissionPolicy)}><option value="replace_until_lock">REPLACE UNTIL LOCK</option><option value="fixed">FIXED AFTER ENTRY</option></select></label>
+                  <label>REWARD RULE<select value={customReward} onChange={(event) => setCustomReward(event.target.value as TournamentRewardPolicy)}><option value="optional">OPTIONAL REWARD</option><option value="funded_before_start">FUND BEFORE PLAY</option></select></label>
+                </> : null}
+                {draftRules ? <div className="operator-rule-preview" role="status">
+                  <span>{draftRules.pairingMode.replaceAll("_", " ").toUpperCase()}</span>
+                  <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} hands / {draftRules.encountersPerPair} meeting{draftRules.encountersPerPair === 1 ? "" : "s"}</strong>
+                  <small>Strategies stay sealed. Only the losing committed action may be revealed.</small>
+                </div> : <div className="operator-rule-preview is-error" role="alert">The custom limits do not form a valid tournament.</div>}
                 <button className="operator-button operator-button-dark" type="submit" disabled={busy !== ""}>{busy === "create" ? "CREATING" : "CREATE SEASON"}<span>+</span></button>
               </form>
               <div className="operator-season-list">
                 <div className="operator-subhead"><span>YOUR SEASONS</span><small>{openSeasons.length} OPEN</small></div>
-                {seasons.map((season) => <button type="button" key={season.id} className={`operator-season-row ${schedule?.season.id === season.id ? "is-selected" : ""}`} onClick={() => void loadSchedule(season.id)}><span>{season.status.toUpperCase()}</span><strong>{season.name}</strong><small>{season.entryCount}/{season.maxEntries} ENTRIES / {season.entryMode === "open" ? "PUBLIC" : "INVITE"}</small></button>)}
+                {seasons.map((season) => <button type="button" key={season.id} className={`operator-season-row ${schedule?.season.id === season.id ? "is-selected" : ""}`} onClick={() => void loadSchedule(season.id)}><span>{season.status.toUpperCase()}</span><strong>{season.name}</strong><small>{season.entryCount}/{season.maxEntries} ENTRIES / {(season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</small></button>)}
                 {!seasons.length ? <p className="operator-muted">No seasons are recorded for this project.</p> : null}
               </div>
             </section>
@@ -823,8 +905,12 @@ export function VeilArenaConsole() {
 
             {schedule ? <section className="operator-panel operator-panel-wide" aria-labelledby="schedule-title">
               <header className="operator-panel-head"><div><span>04 / DRAW CONTROL</span><h2 id="schedule-title">{schedule.season.name}</h2></div><strong>{schedule.season.status.toUpperCase()}</strong></header>
-              <div className="operator-schedule-meta"><span>{schedule.entries.length} AGENTS</span><span>{schedule.matches.length} PAIRINGS</span><span>RULESET {schedule.season.rulesetVersion.toUpperCase()}</span><span>LOCK {readableDate(schedule.season.locksAt)}</span></div>
-              {schedule.season.status === "open" ? <div className="operator-lock-bar"><label htmlFor="hands">HANDS PER PAIRING<input id="hands" type="number" min="1" max="100" value={hands} onChange={(event) => setHands(event.target.value)} /></label><p>Locking closes entry and creates the round-robin match list. You cannot change the roster afterward.</p><button type="button" className="operator-button operator-button-dark" onClick={() => void lockSeason()} disabled={busy !== "" || schedule.entries.length < 2}>{busy === "lock" ? "LOCKING" : "LOCK DRAW"}<span>→</span></button></div> : null}
+              <div className="operator-schedule-meta"><span>{schedule.entries.length} AGENTS</span><span>{schedule.season.workload?.pairingCount ?? schedule.matches.length} PAIRINGS</span><span>{(schedule.season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</span><span>LOCK {readableDate(schedule.season.locksAt)}</span>{schedule.season.rulesCommitment ? <span>RULES {shortCommitment(schedule.season.rulesCommitment)}</span> : null}</div>
+              {schedule.season.status === "open" ? <div className="operator-lock-bar">
+                {schedule.season.rules?.pairingMode === "gauntlet" ? <label htmlFor="benchmark-agent">SEALED BENCHMARK<select id="benchmark-agent" value={benchmarkAgentId} onChange={(event) => setBenchmarkAgentId(event.target.value)}><option value="">CHOOSE AN ENROLLED AGENT</option>{schedule.entries.map((entry) => <option value={entry.agentId} key={entry.id}>{entry.displayName.toUpperCase()}</option>)}</select></label> : null}
+                <p>Locking freezes the roster and committed rules, then creates the exact match list. Strategies remain sealed.</p>
+                <button type="button" className="operator-button operator-button-dark" onClick={() => void lockSeason()} disabled={busy !== "" || schedule.entries.length < (schedule.season.rules?.minEntries ?? 2) || (schedule.season.rules?.pairingMode === "gauntlet" && !benchmarkAgentId)}>{busy === "lock" ? "LOCKING" : "LOCK DRAW"}<span>→</span></button>
+              </div> : null}
               <div className="operator-match-list">
                 {lockedMatches.map((match) => <article className="operator-match-row" key={match.id}><span className="operator-sequence">{String(match.sequence).padStart(2, "0")}</span><div><strong>{match.leftAgentId.toUpperCase()} <b>VS</b> {match.rightAgentId.toUpperCase()}</strong><small>{match.hands} HANDS / {match.status.toUpperCase()}{match.matchId ? ` / ${shortCommitment(match.matchId)}` : ""}</small></div><button type="button" className="operator-run-button" onClick={() => void runMatch(match)} disabled={match.status === "completed" || match.status === "running" || busy !== ""}>{busy === `run-${match.id}` ? "RUNNING" : match.status === "completed" ? "DONE" : "RUN"}</button></article>)}
                 {!lockedMatches.length ? <p className="operator-muted">Lock the season to create real pairings.</p> : null}
