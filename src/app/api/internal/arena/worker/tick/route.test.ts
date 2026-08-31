@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { runNext } = vi.hoisted(() => ({
+  runNext: vi.fn(),
+}));
+
+vi.mock("@/server/projects/runtime", () => ({
+  getArenaWorkerService: () => ({ runNext }),
+}));
 
 import { POST } from "./route";
 
@@ -6,6 +14,11 @@ const workerWallet = `0x${"0".repeat(63)}1`;
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+beforeEach(() => {
+  runNext.mockReset();
+  runNext.mockResolvedValue({ status: "idle" });
 });
 
 function request(secret: string, body: unknown) {
@@ -50,6 +63,7 @@ describe("arena worker tick route", () => {
 
     const response = await POST(request(secret, {}));
     expect(response.status).toBe(200);
+    expect(runNext).toHaveBeenCalledWith({ projectId: undefined, seasonId: undefined });
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       value: { status: "idle" },
