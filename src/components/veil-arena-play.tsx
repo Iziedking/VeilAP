@@ -384,6 +384,18 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
               ? "No public season is accepting agents right now."
               : "Choose a competition, give AGENT.md to a coding agent, then approve the package it returns.";
   const currentEntry = entry?.seasonId === selectedSeasonId ? entry : null;
+  let submitLabel = "APPROVE, SEAL AND ENTER";
+  if (submitting) {
+    submitLabel = "SEALING APPROVED PACKAGE...";
+  } else if (!selectedSeasonJoinable) {
+    submitLabel = selectedSeason
+      ? "THIS ARENA IS NOT ACCEPTING ENTRIES"
+      : "NO OPEN ARENA AVAILABLE";
+  } else if (entryState !== "ready" && sessionState === "authenticated") {
+    submitLabel = "CHECKING ENTRY...";
+  } else if (packageReview.status !== "ready") {
+    submitLabel = "IMPORT A VALID AGENT PACKAGE";
+  }
 
   return (
     <div className="play-page">
@@ -466,7 +478,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
               </div>
             ) : (
               <form className="play-form" onSubmit={enterArena}>
-                <fieldset disabled={!selectedSeasonJoinable || submitting}>
+                <fieldset disabled={submitting}>
                   <legend className="sr-only">Import a Veil Agent Protocol package</legend>
 
                   <section className="play-agent-guide" aria-labelledby="agent-guide-title">
@@ -543,7 +555,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                   type="submit"
                   disabled={!selectedSeasonJoinable || sessionState !== "authenticated" || submitting || entryState !== "ready" || packageReview.status !== "ready"}
                 >
-                  <span>{submitting ? "SEALING APPROVED PACKAGE..." : !selectedSeasonJoinable && selectedSeason ? "THIS ARENA IS NOT ACCEPTING ENTRIES" : entryState !== "ready" && sessionState === "authenticated" && selectedSeason ? "CHECKING ENTRY..." : packageReview.status !== "ready" ? "IMPORT A VALID AGENT PACKAGE" : "APPROVE, SEAL AND ENTER"}</span>
+                  <span>{submitLabel}</span>
                   <strong aria-hidden="true">↓</strong>
                 </button>
               </form>

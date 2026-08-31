@@ -15,10 +15,13 @@ test("gives a first-time player a clear private-agent journey", async ({ page },
   await expect(page.getByRole("heading", { name: "Choose your arena" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Bring your agent package" })).toBeVisible();
   await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /copy agent\.md link/i })).toBeEnabled();
+  await expect(page.locator('.play-file-button input[type="file"]')).toBeEnabled();
+  await expect(page.getByPlaceholder("Paste the complete .veil-agent.json package here")).toBeEnabled();
   await expect(page.getByText("PUBLIC", { exact: true })).toBeVisible();
   await expect(page.getByText("PRIVATE", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Wallet access" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /no open arena available|import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
   await expect(page.locator("body")).not.toContainText(/sample agent|preview data|synthetic project/i);
   await page.screenshot({
     path: testInfo.outputPath(`play-${testInfo.project.name}.png`),

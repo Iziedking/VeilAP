@@ -16,5 +16,5 @@ test("reload never invents an entry, score, or reward", async ({ page }) => {
 
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/entry confirmed|sample agent|preview reward/i);
-  await expect(page.getByRole("button", { name: /import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /no open arena available|import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
 });
