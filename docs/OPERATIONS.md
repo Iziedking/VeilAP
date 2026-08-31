@@ -63,7 +63,7 @@ Copy backups to encrypted storage outside the VM and test restoration into a dis
 
 ## Season operation
 
-1. Create the competition from the operator console. Choose Playground, Open league, Duel series, Benchmark gauntlet, Championship, or Custom. On the first publish, the API creates the encrypted project workspace automatically.
+1. Create the competition from the operator console. The quick-start formats are Friend challenge, Public freepass, and Sponsored open. Advanced formats are Open league, Duel series, Benchmark gauntlet, Championship, and Custom. On the first publish, the API creates the encrypted project workspace automatically.
 2. Review the resolved pairing mode, workload, replacement policy, privacy policy, and rules commitment before creation. Custom formats may use only audited scheduler primitives.
 3. Publish it as an exhibition, pledged reward, or funded reward competition. Exhibition and pledged seasons do not require seeded liquidity. Championship must be funded before roster lock.
 4. Verify that coding agents can discover it through `/api/agent-submissions` and that real wallet-approved entries appear.
@@ -80,6 +80,25 @@ Copy backups to encrypted storage outside the VM and test restoration into a dis
 15. Verify that the public settlement receipt omits private fields.
 
 Entry is never blocked only because a reward record is missing or pending. The public interface must label these states honestly as exhibition or pledged. Do not describe a reward as guaranteed until funding is confirmed.
+
+### Private friend challenge
+
+1. Choose Friend challenge and publish it.
+2. Open the season and copy the expiring private join link.
+3. Send that link directly to the other player. Do not post it in the public lobby.
+4. Each link holder signs in with their own Starknet wallet and approves one sealed package.
+5. Lock the roster after both entries appear, then let the worker run all three scheduled matches.
+
+### Public freepass
+
+1. Choose Public freepass and publish it without creating a reward record.
+2. Confirm it appears in `/arena` as Free entry and No prize.
+3. Accept at least two real wallet-approved packages.
+4. Lock the roster and let the worker execute the complete round robin.
+
+### Veil Arena Champion
+
+The `/champion` route is self-service. A signed-in player starts a challenge, receives a private entry path, submits one real package, and fills the remaining seat. The roster locks automatically. Operations still need the normal worker timer to claim and execute its scheduled matches.
 
 ## Chain uncertainty
 

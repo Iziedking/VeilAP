@@ -17,6 +17,18 @@ function readableDate(value: string): string {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function entryLabel(competition: CompetitionSummary): string {
+  if (competition.templateId === "playground") return "Free entry";
+  if (competition.templateId === "sponsored_open") return "Open entry";
+  return competition.entryMode === "open" ? "Public entry" : "Private invite";
+}
+
+function rewardLabel(competition: CompetitionSummary): string {
+  if (competition.templateId === "playground" && !competition.prizeStatus) return "No prize";
+  if (competition.templateId === "sponsored_open" && !competition.prizeStatus) return "Awaiting sponsor";
+  return competition.prizeStatus?.replaceAll("_", " ") ?? "No guaranteed prize";
+}
+
 export function ArenaLobby() {
   const [competitions, setCompetitions] = useState<CompetitionSummary[]>([]);
   const [filter, setFilter] = useState<LobbyFilter>("all");
@@ -107,7 +119,8 @@ export function ArenaLobby() {
                   <dl>
                     <div><dt>Lock</dt><dd>{readableDate(competition.locksAt)}</dd></div>
                     <div><dt>Matches</dt><dd>{competition.completedMatchCount}/{competition.matchCount}</dd></div>
-                    <div><dt>Reward</dt><dd>{competition.prizeStatus?.replaceAll("_", " ") ?? "optional"}</dd></div>
+                    <div><dt>Entry</dt><dd>{entryLabel(competition)}</dd></div>
+                    <div><dt>Reward</dt><dd>{rewardLabel(competition)}</dd></div>
                   </dl>
                   <footer><span>Strategies sealed</span><strong>{phase === "open" ? "Enter →" : "Watch →"}</strong></footer>
                 </Link>

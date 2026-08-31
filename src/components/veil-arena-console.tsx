@@ -35,6 +35,9 @@ import { WalletPicker } from "@/components/wallet/wallet-picker";
 
 type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
 
+const quickStartTemplates = TOURNAMENT_TEMPLATES.filter((template) => template.group === "quick_start");
+const advancedTemplates = TOURNAMENT_TEMPLATES.filter((template) => template.group === "advanced");
+
 type Project = {
   id: string;
   name: string;
@@ -249,6 +252,7 @@ export function VeilArenaConsole() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [privateInvitation, setPrivateInvitation] = useState("");
 
   const openSeasons = useMemo(() => seasons.filter((season) => season.status === "open"), [seasons]);
   const lockedMatches = schedule?.matches ?? [];
@@ -328,6 +332,7 @@ export function VeilArenaConsole() {
     setBusy("schedule");
     setError("");
     setNotice("");
+    setPrivateInvitation("");
     try {
       const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}`);
       const body = await readEnvelope<Schedule>(response);
@@ -438,9 +443,40 @@ export function VeilArenaConsole() {
       setSeasonName("");
       setSchedule({ season: body.value, entries: [], matches: [] });
       window.history.replaceState({}, "", `/arena-console?project=${encodeURIComponent(targetProjectId)}&season=${encodeURIComponent(body.value.id)}`);
-      setNotice(`${body.value.name} is open for entries.`);
+      setPrivateInvitation("");
+      setNotice(body.value.entryMode === "invite_only"
+        ? `${body.value.name} is ready. Copy its private join link next.`
+        : `${body.value.name} is open for entries.`);
     } catch {
       setError("The season could not be created.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function copyPrivateInvitation() {
+    if (!schedule || schedule.season.entryMode !== "invite_only") return;
+    setBusy("invitation");
+    setError("");
+    setNotice("");
+    try {
+      const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(schedule.season.id)}/invitation`, {
+        method: "POST",
+      });
+      const body = await readEnvelope<{ url: string; expiresAt: string }>(response);
+      if (!response.ok || !body.ok) {
+        setError(friendlyError(body.ok ? "INVITATION_FAILED" : body.code));
+        return;
+      }
+      setPrivateInvitation(body.value.url);
+      try {
+        await navigator.clipboard.writeText(body.value.url);
+        setNotice(`Private join link copied. It expires ${readableDate(body.value.expiresAt)}.`);
+      } catch {
+        setNotice(`Private join link created. Copy it from the field below before ${readableDate(body.value.expiresAt)}.`);
+      }
+    } catch {
+      setError("The private join link could not be created.");
     } finally {
       setBusy("");
     }
@@ -864,9 +900,9 @@ export function VeilArenaConsole() {
               <header className="operator-panel-head"><div><span>01 / FORMAT AND ENTRY</span><h2 id="season-create-title">Create a competition</h2></div><strong>{seasons.length} SAVED</strong></header>
               <form className="operator-form" onSubmit={(event) => void createSeason(event)}>
                 <fieldset className="operator-template-fieldset">
-                  <legend>CHOOSE A FORMAT</legend>
+                  <legend>WHAT ARE YOU HOSTING?</legend>
                   <div className="operator-template-grid">
-                    {TOURNAMENT_TEMPLATES.map((template) => (
+                    {quickStartTemplates.map((template) => (
                       <button
                         type="button"
                         key={template.id}
@@ -879,7 +915,35 @@ export function VeilArenaConsole() {
                         <small>{template.bestFor}</small>
                       </button>
                     ))}
+                    <article className="operator-template-card is-blocked">
+                      <span>Stake match</span>
+                      <strong>Both players stake. Winner takes the pool.</strong>
+                      <small>Unavailable until the escrow contract is audited.</small>
+                    </article>
+                    <article className="operator-template-card is-blocked">
+                      <span>Split rewards</span>
+                      <strong>Share a funded pool across the top finishers.</strong>
+                      <small>Unavailable until multi-recipient settlement is enforced.</small>
+                    </article>
                   </div>
+                  <details className="operator-advanced-formats">
+                    <summary>Advanced formats</summary>
+                    <div className="operator-template-grid">
+                      {advancedTemplates.map((template) => (
+                        <button
+                          type="button"
+                          key={template.id}
+                          className={`operator-template-card ${templateId === template.id ? "is-selected" : ""}`}
+                          aria-pressed={templateId === template.id}
+                          onClick={() => setTemplateId(template.id)}
+                        >
+                          <span>{template.name}</span>
+                          <strong>{template.summary}</strong>
+                          <small>{template.bestFor}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
                 </fieldset>
                 <label>SEASON NAME<input value={seasonName} onChange={(event) => setSeasonName(event.target.value)} placeholder="Season 01" required /></label>
                 <label>STARTS AT<input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required /></label>
@@ -891,7 +955,7 @@ export function VeilArenaConsole() {
                     const nextEntryMode = event.target.value as Season["entryMode"];
                     setEntryMode(nextEntryMode);
                     if (nextEntryMode === "invite_only") setCustomResubmission("fixed");
-                  }}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PROJECT MEMBERS ONLY</option></select></label>
+                  }}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PRIVATE LINK HOLDERS</option></select></label>
                   <label>ENTRY LIMIT<input type="number" min="2" max="32" value={maxEntries} onChange={(event) => setMaxEntries(event.target.value)} required /></label>
                   <label>HANDS PER MATCH<input type="number" min="1" max="100" value={customHands} onChange={(event) => setCustomHands(event.target.value)} required /></label>
                   <label>MEETINGS PER PAIR<input type="number" min="1" max="5" value={customEncounters} onChange={(event) => setCustomEncounters(event.target.value)} required /></label>
@@ -925,6 +989,11 @@ export function VeilArenaConsole() {
             {schedule ? <section className="operator-panel operator-panel-wide" aria-labelledby="schedule-title">
               <header className="operator-panel-head"><div><span>03 / DRAW CONTROL</span><h2 id="schedule-title">{schedule.season.name}</h2></div><strong>{schedule.season.status.toUpperCase()}</strong></header>
               <div className="operator-schedule-meta"><span>{schedule.entries.length} AGENTS</span><span>{schedule.season.workload?.pairingCount ?? schedule.matches.length} PAIRINGS</span><span>{(schedule.season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</span><span>LOCK {readableDate(schedule.season.locksAt)}</span>{schedule.season.rulesCommitment ? <span>RULES {shortCommitment(schedule.season.rulesCommitment)}</span> : null}</div>
+              {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" ? <div className="operator-invite-bar">
+                <div><span>PRIVATE ENTRY</span><strong>Send one expiring link to your challenger.</strong><small>The link grants entry to this competition only. Strategies and payout details remain sealed.</small></div>
+                <button type="button" className="operator-button operator-button-signal" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : privateInvitation ? "COPY A FRESH LINK" : "COPY PRIVATE JOIN LINK"}<span>↗</span></button>
+                {privateInvitation ? <input aria-label="Private join link" value={privateInvitation} readOnly onFocus={(event) => event.currentTarget.select()} /> : null}
+              </div> : null}
               {schedule.season.status === "open" ? <div className="operator-lock-bar">
                 {schedule.season.rules?.pairingMode === "gauntlet" ? <label htmlFor="benchmark-agent">SEALED BENCHMARK<select id="benchmark-agent" value={benchmarkAgentId} onChange={(event) => setBenchmarkAgentId(event.target.value)}><option value="">CHOOSE AN ENROLLED AGENT</option>{schedule.entries.map((entry) => <option value={entry.agentId} key={entry.id}>{entry.displayName.toUpperCase()}</option>)}</select></label> : null}
                 <p>Locking freezes the roster and committed rules, then creates the exact match list. Strategies remain sealed.</p>

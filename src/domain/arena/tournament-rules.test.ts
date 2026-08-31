@@ -16,7 +16,7 @@ const entries = [
 
 describe("tournament rules", () => {
   it("resolves immutable privacy rules for every preset", () => {
-    for (const templateId of ["playground", "open_league", "duel_series", "benchmark_gauntlet", "championship"] as const) {
+    for (const templateId of ["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship"] as const) {
       const rules = resolveTournamentRules({ templateId });
       expect(rules.strategyVisibility).toBe("sealed");
       expect(rules.revealPolicy).toBe("loser_action_only");
@@ -44,6 +44,38 @@ describe("tournament rules", () => {
       ["CINDER", "NIGHTJAR"],
       ["NIGHTJAR", "CINDER"],
     ]);
+  });
+
+  it("keeps friend challenges private and fixed after entry", () => {
+    const rules = resolveTournamentRules({ templateId: "friend_challenge" });
+    expect(rules).toMatchObject({
+      pairingMode: "duel_series",
+      entryMode: "invite_only",
+      minEntries: 2,
+      maxEntries: 2,
+      resubmissionPolicy: "fixed",
+      rewardPolicy: "optional",
+    });
+  });
+
+  it("builds the champion challenge as a private three-match benchmark", () => {
+    expect(resolveTournamentRules({ templateId: "champion_challenge" })).toMatchObject({
+      entryMode: "invite_only",
+      pairingMode: "duel_series",
+      minEntries: 2,
+      maxEntries: 2,
+      encountersPerPair: 3,
+      handsPerMatch: 12,
+      rewardPolicy: "optional",
+    });
+  });
+
+  it("opens sponsored competitions publicly but requires funding before play", () => {
+    expect(resolveTournamentRules({ templateId: "sponsored_open" })).toMatchObject({
+      entryMode: "open",
+      rewardPolicy: "funded_before_start",
+      maxEntries: 16,
+    });
   });
 
   it("requires an enrolled benchmark for a gauntlet", () => {

@@ -42,6 +42,7 @@ export interface ProjectServiceDependencies {
   repositories: ProjectRepository;
   keyProvider: KeyProvider;
   walletHashPepper: string;
+  systemWorkerWalletAddress?: string;
   now?: () => Date;
   idFactory?: () => string;
 }
@@ -84,6 +85,7 @@ export class ProjectService {
   private readonly repositories: ProjectRepository;
   private readonly keyProvider: KeyProvider;
   private readonly walletHashPepper: string;
+  private readonly systemWorkerWalletAddress?: string;
   private readonly now: () => Date;
   private readonly idFactory: () => string;
 
@@ -91,6 +93,7 @@ export class ProjectService {
     this.repositories = dependencies.repositories;
     this.keyProvider = dependencies.keyProvider;
     this.walletHashPepper = dependencies.walletHashPepper;
+    this.systemWorkerWalletAddress = dependencies.systemWorkerWalletAddress?.trim() || undefined;
     this.now = dependencies.now ?? (() => new Date());
     this.idFactory = dependencies.idFactory ?? randomUUID;
   }
@@ -120,6 +123,17 @@ export class ProjectService {
         role: "company",
         createdAt,
       });
+      if (this.systemWorkerWalletAddress) {
+        const workerFingerprint = actorFingerprint(this.systemWorkerWalletAddress, this.walletHashPepper);
+        if (workerFingerprint !== ownerFingerprint) {
+          await this.repositories.saveMember({
+            projectId: id,
+            walletFingerprint: workerFingerprint,
+            role: "reviewer",
+            createdAt,
+          });
+        }
+      }
       await this.writeAudit(id, ownerFingerprint, "project_created", commitment({ projectId: id, nameDigest: commitment(name) }));
       return {
         ok: true,

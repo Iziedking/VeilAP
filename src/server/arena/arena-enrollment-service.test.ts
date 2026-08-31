@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
 import { resolveTournamentRules, tournamentRulesCommitment } from "@/domain/arena/tournament-rules";
+import { VEIL_ARENA_CHAMPION, VEIL_ARENA_CHAMPION_AGENT_ID } from "@/domain/arena/veil-arena-champion";
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import { decryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
@@ -411,6 +412,57 @@ describe("ArenaEnrollmentService", () => {
       policy: policy("Ember", "check"),
       idempotencyKey: "join-ember-005",
     })).resolves.toEqual({ ok: false, code });
+  });
+
+  it("admits a signed wallet to an invite-only season only through the invitation path", async () => {
+    const privateRules = resolveTournamentRules({ templateId: "friend_challenge" });
+    const { projectId, season, service } = await setup({
+      entryMode: "invite_only",
+      maxEntries: 2,
+      templateId: "friend_challenge",
+      rulesSnapshot: privateRules,
+      rulesCommitment: tournamentRulesCommitment(privateRules),
+    });
+    const common = {
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "FRIEND_01",
+      policy: agentPackage("FRIEND_01", "Friend one"),
+      idempotencyKey: "join-friend-private-001",
+    };
+    await expect(service.enroll(common)).resolves.toEqual({ ok: false, code: "ARENA_SEASON_NOT_PUBLIC" });
+    await expect(service.enroll({ ...common, admission: "invite" })).resolves.toMatchObject({
+      ok: true,
+      value: { agentId: "FRIEND_01" },
+    });
+  });
+
+  it("seals a system benchmark without binding it to a player or payout wallet", async () => {
+    const championRules = resolveTournamentRules({ templateId: "champion_challenge" });
+    const { repositories, projectId, season, service } = await setup({
+      entryMode: "invite_only",
+      maxEntries: 2,
+      templateId: "champion_challenge",
+      rulesSnapshot: championRules,
+      rulesCommitment: tournamentRulesCommitment(championRules),
+    });
+    await expect(service.enrollSystem({
+      projectId,
+      seasonId: season.id,
+      agentId: VEIL_ARENA_CHAMPION_AGENT_ID,
+      policy: VEIL_ARENA_CHAMPION,
+      idempotencyKey: "seed-veil-champion-001",
+    })).resolves.toMatchObject({
+      ok: true,
+      value: { agentId: VEIL_ARENA_CHAMPION_AGENT_ID, displayName: "Veil Arena Champion" },
+    });
+    const entry = await repositories.projects.getArenaSeasonEntry(projectId, season.id, VEIL_ARENA_CHAMPION_AGENT_ID);
+    const artifact = await repositories.projects.getArenaStrategyArtifact(projectId, VEIL_ARENA_CHAMPION_AGENT_ID);
+    expect(entry?.ownerFingerprint).toBeUndefined();
+    expect(entry?.encryptedPayoutWallet).toBeUndefined();
+    expect(artifact?.ownerFingerprint).toBeUndefined();
+    expect(JSON.stringify(artifact?.encryptedPolicy)).not.toContain("minHandStrength");
   });
 
   it("returns only the authenticated wallet's entry", async () => {

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { openArenaInvitation } from "@/server/arena/arena-invitation-token";
 import { readRequestActor } from "@/server/auth/request-actor";
+import { getSessionSecret } from "@/server/auth/runtime";
 import { JsonBodyError, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
-import { getArenaEnrollmentService } from "@/server/projects/runtime";
+import { getArenaEnrollmentService, getArenaSeasonService } from "@/server/projects/runtime";
 
 export const runtime = "nodejs";
 
@@ -12,6 +14,7 @@ const requestSchema = z.object({
   agentId: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9][A-Za-z0-9_-]+$/),
   policy: z.unknown(),
   replaceExisting: z.boolean().optional().default(false),
+  invitationToken: z.string().trim().min(32).max(4_096).optional(),
 }).strict();
 
 type JoinRouteContext = {
@@ -26,7 +29,15 @@ export async function POST(request: Request, context: JoinRouteContext) {
     if (!idempotencyKey) return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     const { projectId, seasonId } = await context.params;
     const input = requestSchema.parse(await readJsonBody(request));
-    return serviceResponse(await getArenaEnrollmentService().enroll({
+    let admission: "public" | "invite" = "public";
+    if (input.invitationToken) {
+      const invitation = openArenaInvitation({ token: input.invitationToken, secret: getSessionSecret() });
+      if (invitation.projectId !== projectId || invitation.seasonId !== seasonId) {
+        return serviceResponse({ ok: false, code: "ARENA_INVITATION_INVALID" });
+      }
+      admission = "invite";
+    }
+    const enrollment = await getArenaEnrollmentService().enroll({
       projectId,
       seasonId,
       actorWalletAddress: actor.walletAddress,
@@ -34,7 +45,26 @@ export async function POST(request: Request, context: JoinRouteContext) {
       policy: input.policy,
       idempotencyKey,
       replaceExisting: input.replaceExisting,
-    }));
+      admission,
+    });
+    if (enrollment.ok) {
+      const seasonService = getArenaSeasonService();
+      const schedule = await seasonService.getPublicSchedule(projectId, seasonId);
+      if (
+        schedule.ok
+        && schedule.value.season.templateId === "champion_challenge"
+        && schedule.value.season.status === "open"
+        && schedule.value.entries.length === 2
+      ) {
+        await seasonService.lockSeason({
+          projectId,
+          seasonId,
+          actorWalletAddress: actor.walletAddress,
+          idempotencyKey: `champion-lock-${seasonId}`,
+        });
+      }
+    }
+    return serviceResponse(enrollment);
   } catch (error) {
     if (error instanceof JsonBodyError) {
       return NextResponse.json({ ok: false, code: error.code }, {
@@ -44,6 +74,12 @@ export async function POST(request: Request, context: JoinRouteContext) {
     }
     if (error instanceof Error && error.message === "CONFIGURATION_MISSING") {
       return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });
+    }
+    if (error instanceof Error && error.message === "ARENA_INVITATION_TOKEN_EXPIRED") {
+      return serviceResponse({ ok: false, code: "ARENA_INVITATION_EXPIRED" });
+    }
+    if (error instanceof Error && error.message === "ARENA_INVITATION_TOKEN_INVALID") {
+      return serviceResponse({ ok: false, code: "ARENA_INVITATION_INVALID" });
     }
     return serviceResponse({ ok: false, code: "INVALID_INPUT" });
   }

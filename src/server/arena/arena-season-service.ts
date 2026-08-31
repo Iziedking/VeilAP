@@ -657,7 +657,8 @@ export class ArenaSeasonService {
 
   async listAllPublicSeasons(): Promise<ArenaSeasonServiceResult<ArenaCompetitionSummaryView[]>> {
     try {
-      const records = await this.repositories.listAllArenaSeasons();
+      const records = (await this.repositories.listAllArenaSeasons())
+        .filter((record) => (record.entryMode ?? "invite_only") === "open");
       const values = await Promise.all(records.map(async (record) => {
         const [project, entries, matches, prizePool] = await Promise.all([
           this.repositories.getProject(record.projectId),

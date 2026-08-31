@@ -9,9 +9,9 @@ import { getArenaWorkerService } from "@/server/projects/runtime";
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
-  projectId: z.string().trim().min(1).max(200),
-  seasonId: z.string().trim().min(1).max(200),
-}).strict();
+  projectId: z.string().trim().min(1).max(200).optional(),
+  seasonId: z.string().trim().min(1).max(200).optional(),
+}).strict().refine((value) => Boolean(value.projectId) === Boolean(value.seasonId), "WORKER_TARGET_INCOMPLETE");
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });

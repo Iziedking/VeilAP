@@ -8,8 +8,11 @@ export const TOURNAMENT_RULES_SCHEMA_VERSION = 1 as const;
 export const TOURNAMENT_TEMPLATE_VERSION = 1 as const;
 
 export type TournamentTemplateId =
+  | "friend_challenge"
+  | "champion_challenge"
   | "playground"
   | "open_league"
+  | "sponsored_open"
   | "duel_series"
   | "benchmark_gauntlet"
   | "championship"
@@ -49,6 +52,7 @@ export interface CustomTournamentRulesInput {
 
 export interface TournamentTemplateDefinition {
   id: TournamentTemplateId;
+  group: "quick_start" | "advanced";
   name: string;
   summary: string;
   bestFor: string;
@@ -83,7 +87,7 @@ const sharedPrivacyRules = {
 
 const tournamentRulesSchema = z.object({
   schemaVersion: z.literal(TOURNAMENT_RULES_SCHEMA_VERSION),
-  templateId: z.enum(["playground", "open_league", "duel_series", "benchmark_gauntlet", "championship", "custom"]),
+  templateId: z.enum(["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship", "custom"]),
   templateVersion: z.literal(TOURNAMENT_TEMPLATE_VERSION),
   engineVersion: z.literal(ARENA_ENGINE_VERSION),
   pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
@@ -99,6 +103,30 @@ const tournamentRulesSchema = z.object({
 }).strict();
 
 const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules> = {
+  friend_challenge: {
+    ...sharedPrivacyRules,
+    templateId: "friend_challenge",
+    pairingMode: "duel_series",
+    entryMode: "invite_only",
+    minEntries: 2,
+    maxEntries: 2,
+    handsPerMatch: 8,
+    encountersPerPair: 3,
+    resubmissionPolicy: "fixed",
+    rewardPolicy: "optional",
+  },
+  champion_challenge: {
+    ...sharedPrivacyRules,
+    templateId: "champion_challenge",
+    pairingMode: "duel_series",
+    entryMode: "invite_only",
+    minEntries: 2,
+    maxEntries: 2,
+    handsPerMatch: 12,
+    encountersPerPair: 3,
+    resubmissionPolicy: "fixed",
+    rewardPolicy: "optional",
+  },
   playground: {
     ...sharedPrivacyRules,
     templateId: "playground",
@@ -122,6 +150,18 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     encountersPerPair: 1,
     resubmissionPolicy: "replace_until_lock",
     rewardPolicy: "optional",
+  },
+  sponsored_open: {
+    ...sharedPrivacyRules,
+    templateId: "sponsored_open",
+    pairingMode: "round_robin",
+    entryMode: "open",
+    minEntries: 4,
+    maxEntries: 16,
+    handsPerMatch: 12,
+    encountersPerPair: 1,
+    resubmissionPolicy: "replace_until_lock",
+    rewardPolicy: "funded_before_start",
   },
   duel_series: {
     ...sharedPrivacyRules,
@@ -163,14 +203,32 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
 
 export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
   {
+    id: "friend_challenge",
+    group: "quick_start",
+    name: "Friend challenge",
+    summary: "A private two-agent duel entered through one expiring link.",
+    bestFor: "Challenge someone you know",
+    rules: templates.friend_challenge,
+  },
+  {
     id: "playground",
-    name: "Playground",
+    group: "quick_start",
+    name: "Public freepass",
     summary: "A short public exhibition where every agent faces every other agent.",
     bestFor: "Fast demos and first competitions",
     rules: templates.playground,
   },
   {
+    id: "sponsored_open",
+    group: "quick_start",
+    name: "Sponsored open",
+    summary: "A public league whose sponsor reward must be funded before play.",
+    bestFor: "Open funded competitions",
+    rules: templates.sponsored_open,
+  },
+  {
     id: "open_league",
+    group: "advanced",
     name: "Open league",
     summary: "A public fixed-roster league with one match against every opponent.",
     bestFor: "Community competitions",
@@ -178,6 +236,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
   },
   {
     id: "duel_series",
+    group: "advanced",
     name: "Duel series",
     summary: "Two agents play three independently receipted matches.",
     bestFor: "Head-to-head challenges",
@@ -185,6 +244,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
   },
   {
     id: "benchmark_gauntlet",
+    group: "advanced",
     name: "Benchmark gauntlet",
     summary: "Every challenger faces one operator-selected sealed benchmark agent.",
     bestFor: "Agent evaluation",
@@ -192,6 +252,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
   },
   {
     id: "championship",
+    group: "advanced",
     name: "Championship",
     summary: "An invite-only round robin with funding required before play begins.",
     bestFor: "Guaranteed prize events",
@@ -199,6 +260,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
   },
   {
     id: "custom",
+    group: "advanced",
     name: "Custom",
     summary: "Combine approved pairing, admission, funding, and replacement rules.",
     bestFor: "Operators who need precise control",

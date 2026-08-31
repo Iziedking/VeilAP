@@ -41,4 +41,18 @@ describe("arena worker tick route", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
   });
+
+  it("accepts an empty target and discovers work globally", async () => {
+    const secret = "w".repeat(64);
+    vi.stubEnv("NEXT_PUBLIC_VEILAP_PREVIEW_MODE", "1");
+    vi.stubEnv("VEILAP_ARENA_WORKER_SECRET", secret);
+    vi.stubEnv("VEILAP_ARENA_WORKER_WALLET_ADDRESS", workerWallet);
+
+    const response = await POST(request(secret, {}));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      value: { status: "idle" },
+    });
+  });
 });

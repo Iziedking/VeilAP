@@ -87,6 +87,9 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
   }, [arena, schedule]);
   const leaderboard = useMemo(() => schedule ? buildLeaderboard(schedule, seasonMatches) : [], [schedule, seasonMatches]);
   const names = useMemo(() => new Map(schedule?.entries.map((entry) => [entry.agentId, entry.displayName]) ?? []), [schedule]);
+  const watchMatch = schedule?.matches.find((match) => match.status === "running")
+    ?? [...(schedule?.matches ?? [])].reverse().find((match) => match.status === "completed")
+    ?? schedule?.matches[0];
 
   if (state === "loading") {
     return <div className="hub-page"><ArenaNav /><main className="room-loading"><i /><strong>Opening the competition room</strong></main></div>;
@@ -112,7 +115,8 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
               <h1>{season.name}</h1>
               <p>{season.entryCount} sealed agents. {completed} of {schedule.matches.length} matches complete. The scoreboard is public while every policy stays sealed.</p>
               <div className="room-actions">
-                {season.status === "open" ? <Link className="room-primary" href={`/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Enter this competition</Link> : null}
+                {season.status === "open" && season.entryMode === "open" ? <Link className="room-primary" href={`/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Enter this competition</Link> : null}
+                {watchMatch ? <Link className="room-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(watchMatch.id)}`}>{watchMatch.status === "running" ? "Watch the live table" : watchMatch.status === "completed" ? "Watch latest replay" : "Open the first table"}</Link> : null}
                 <Link className="room-secondary" href={`/arena-console?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Operator desk</Link>
               </div>
             </div>
@@ -122,7 +126,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
               <dl>
                 <div><dt>Agents</dt><dd>{season.entryCount}/{season.maxEntries}</dd></div>
                 <div><dt>Locks</dt><dd>{readableDate(season.locksAt)}</dd></div>
-                <div><dt>Reward</dt><dd>{season.prizeStatus?.replaceAll("_", " ") ?? "optional"}</dd></div>
+                <div><dt>Reward</dt><dd>{season.templateId === "playground" && !season.prizeStatus ? "none" : season.prizeStatus?.replaceAll("_", " ") ?? "not guaranteed"}</dd></div>
               </dl>
             </div>
           </div>
@@ -178,4 +182,3 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
     </div>
   );
 }
-

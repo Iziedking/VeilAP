@@ -6,16 +6,46 @@ This demo must use persisted seasons, real wallet sessions, real match receipts,
 
 - Production frontend and API return 200 over HTTPS.
 - Health and protected readiness are green.
-- The default player-entry project in Vercel selects the intended persisted competition for direct `/play` links.
-- At least one public open competition exists. It may be exhibition, pledged, or funded.
-- Its template, rules commitment, replacement policy, and exact workload have been reviewed in the operator console.
-- Two real player wallets can enter, or two real entries already exist.
-- The operator wallet is the recorded sponsor.
-- The worker is configured for the correct project and season.
+- Two real Starknet wallets are available for the friend test.
+- Two real agent packages have been created from `AGENT.md`.
+- The worker can discover every locked season instead of relying on a hard-coded demo season.
 - Browser console and network panel are clean of unexpected failures.
 - A database backup exists.
 
 Stop the demo if any prerequisite is false. Explain the boundary instead of fabricating a result.
+
+## Demo one: private friend challenge
+
+1. Sign in as the host and open `/arena-console`.
+2. Choose **Friend challenge**, name the event, set the dates, and publish it.
+3. Open the saved season and choose **Copy private join link**.
+4. Send the link to the friend. The private competition must not appear in `/arena`.
+5. The friend opens the link, signs in with their own Starknet wallet, imports the package returned by their coding agent, reviews the commitment, and approves entry.
+6. The host enters their own package through the same private link.
+7. Confirm that the operator sees two aliases and two commitments, never either policy.
+8. Lock the draw. The worker runs three real seat-swapped matches.
+9. Open the competition room. Watch standings refresh, then open a match and play the verified hand-receipt replay.
+
+Expected result: a complete private-link entry journey, two wallet-owned agents, public results, and no public strategy or private cards.
+
+## Demo two: public freepass
+
+1. In `/arena-console`, choose **Public freepass** and publish without creating a reward.
+2. Open `/arena` in another browser. Confirm the competition says **Free entry** and **No prize**.
+3. Enter at least two real packages from separate wallet sessions.
+4. Lock the roster and let the worker run the complete round robin.
+5. Open the dedicated room. Switch between Matches, Leaderboard, and Rules while results arrive.
+
+Expected result: anybody can enter, no liquidity is required, rankings update from persisted receipts, and strategies remain sealed.
+
+## Optional opening: challenge the Champion
+
+1. Open `/champion` and choose **Start free challenge**.
+2. Sign in if asked. Veil Arena creates a private table and seals the real Champion package into seat one.
+3. Submit one real player package into seat two.
+4. Confirm the roster locks automatically, then open the room while the worker runs the three-match series.
+
+The Champion is a deterministic benchmark, not a fake account or prewritten result.
 
 ## Three-minute narrative
 
@@ -54,7 +84,7 @@ Open the dedicated competition room and select a completed match. Use the verifi
 - seed commitment and transcript root;
 - no strategy policy or private cards.
 
-The current worker publishes the hand sequence after execution completes. Call it a verified replay, not a live card stream.
+The match page shows the persisted worker state while execution is active. The current worker publishes the hand sequence after execution completes. Call it a live competition room followed by a verified replay, not a live card or reasoning stream.
 
 ### 1:55 to 2:25: selective disclosure
 
@@ -88,6 +118,10 @@ The game result can be public while the financial relationship remains private. 
 ### Is the reward escrowed?
 
 No. Version one uses a sponsor-controlled private STRK20 balance and a signed application plan. The system proves sponsor authorization plus finalized pool interaction, not contract-enforced escrow.
+
+### Can players stake today?
+
+No. The final demo uses free friend challenges, public freepass competitions, or sponsor-funded events. Player staking, winner-takes-all custody, and top-player splits remain unavailable until an audited escrow and distribution contract can enforce them.
 
 ### Can the operator steal a strategy?
 

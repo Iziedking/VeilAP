@@ -41,6 +41,22 @@ async function projectWithMembers() {
 }
 
 describe("ProjectService", () => {
+  it("grants the configured arena worker reviewer access to new competition workspaces", async () => {
+    const repositories = createMemoryRepositories();
+    const service = new ProjectService({
+      repositories: repositories.projects,
+      keyProvider: createTestKeyProvider(),
+      walletHashPepper: "test-wallet-pepper-0123456789012345",
+      systemWorkerWalletAddress: reviewer,
+    });
+    const created = await service.createProject({ name: "Worker-ready arena", walletAddress: company });
+    if (!created.ok) throw new Error(created.code);
+    await expect(service.getProject({ projectId: created.value.id, walletAddress: reviewer })).resolves.toMatchObject({
+      ok: true,
+      value: { roles: ["reviewer"] },
+    });
+  });
+
   it("creates immutable agreement versions", async () => {
     const { service, projectId } = await projectWithMembers();
     const first = await service.createAgreement({ projectId, actorWalletAddress: company, terms });

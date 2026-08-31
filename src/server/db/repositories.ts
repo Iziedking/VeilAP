@@ -433,6 +433,7 @@ export interface ProjectRepository extends ProjectKeyRepository {
   saveArenaEnrollment(input: {
     artifact: ArenaStrategyArtifactRecord;
     entry: ArenaSeasonEntryRecord;
+    admission: "public" | "invite" | "system";
     audit: AuditEventRecord;
     now: Date;
   }): Promise<void>;
@@ -1399,7 +1400,10 @@ export function createPostgresRepositories(db: VeilapDatabase): {
             const season = seasons[0];
             if (!season) throw new Error("ARENA_SEASON_NOT_FOUND");
             if (season.status !== "open") throw new Error("ARENA_SEASON_NOT_OPEN");
-            if (season.entryMode !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
+            const admissionAllowed = season.entryMode === "open"
+              ? input.admission === "public"
+              : input.admission === "invite" || input.admission === "system";
+            if (!admissionAllowed) throw new Error("ARENA_SEASON_NOT_PUBLIC");
             if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
             if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
             const totals = await tx
@@ -2135,7 +2139,10 @@ export function createMemoryRepositories(): {
         const season = arenaSeasonRows.get(input.entry.seasonId);
         if (!season || season.projectId !== input.entry.projectId) throw new Error("ARENA_SEASON_NOT_FOUND");
         if (season.status !== "open") throw new Error("ARENA_SEASON_NOT_OPEN");
-        if ((season.entryMode ?? "invite_only") !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
+        const admissionAllowed = (season.entryMode ?? "invite_only") === "open"
+          ? input.admission === "public"
+          : input.admission === "invite" || input.admission === "system";
+        if (!admissionAllowed) throw new Error("ARENA_SEASON_NOT_PUBLIC");
         if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
         if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
         const entries = [...arenaSeasonEntryRows.values()].filter((row) => row.projectId === input.entry.projectId && row.seasonId === input.entry.seasonId);

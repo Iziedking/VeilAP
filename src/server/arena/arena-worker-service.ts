@@ -11,7 +11,7 @@ export type ArenaWorkerTickResult = {
 };
 
 export interface ArenaWorkerServiceDependencies {
-  repositories: Pick<ProjectRepository, "listArenaScheduledMatches">;
+  repositories: Pick<ProjectRepository, "listAllArenaSeasons" | "listArenaScheduledMatches">;
   seasonService: Pick<ArenaSeasonService, "runScheduledMatch">;
   workerWalletAddress: string;
 }
@@ -27,13 +27,29 @@ export class ArenaWorkerService {
     this.workerWalletAddress = dependencies.workerWalletAddress.trim();
   }
 
-  async runNext(input: { projectId: string; seasonId: string }): Promise<ArenaWorkerTickResult> {
-    const projectId = input.projectId.trim();
-    const seasonId = input.seasonId.trim();
-    if (!projectId || !seasonId || !this.workerWalletAddress) {
+  async runNext(input: { projectId?: string; seasonId?: string } = {}): Promise<ArenaWorkerTickResult> {
+    const projectId = input.projectId?.trim() ?? "";
+    const seasonId = input.seasonId?.trim() ?? "";
+    if (!this.workerWalletAddress || Boolean(projectId) !== Boolean(seasonId)) {
       return { status: "failed", projectId, seasonId, errorCode: "INVALID_INPUT" };
     }
 
+    if (projectId && seasonId) return this.runNextForSeason(projectId, seasonId);
+
+    const seasons = (await this.repositories.listAllArenaSeasons())
+      .filter((season) => season.status === "locked")
+      .sort((left, right) => (
+        (left.lockedAt?.getTime() ?? left.createdAt.getTime()) - (right.lockedAt?.getTime() ?? right.createdAt.getTime())
+        || left.id.localeCompare(right.id)
+      ));
+    for (const season of seasons) {
+      const result = await this.runNextForSeason(season.projectId, season.id);
+      if (result.status !== "idle") return result;
+    }
+    return { status: "idle", projectId: "", seasonId: "" };
+  }
+
+  private async runNextForSeason(projectId: string, seasonId: string): Promise<ArenaWorkerTickResult> {
     const scheduledMatches = await this.repositories.listArenaScheduledMatches(projectId, seasonId);
     const next = scheduledMatches.find((match) => match.status === "scheduled" || match.status === "failed");
     if (!next) return { status: "idle", projectId, seasonId };

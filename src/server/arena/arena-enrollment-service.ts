@@ -161,11 +161,13 @@ export class ArenaEnrollmentService {
     policy: unknown;
     idempotencyKey: string;
     replaceExisting?: boolean;
+    admission?: "public" | "invite" | "system";
   }): Promise<ArenaEnrollmentResult<ArenaEnrollmentView>> {
     const projectId = input.projectId.trim();
     const seasonId = input.seasonId.trim();
     const agentId = input.agentId.trim().toUpperCase();
     const payoutWalletAddress = normalizeFeltAddress(input.actorWalletAddress);
+    const admission = input.admission ?? "public";
     if (
       !projectId
       || !seasonId
@@ -193,6 +195,7 @@ export class ArenaEnrollmentService {
         seasonId,
         agentId,
         artifactCommitment,
+        admission,
         ...(input.replaceExisting ? { replaceExisting: true } : {}),
       });
 
@@ -299,7 +302,10 @@ export class ArenaEnrollmentService {
       }
 
       if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_NOT_OPEN" };
-      if ((season.entryMode ?? "invite_only") !== "open") return { ok: false, code: "ARENA_SEASON_NOT_PUBLIC" };
+      const admissionAllowed = (season.entryMode ?? "invite_only") === "open"
+        ? admission === "public"
+        : admission === "invite" || admission === "system";
+      if (!admissionAllowed) return { ok: false, code: "ARENA_SEASON_NOT_PUBLIC" };
       if (now < season.startsAt) return { ok: false, code: "ARENA_SEASON_NOT_STARTED" };
       if (now >= season.locksAt) return { ok: false, code: "ARENA_SEASON_CLOSED" };
       const existingArtifact = await this.repositories.getArenaStrategyArtifact(projectId, agentId);
@@ -342,12 +348,13 @@ export class ArenaEnrollmentService {
       await this.repositories.saveArenaEnrollment({
         artifact,
         entry,
+        admission,
         now,
         audit: {
           id: this.idFactory(),
           projectId,
           actorFingerprint,
-          eventType: "public_arena_entry_registered",
+          eventType: admission === "public" ? "public_arena_entry_registered" : "private_arena_entry_registered",
           payloadDigest: commitment({
             seasonId,
             agentId,
@@ -381,6 +388,88 @@ export class ArenaEnrollmentService {
         } catch {
           return { ok: false, code: "PERSISTENCE_FAILED" };
         }
+      }
+      return { ok: false, code: mapError(error) };
+    }
+  }
+
+  async enrollSystem(input: {
+    projectId: string;
+    seasonId: string;
+    agentId: string;
+    policy: unknown;
+    idempotencyKey: string;
+  }): Promise<ArenaEnrollmentResult<ArenaEnrollmentView>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    const agentId = input.agentId.trim().toUpperCase();
+    if (!projectId || !seasonId || !agentIdPattern.test(agentId) || !idempotencyKeyPattern.test(input.idempotencyKey)) {
+      return { ok: false, code: "INVALID_INPUT" };
+    }
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const season = await this.repositories.getArenaSeason(projectId, seasonId);
+      if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      const parsedPolicy = parseStrategyArtifactPayload(input.policy);
+      if (!("protocolVersion" in parsedPolicy) || parsedPolicy.agentId !== agentId) {
+        return { ok: false, code: "INVALID_INPUT" };
+      }
+      const artifactCommitment = strategyPayloadCommitment(parsedPolicy);
+      const existing = await this.repositories.getArenaSeasonEntry(projectId, seasonId, agentId);
+      if (existing) return existing.artifactCommitment === artifactCommitment
+        ? { ok: true, value: view(existing, await this.repositories.listArenaEntryVersions(projectId, seasonId, existing.id)) }
+        : { ok: false, code: "STRATEGY_ARTIFACT_ALREADY_EXISTS" };
+
+      const now = this.now();
+      const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
+      const artifact = buildStrategyArtifact({
+        projectId,
+        agentId,
+        policy: parsedPolicy,
+        keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
+        now: () => now,
+        idFactory: this.idFactory,
+      });
+      const entryId = this.idFactory();
+      const actorFingerprint = commitment("veil-arena-system-agent");
+      const requestDigest = commitment({ seasonId, agentId, artifactCommitment, admission: "system" });
+      const entry: ArenaSeasonEntryRecord = {
+        id: entryId,
+        seasonId,
+        projectId,
+        agentId,
+        displayName: artifact.displayName,
+        artifactCommitment,
+        version: 1,
+        joinedAt: now,
+        idempotencyKey: input.idempotencyKey,
+        requestDigest,
+      };
+      await this.repositories.saveArenaEnrollment({
+        artifact,
+        entry,
+        admission: "system",
+        now,
+        audit: {
+          id: this.idFactory(),
+          projectId,
+          actorFingerprint,
+          eventType: "system_arena_entry_registered",
+          payloadDigest: requestDigest,
+          createdAt: now,
+        },
+      });
+      return { ok: true, value: view(entry) };
+    } catch (error) {
+      try {
+        const existing = await this.repositories.getArenaSeasonEntry(projectId, seasonId, agentId);
+        if (existing) {
+          return { ok: true, value: view(existing, await this.repositories.listArenaEntryVersions(projectId, seasonId, existing.id)) };
+        }
+      } catch {
+        return { ok: false, code: "PERSISTENCE_FAILED" };
       }
       return { ok: false, code: mapError(error) };
     }

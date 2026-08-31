@@ -8,6 +8,7 @@ export function ArenaNav() {
       <Link className="hub-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
       <nav aria-label="Main navigation">
         <Link href="/arena">Arena</Link>
+        <Link href="/champion">Champion</Link>
         <Link href="/play">Enter</Link>
         <Link href="/arena-console">Host</Link>
       </nav>
@@ -15,4 +16,3 @@ export function ArenaNav() {
     </header>
   );
 }
-

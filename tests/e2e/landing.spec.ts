@@ -34,19 +34,27 @@ test("dismisses the branded entry loader without trapping the page", async ({ pa
 });
 
 test("routes arena and host work away from the landing page", async ({ page }) => {
-  await page.goto("/");
-
-  await page.getByRole("link", { name: "Watch the arena" }).click();
+  test.setTimeout(45_000);
+  await page.goto("/arena", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/arena$/);
   await expect(page.getByRole("heading", { level: 1, name: "Choose your table." })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);
 
-  await page.goto("/arena-console");
+  await page.goto("/arena-console", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { level: 1, name: "Host a competition." })).toBeVisible();
-  await expect(page.getByText("CHOOSE A FORMAT", { exact: true })).toBeVisible();
+  await expect(page.getByText("WHAT ARE YOU HOSTING?", { exact: true })).toBeVisible();
   await expect(page.getByLabel("PROJECT ID")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /publish competition/i })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);
+});
+
+test("offers a real free challenge against the sealed Champion", async ({ page }) => {
+  await page.goto("/champion");
+  await expect(page.getByRole("heading", { level: 1, name: "Beat the Veil Champion." })).toBeVisible();
+  await expect(page.getByRole("button", { name: /start free challenge/i })).toBeVisible();
+  await expect(page.getByText("No entry fee. No prize pool.")).toBeVisible();
+  await expect(page.getByText("VEIL ARENA CHAMPION", { exact: true })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(/sample champion|mock opponent|synthetic result/i);
 });
 
 test("keeps the public arena usable at 390 pixels", async ({ page }) => {

@@ -163,6 +163,32 @@ describe("ArenaSeasonService", () => {
     })).resolves.toEqual({ ok: false, code: "ARENA_SEASON_TOO_SMALL" });
   });
 
+  it("keeps private friend challenges out of the public competition lobby", async () => {
+    const { projectId, service } = await setup();
+    const publicSeason = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-public-lobby-1",
+      templateId: "playground",
+      ...seasonInput,
+      name: "Public freepass",
+    });
+    const privateSeason = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-private-lobby-1",
+      templateId: "friend_challenge",
+      ...seasonInput,
+      name: "Private friend challenge",
+    });
+    expect(publicSeason.ok).toBe(true);
+    expect(privateSeason.ok).toBe(true);
+    await expect(service.listAllPublicSeasons()).resolves.toMatchObject({
+      ok: true,
+      value: [{ name: "Public freepass", entryMode: "open" }],
+    });
+  });
+
   it("claims, executes, and safely retries a scheduled pairing", async () => {
     const { repositories, projectId, service } = await setup();
     const created = await service.createSeason({

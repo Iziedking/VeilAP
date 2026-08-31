@@ -44,6 +44,7 @@ function dependencies() {
     repositories: getAuthRepositories().projects,
     keyProvider: projectKeyProvider(),
     walletHashPepper: config.walletHashPepper ?? "veilap-preview-wallet-pepper-0123456789012345",
+    systemWorkerWalletAddress: config.arenaWorkerWalletAddress,
     signer: config.receiptSigningPrivateKey && config.receiptSigningPublicKey
       ? createReceiptSigner({
         privateKeyBase64: config.receiptSigningPrivateKey,

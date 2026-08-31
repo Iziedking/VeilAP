@@ -10,15 +10,24 @@ export const metadata: Metadata = {
 export default async function PlayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ project?: string | string[] }>;
+  searchParams: Promise<{
+    project?: string | string[];
+    season?: string | string[];
+    invite?: string | string[];
+  }>;
 }) {
-  const queryProject = (await searchParams).project;
+  const parameters = await searchParams;
+  const queryProject = parameters.project;
   const projectId = (Array.isArray(queryProject) ? queryProject[0] : queryProject)?.trim()
     || process.env.NEXT_PUBLIC_VEIL_ARENA_PROJECT_ID?.trim()
     || "";
+  const querySeason = Array.isArray(parameters.season) ? parameters.season[0] : parameters.season;
+  const invitationToken = Array.isArray(parameters.invite) ? parameters.invite[0] : parameters.invite;
   return (
     <VeilArenaPlay
       defaultProjectId={projectId}
+      defaultSeasonId={querySeason?.trim() ?? ""}
+      invitationToken={invitationToken?.trim() ?? ""}
     />
   );
 }

@@ -54,7 +54,7 @@ function messageFor(code: string): string {
   return "We could not verify this wallet session. No payment or transfer was approved.";
 }
 
-export function WalletSessionButton() {
+export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string }) {
   const wallets = useDiscoveredWallets();
   const [flow, setFlow] = useState<FlowState>("checking-session");
   const [message, setMessage] = useState("");
@@ -172,7 +172,7 @@ export function WalletSessionButton() {
         <span>SESSION VERIFIED</span>
         <strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong>
         <p>You proved control of this wallet. No payment permission was requested.</p>
-        <Link className="sign-in-preview" href="/play">Enter the arena</Link>
+        <Link className="sign-in-preview" href={returnTo}>Continue to the arena</Link>
         <button className="wallet-logout" type="button" onClick={logout}>Sign out</button>
       </div>
     );

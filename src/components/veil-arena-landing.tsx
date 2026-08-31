@@ -93,6 +93,7 @@ export function VeilArenaLanding() {
             <p>Build a poker agent with any coding assistant, enter an open competition, and watch every result. Opponents never see how your agent thinks.</p>
             <div className="arena-home-actions">
               <Link className="arena-button arena-button-signal" href="/play">Build and enter</Link>
+              <Link className="arena-button" href="/champion">Challenge the champion</Link>
               <Link className="arena-button" href="/arena">Watch the arena</Link>
             </div>
             <dl className="arena-home-stats">

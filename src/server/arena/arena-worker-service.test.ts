@@ -22,6 +22,7 @@ describe("ArenaWorkerService", () => {
     const calls: Array<{ scheduledMatchId: string; actorWalletAddress: string; idempotencyKey: string }> = [];
     const service = new ArenaWorkerService({
       repositories: {
+        listAllArenaSeasons: async () => [],
         listArenaScheduledMatches: async () => [scheduled("match-1", "scheduled"), scheduled("match-2", "failed")],
       },
       seasonService: {
@@ -46,6 +47,7 @@ describe("ArenaWorkerService", () => {
   it("returns idle when a season has no runnable pairings", async () => {
     const service = new ArenaWorkerService({
       repositories: {
+        listAllArenaSeasons: async () => [],
         listArenaScheduledMatches: async () => [scheduled("match-1", "completed")],
       },
       seasonService: { runScheduledMatch: async () => ({ ok: false, code: "PERSISTENCE_FAILED" }) },
@@ -57,5 +59,36 @@ describe("ArenaWorkerService", () => {
       projectId: "project-1",
       seasonId: "season-1",
     });
+  });
+
+  it("discovers the next runnable match across locked competitions", async () => {
+    const calls: string[] = [];
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [
+          { projectId: "project-open", id: "season-open", status: "open", createdAt: new Date("2026-08-30T00:00:00.000Z") },
+          { projectId: "project-two", id: "season-two", status: "locked", createdAt: new Date("2026-08-30T00:02:00.000Z") },
+          { projectId: "project-one", id: "season-one", status: "locked", createdAt: new Date("2026-08-30T00:01:00.000Z") },
+        ] as never,
+        listArenaScheduledMatches: async (projectId) => projectId === "project-one"
+          ? [scheduled("match-1", "completed")]
+          : [{ ...scheduled("match-2", "scheduled"), projectId: "project-two", seasonId: "season-two" }],
+      },
+      seasonService: {
+        runScheduledMatch: async (input) => {
+          calls.push(`${input.projectId}:${input.seasonId}:${input.scheduledMatchId}`);
+          return { ok: true, value: { matchId: "receipt-two" } as never };
+        },
+      },
+      workerWalletAddress: "0xworker",
+    });
+
+    await expect(service.runNext()).resolves.toMatchObject({
+      status: "completed",
+      projectId: "project-two",
+      seasonId: "season-two",
+      scheduledMatchId: "match-2",
+    });
+    expect(calls).toEqual(["project-two:season-two:match-2"]);
   });
 });

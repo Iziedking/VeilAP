@@ -61,9 +61,11 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 type SessionState = "checking" | "authenticated" | "signed-out" | "unavailable";
 type ClaimState = "idle" | "loading" | "loaded" | "error";
 
-function isJoinable(season: ArenaSeason, now: number): boolean {
+function isJoinable(season: ArenaSeason, now: number, invitedSeasonId = ""): boolean {
+  const entryAllowed = season.entryMode === "open"
+    || (season.entryMode === "invite_only" && season.id === invitedSeasonId);
   return season.status === "open"
-    && season.entryMode === "open"
+    && entryAllowed
     && season.entryCount < season.maxEntries
     && new Date(season.startsAt).getTime() <= now
     && now < new Date(season.locksAt).getTime();
@@ -77,8 +79,8 @@ function acceptsReplacement(season: ArenaSeason, now: number): boolean {
     && now < new Date(season.locksAt).getTime();
 }
 
-function seasonStateLabel(season: ArenaSeason, now: number): string {
-  if (season.entryMode !== "open") return "INVITE ONLY";
+function seasonStateLabel(season: ArenaSeason, now: number, invitedSeasonId = ""): string {
+  if (season.entryMode !== "open" && season.id !== invitedSeasonId) return "INVITE ONLY";
   if (season.status === "cancelled") return "CANCELLED";
   if (season.status === "completed") return "COMPLETED";
   if (season.status === "locked" || now >= new Date(season.locksAt).getTime()) return "ENTRY LOCKED";
@@ -121,6 +123,8 @@ function enrollmentMessage(code: string): string {
     ARENA_SEASON_FULL: "The final seat was taken. Choose another open season.",
     ARENA_SEASON_NOT_OPEN: "This season is no longer accepting agents.",
     ARENA_SEASON_NOT_PUBLIC: "This season is not open to public players.",
+    ARENA_INVITATION_INVALID: "This private invitation is not valid for this competition. Ask the host for a new link.",
+    ARENA_INVITATION_EXPIRED: "This private invitation expired. Ask the host for a new link.",
     ARENA_SEASON_NOT_STARTED: "This season has not opened yet.",
     ARENA_WALLET_ALREADY_ENTERED: "This wallet already has an agent in the selected season.",
     ARENA_REPLACEMENT_CONFIRMATION_REQUIRED: "Your current agent is still active. Confirm replacement before submitting the new version.",
@@ -159,12 +163,24 @@ function reviewAgentPackage(value: string): PackageReview {
   }
 }
 
-export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }) {
+export function VeilArenaPlay({
+  defaultProjectId,
+  defaultSeasonId,
+  invitationToken,
+}: {
+  defaultProjectId: string;
+  defaultSeasonId: string;
+  invitationToken: string;
+}) {
   const projectId = defaultProjectId;
+  const invitedSeasonId = invitationToken ? defaultSeasonId : "";
+  const signInReturnTo = invitationToken
+    ? `/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(defaultSeasonId)}&invite=${encodeURIComponent(invitationToken)}`
+    : `/play?project=${encodeURIComponent(projectId)}`;
   const [loadState, setLoadState] = useState<LoadState>(defaultProjectId ? "loading" : "idle");
   const [seasons, setSeasons] = useState<ArenaSeason[]>([]);
   const [seasonError, setSeasonError] = useState("");
-  const [selectedSeasonId, setSelectedSeasonId] = useState("");
+  const [selectedSeasonId, setSelectedSeasonId] = useState(defaultSeasonId);
   const [sessionState, setSessionState] = useState<SessionState>("checking");
   const [walletAddress, setWalletAddress] = useState("");
   const [entryState, setEntryState] = useState<LoadState>("idle");
@@ -272,11 +288,13 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
           new Date(left.locksAt).getTime() - new Date(right.locksAt).getTime()
         ));
         setSeasons(ordered);
-        const joinable = ordered.filter((season) => isJoinable(season, Date.now()));
+        const joinable = ordered.filter((season) => isJoinable(season, Date.now(), invitedSeasonId));
         setSelectedSeasonId((current) => (
           ordered.some((season) => season.id === current)
             ? current
-            : joinable[0]?.id ?? ordered[0]?.id ?? ""
+            : ordered.some((season) => season.id === defaultSeasonId)
+              ? defaultSeasonId
+              : joinable[0]?.id ?? ordered[0]?.id ?? ""
         ));
         setSeasonError("");
         setLoadState("ready");
@@ -293,14 +311,17 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
       active = false;
       window.clearInterval(interval);
     };
-  }, [projectId]);
+  }, [defaultSeasonId, invitedSeasonId, projectId]);
 
   const joinableSeasons = useMemo(
-    () => seasons.filter((season) => isJoinable(season, now)),
-    [now, seasons],
+    () => seasons.filter((season) => isJoinable(season, now, invitedSeasonId)),
+    [invitedSeasonId, now, seasons],
   );
+  const visibleSeasons = invitationToken
+    ? seasons.filter((season) => season.id === invitedSeasonId)
+    : seasons;
   const selectedSeason = seasons.find((season) => season.id === selectedSeasonId);
-  const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now) : false;
+  const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now, invitedSeasonId) : false;
   const packageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
 
   useEffect(() => {
@@ -398,6 +419,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
             agentId: agentPackage.agentId,
             policy: agentPackage,
             replaceExisting: Boolean(currentEntry),
+            ...(invitationToken && selectedSeason.id === invitedSeasonId ? { invitationToken } : {}),
           }),
         },
       );
@@ -428,10 +450,10 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
       : loadState === "error"
         ? seasonError
         : seasons.length === 0
-          ? "No public season has been created yet."
+          ? invitationToken ? "This private competition could not be found." : "No public season has been created yet."
             : joinableSeasons.length === 0
-              ? "No public season is accepting agents right now."
-              : "Choose a competition, give AGENT.md to a coding agent, then approve the package it returns.";
+              ? invitationToken ? "This private challenge is no longer accepting an agent." : "No public season is accepting agents right now."
+              : invitationToken ? "Your private challenge is ready. Build an agent, then approve its entry." : "Choose a competition, give AGENT.md to a coding agent, then approve the package it returns.";
   let submitLabel = "APPROVE, SEAL AND ENTER";
   if (submitting) {
     submitLabel = "SEALING APPROVED PACKAGE...";
@@ -454,7 +476,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
       <header className="play-nav">
         <Link className="play-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
         <nav aria-label="Player navigation">
-          <Link href="/#broadcast">Watch arena</Link>
+          <Link href="/arena">Watch arena</Link>
           <Link href="/sign-in">Wallet access</Link>
         </nav>
       </header>
@@ -480,8 +502,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
             <p className="play-status" aria-live="polite">{statusMessage}</p>
 
             <div className="play-season-list">
-              {seasons.map((season) => {
-                const joinable = isJoinable(season, now);
+              {visibleSeasons.map((season) => {
+                const joinable = isJoinable(season, now, invitedSeasonId);
                 const replacementOpen = acceptsReplacement(season, now);
                 const available = joinable || replacementOpen;
                 const selected = season.id === selectedSeasonId;
@@ -500,10 +522,10 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                       resetSubmission();
                     }}
                   >
-                    <span className="play-season-index">{String(seasons.indexOf(season) + 1).padStart(2, "0")}</span>
+                    <span className="play-season-index">{String(visibleSeasons.indexOf(season) + 1).padStart(2, "0")}</span>
                     <span className="play-season-name"><strong>{season.name}</strong><small>{(season.templateId ?? season.rulesetVersion).replaceAll("_", " ")}</small></span>
                     <span><strong>{season.entryCount} / {season.maxEntries}</strong><small>AGENTS</small></span>
-                    <span><strong>{seasonStateLabel(season, now)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "EXHIBITION"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
+                    <span><strong>{seasonStateLabel(season, now, invitedSeasonId)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "FREE CHALLENGE"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
                   </button>
                 );
               })}
@@ -541,7 +563,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                   </section>
                 )}
                 <div className="play-success-actions">
-                  <Link className="play-primary" href={`/?project=${encodeURIComponent(projectId)}#broadcast`}>[ WATCH YOUR AGENT ]</Link>
+                  <Link className="play-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(selectedSeasonId)}`}>[ WATCH YOUR AGENT ]</Link>
                   {selectedSeasonAcceptsReplacement && (
                     <button
                       className="play-secondary"
@@ -641,7 +663,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                 ) : (
                   <div className="play-sign-in-callout">
                     <div><span>{sessionState === "checking" ? "CHECKING WALLET" : "SIGN IN TO ENTER"}</span><p>Your wallet approval links the agent and any reward to you.</p></div>
-                    {sessionState !== "checking" && <Link href="/sign-in">[ SIGN IN WITH WALLET ]</Link>}
+                    {sessionState !== "checking" && <Link href={`/sign-in?returnTo=${encodeURIComponent(signInReturnTo)}`}>[ SIGN IN WITH WALLET ]</Link>}
                   </div>
                 )}
 

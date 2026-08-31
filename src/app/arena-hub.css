@@ -249,3 +249,41 @@
 @media (prefers-reduced-motion: reduce) {
   .spectator-header > strong i { animation: none; }
 }
+
+.champion-main { width: min(1380px, 92vw); min-height: calc(100vh - 136px); margin: 0 auto; padding: clamp(72px, 10vh, 130px) 0; display: grid; grid-template-columns: minmax(0, .8fr) minmax(520px, 1fr); align-items: center; gap: clamp(48px, 8vw, 126px); }
+.champion-copy h1 { max-width: 720px; margin: 22px 0 24px; font-family: var(--arena-display); font-size: clamp(44px, 6.2vw, 94px); line-height: .96; text-transform: uppercase; }
+.champion-copy > p { max-width: 620px; color: var(--ink-soft); font-size: clamp(16px, 1.5vw, 21px); line-height: 1.65; }
+.champion-actions { margin-top: 34px; display: flex; align-items: center; flex-wrap: wrap; gap: 22px; }
+.champion-actions button { min-height: 56px; padding: 0 24px; border: 1px solid var(--ink); background: var(--signal); box-shadow: 7px 7px 0 var(--ink); cursor: pointer; font-family: var(--arena-mono); font-size: 10px; }
+.champion-actions button:disabled { cursor: wait; opacity: .62; }
+.champion-actions a { border-bottom: 1px solid var(--ink); font-size: 13px; font-weight: 700; }
+.champion-error { color: #8a241b !important; font-weight: 750; }
+.champion-card { border: 1px solid var(--ink); background: var(--paper-light); box-shadow: 13px 13px 0 var(--signal); }
+.champion-card > header { min-height: 60px; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; background: var(--ink); color: var(--paper-light); font-family: var(--arena-mono); font-size: 9px; letter-spacing: .7px; }
+.champion-card > header strong { color: var(--signal); }
+.champion-card > header i { display: inline-block; width: 7px; height: 7px; margin-right: 7px; background: var(--signal); }
+.champion-seat { min-height: 148px; display: grid; grid-template-columns: 62px 1fr auto; align-items: center; border-bottom: 1px solid var(--ink); }
+.champion-seat > span { height: 100%; display: grid; place-items: center; border-right: 1px solid var(--rule); color: var(--signal-dark); font-family: var(--arena-mono); }
+.champion-seat div { padding: 22px; display: grid; gap: 9px; }
+.champion-seat small { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 8px; letter-spacing: .7px; }
+.champion-seat strong { font-family: var(--arena-display); font-size: clamp(18px, 2.1vw, 30px); }
+.champion-seat b { padding-right: 24px; font-family: var(--arena-mono); font-size: 9px; }
+.champion-seat.is-player { background: rgba(242,165,114,.16); border-top: 1px solid var(--ink); }
+.champion-versus { height: 34px; display: grid; place-items: center; margin-bottom: -35px; position: relative; z-index: 1; font-family: var(--arena-display); font-size: 13px; }
+.champion-card dl { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+.champion-card dl div { min-height: 78px; padding: 18px 20px; display: grid; gap: 8px; border-right: 1px solid var(--rule); }
+.champion-card dl div:last-child { border-right: 0; }
+.champion-card dt { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; }
+.champion-card dd { margin: 0; font-size: 13px; font-weight: 800; }
+
+@media (max-width: 900px) {
+  .champion-main { grid-template-columns: 1fr; min-height: auto; padding: 54px 0 80px; }
+  .champion-card { box-shadow: 8px 8px 0 var(--signal); }
+}
+
+@media (max-width: 560px) {
+  .champion-seat { grid-template-columns: 46px 1fr; }
+  .champion-seat b { grid-column: 2; padding: 0 18px 18px; }
+  .champion-card dl { grid-template-columns: 1fr; }
+  .champion-card dl div { min-height: 62px; border-right: 0; border-bottom: 1px solid var(--rule); }
+}

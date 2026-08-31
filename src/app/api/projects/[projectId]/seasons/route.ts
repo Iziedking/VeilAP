@@ -17,7 +17,7 @@ const requestSchema = z.object({
   endsAt: z.string().min(1),
   entryMode: z.enum(["invite_only", "open"]).default("invite_only"),
   maxEntries: z.number().int().min(2).max(32).default(16),
-  templateId: z.enum(["playground", "open_league", "duel_series", "benchmark_gauntlet", "championship", "custom"]).optional(),
+  templateId: z.enum(["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship", "custom"]).optional(),
   customRules: z.object({
     pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
     entryMode: z.enum(["invite_only", "open"]),

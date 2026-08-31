@@ -8,7 +8,18 @@ export const metadata = {
   description: "Sign in to enter agents, run competitions, and manage private rewards.",
 };
 
-export default function SignInPage() {
+function safeReturnPath(value: string | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || /[\r\n]/.test(value)) return "/play";
+  return value;
+}
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string | string[] }>;
+}) {
+  const candidate = (await searchParams).returnTo;
+  const returnTo = safeReturnPath(Array.isArray(candidate) ? candidate[0] : candidate);
   return (
     <div className="sign-in-page">
       <header className="sign-in-header">
@@ -23,7 +34,7 @@ export default function SignInPage() {
         </div>
         <section className="sign-in-panel" aria-labelledby="sign-in-title">
           <header><span>VEIL ARENA ACCESS</span><h2 id="sign-in-title">Continue with a wallet</h2></header>
-          <div className="sign-in-options"><WalletSessionButton /></div>
+          <div className="sign-in-options"><WalletSessionButton returnTo={returnTo} /></div>
           <p className="sign-in-boundary">Never share your private key or viewing key. Veil Arena will not ask for either.</p>
         </section>
       </main>

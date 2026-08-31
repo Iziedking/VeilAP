@@ -96,7 +96,7 @@ export function MatchSpectator({
   const leftName = displayName(schedule, scheduledMatch.leftAgentId);
   const rightName = displayName(schedule, scheduledMatch.rightAgentId);
   const hasReplay = handReceipts.length > 0;
-  const executionState = scheduledMatch.status === "pending"
+  const executionState = scheduledMatch.status === "scheduled"
     ? "DRAW WAITING"
     : scheduledMatch.status === "running"
       ? "SEALED EXECUTION"

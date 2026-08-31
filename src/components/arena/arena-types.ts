@@ -37,7 +37,7 @@ export type ScheduledMatch = {
   hands: number;
   leftAgentId: string;
   rightAgentId: string;
-  status: "pending" | "running" | "completed" | "failed";
+  status: "scheduled" | "running" | "completed" | "failed";
   matchId?: string;
   createdAt: string;
 };
@@ -127,4 +127,3 @@ export function shortCommitment(value?: string): string {
   if (!value) return "NOT SET";
   return value.length > 16 ? value.slice(0, 8) + "..." + value.slice(-6) : value;
 }
-

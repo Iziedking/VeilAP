@@ -8,6 +8,16 @@ Veil Arena should feel like a live competition people can enter and watch, not a
 
 ## Primary journeys
 
+### Choose a competition
+
+The final demo groups competitions by what the player is trying to do:
+
+- **Challenge a friend:** create a free, private two-agent duel and copy an expiring join link.
+- **Enter an open table:** join a public freepass tournament with no stake and no advertised prize.
+- **Compete for a sponsor reward:** enter an open competition whose funding state is shown separately from entry.
+
+Player-staked winner-takes-all remains unavailable until an audited escrow contract can enforce deposits, refunds, and settlement. The interface may name the format, but it must not offer a working control or imply custody.
+
 ### Discover
 
 The landing page explains the game, shows one real competition preview, and sends the visitor to the arena. It does not contain the full leaderboard or match archive.
@@ -20,13 +30,21 @@ The arena lobby lists real competitions by state. A player opens one competition
 
 Each competition has its own overview, leaderboard, schedule, and completed results. A match opens on a dedicated spectator page. The table replays persisted public hand receipts, including hand order, seat swaps, winners, and commitments. It never invents actions or reveals sealed strategy data.
 
+While a match runs, the spectator page refreshes its real status. Once the worker persists hand receipts, the timeline advances through them at one-second intervals. This is receipt playback, not a fabricated per-decision stream, and the copy must say so.
+
 ### Host
 
-An operator selects a format, names the event, sets its dates, reviews the privacy and workload summary, then creates it. The system creates the underlying project automatically. Project IDs remain available in technical details but are not setup inputs.
+An operator first selects Challenge a friend, Public freepass, or Sponsored competition. The form then asks only for fields that change that format. The operator names the event, sets its dates, reviews the privacy and workload summary, then creates it. The system creates the underlying project automatically. Project IDs remain available in technical details but are not setup inputs.
+
+Private challenges produce one copyable join link. Public freepass competitions appear in the arena lobby. Sponsored competitions may open before funding, but the UI must distinguish a pledged reward from a funded reward.
+
+### Challenge the champion
+
+Veil Arena Champion is a real deterministic system agent stored through the same sealed artifact path as player agents. A player can create a free private duel against it. The champion receives no access to another strategy, private cards, external services, or uncontrolled randomness.
 
 ## Information hierarchy
 
-1. Competition state and next action.
+1. Competition kind, state, and next action.
 2. Who is playing and current score.
 3. Schedule or leaderboard.
 4. Verifiable commitments and privacy boundary.
@@ -39,6 +57,7 @@ An operator selects a format, names the event, sets its dates, reviews the priva
 - `/arena/:projectId/:seasonId` is the competition room.
 - `/arena/:projectId/:seasonId/match/:scheduledMatchId` is the spectator table.
 - `/play?project=:projectId&season=:seasonId` is entry approval.
+- `/play?invite=:opaqueToken` is private challenge entry approval.
 - `/arena-console` is the host desk. A project query opens an existing event; no query starts a new event.
 
 ## Important states
@@ -46,10 +65,12 @@ An operator selects a format, names the event, sets its dates, reviews the priva
 - Loading uses cards shaped like the final content.
 - Empty competition lists offer one action: host the first competition.
 - Open competitions offer entry.
+- Private competitions are absent from the public lobby and require a valid, unexpired invitation.
 - Locked competitions show the draw and match status.
 - Running matches show sealed execution and refresh automatically.
 - Completed matches offer a real public receipt replay.
 - Failed requests explain what failed and provide retry or back navigation.
+- X verification is optional. When OAuth credentials are absent, it is labelled unavailable and wallet identity remains sufficient to compete.
 
 ## Privacy rules
 
@@ -59,6 +80,7 @@ An operator selects a format, names the event, sets its dates, reviews the priva
 - A hand shows its winner, seat swap, and commitment. It does not show either committed action.
 - Only the authorized selective-reveal flow may publish one losing action.
 - The winner's policy remains sealed.
+- An invitation grants entry to one private competition. It does not grant operator access or reveal another entrant's identity, package, or payout wallet.
 
 ## Visual direction
 
