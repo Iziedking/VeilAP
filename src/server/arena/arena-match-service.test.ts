@@ -95,6 +95,12 @@ describe("ArenaMatchService", () => {
     expect(result.value.matchId).toMatch(/^id-/);
     expect(result.value.players.map((player) => player.displayName)).toEqual(["Cinder", "Ember"]);
     expect(result.value.transcriptRoot).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.value.publicHandReceipts).toHaveLength(6);
+    expect(result.value.publicHandReceipts[0]).toMatchObject({ handNumber: 1, seatSwapped: false });
+    expect(result.value.publicHandReceipts[1]).toMatchObject({ handNumber: 1, seatSwapped: true });
+    expect(JSON.stringify(result.value.publicHandReceipts)).not.toContain("holeCards");
+    expect(JSON.stringify(result.value.publicHandReceipts)).not.toContain("policy");
+    expect(JSON.stringify(result.value.publicHandReceipts)).not.toContain("server-generated-secret-seed");
     expect(result.value.signedReceipt?.publicKeyId).toMatch(/^receipt-key-/);
     expect(result.value.signedReceipt).toBeDefined();
     expect(verifySignedArenaMatchReceipt(result.value.signedReceipt!, publicKeyBase64)).toBe(true);
@@ -104,6 +110,9 @@ describe("ArenaMatchService", () => {
     expect(stored?.publicReceipt).toHaveProperty("transcriptRoot");
     expect(stored?.publicReceipt).not.toHaveProperty("hands");
     expect(stored?.signedReceipt).toEqual(result.value.signedReceipt);
+
+    const publicMatch = await service.getPublicMatch(projectId, result.value.matchId);
+    expect(publicMatch).toEqual(result);
   });
 
   it("builds a public leaderboard from persisted receipts", async () => {

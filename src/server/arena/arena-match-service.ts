@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
-import type { PublicMatchReceipt } from "@/domain/arena/poker-engine";
+import type { PublicHandReceipt, PublicMatchReceipt } from "@/domain/arena/poker-engine";
 import { revealSealedLosingAction, runSealedMatch, type SealedLosingActionReveal } from "./sealed-match-runner";
 import type { KeyProvider } from "@/server/crypto/key-provider";
 import { decryptField, encryptField } from "@/server/crypto/envelope";
@@ -51,6 +51,7 @@ export interface PublicArenaMatchView {
   seedCommitment: string;
   transcriptRoot: string;
   handCount: number | null;
+  publicHandReceipts: readonly PublicHandReceipt[];
   signedReceipt?: SignedArenaMatchReceipt;
   selectiveReveal?: PublicArenaRevealView;
   createdAt: string;
@@ -197,6 +198,7 @@ function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRe
     seedCommitment: receipt.seedCommitment,
     transcriptRoot: receipt.transcriptRoot,
     handCount: record.handCount ?? null,
+    publicHandReceipts: (record.publicHandReceipts ?? []) as PublicHandReceipt[],
     signedReceipt: record.signedReceipt as SignedArenaMatchReceipt | undefined,
     selectiveReveal: reveal ? publicReveal(reveal) : undefined,
     createdAt: record.createdAt.toISOString(),
@@ -324,6 +326,7 @@ export class ArenaMatchService {
         leftDisplayName: leftRecord.displayName,
         rightDisplayName: rightRecord.displayName,
         publicReceipt: result.value.publicReceipt,
+        publicHandReceipts: [...result.value.publicHandReceipts],
         signedReceipt,
         encryptedSeed,
         handCount: input.hands,
@@ -531,6 +534,21 @@ export class ArenaMatchService {
           ),
         },
       };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async getPublicMatch(projectId: string, matchId: string): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
+    const normalizedProjectId = projectId.trim();
+    const normalizedMatchId = matchId.trim();
+    if (!normalizedProjectId || !normalizedMatchId) return { ok: false, code: "INVALID_INPUT" };
+    try {
+      if (!(await this.repositories.getProject(normalizedProjectId))) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const record = await this.repositories.getArenaMatchReceipt(normalizedProjectId, normalizedMatchId);
+      if (!record) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      const reveal = await this.repositories.getArenaMatchReveal(normalizedProjectId, normalizedMatchId);
+      return { ok: true, value: publicView(record, reveal) };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
     }

@@ -120,6 +120,13 @@
       "when": 1788160800000,
       "tag": "0016_arena_entry_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788164400000,
+      "tag": "0017_public_match_replay",
+      "breakpoints": true
     }
   ]
 }

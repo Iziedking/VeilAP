@@ -41,6 +41,7 @@ export const arenaMatchReceipts = pgTable(
     leftDisplayName: text("left_display_name").notNull(),
     rightDisplayName: text("right_display_name").notNull(),
     publicReceipt: jsonb("public_receipt").notNull(),
+    publicHandReceipts: jsonb("public_hand_receipts").notNull().default(sql`'[]'::jsonb`),
     signedReceipt: jsonb("signed_receipt"),
     encryptedSeed: jsonb("encrypted_seed").notNull(),
     handCount: integer("hand_count"),

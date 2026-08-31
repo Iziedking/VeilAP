@@ -16,6 +16,7 @@ export type SealedMatchRunResult =
       ok: true;
       value: {
         publicReceipt: PublicMatchReceipt;
+        publicHandReceipts: readonly PublicHandReceipt[];
         decisionCount: number;
       };
     }
@@ -103,6 +104,7 @@ export async function runSealedMatch(input: {
     ok: true,
     value: {
       publicReceipt: result.value.publicReceipt,
+      publicHandReceipts: result.value.publicHandReceipts,
       decisionCount: result.value.hands.length,
     },
   };

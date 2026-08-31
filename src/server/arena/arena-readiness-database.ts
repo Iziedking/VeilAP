@@ -34,6 +34,7 @@ export async function checkArenaDatabaseReadiness(
               ('arena_entry_versions', 'version'),
               ('arena_entry_versions', 'status'),
               ('arena_entry_versions', 'artifact_commitment'),
+              ('arena_match_receipts', 'public_hand_receipts'),
               ('arena_prize_transactions', 'authorization_digest'),
               ('arena_prize_transactions', 'encrypted_authorization')
             )) as column_count
@@ -42,7 +43,7 @@ export async function checkArenaDatabaseReadiness(
     const row = rows[0] as { table_count?: number; column_count?: number } | undefined;
     return {
       database: true,
-      arenaSchema: Number(row?.table_count ?? 0) === 10 && Number(row?.column_count ?? 0) === 19,
+      arenaSchema: Number(row?.table_count ?? 0) === 10 && Number(row?.column_count ?? 0) === 20,
     };
   } catch {
     return { database: false, arenaSchema: false };
