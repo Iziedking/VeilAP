@@ -111,25 +111,25 @@ type FundingAccount = Strk20WalletAccount & {
 };
 
 const errorCopy: Record<string, string> = {
-  AUTH_REQUIRED: "Sign in with the operator wallet before using the arena desk.",
+  AUTH_REQUIRED: "Sign in with an operator wallet to use this desk.",
   PROJECT_ACCESS_REQUIRED: "This wallet does not have access to the project.",
-  ROLE_FORBIDDEN: "This action is restricted to a company or reviewer role.",
+  ROLE_FORBIDDEN: "Only a project operator or reviewer can take this action.",
   PROJECT_NOT_FOUND: "That project was not found in the connected database.",
   ARENA_SEASON_NOT_FOUND: "That season no longer exists.",
-  ARENA_SEASON_TOO_SMALL: "Register at least two sealed agents before locking.",
+  ARENA_SEASON_TOO_SMALL: "At least two agents must enter before you can lock the draw.",
   ARENA_SEASON_ALREADY_LOCKED: "This season is already locked.",
   ARENA_SEASON_NOT_LOCKED: "Lock the season before running a scheduled pairing.",
-  ARENA_SEASON_NOT_ACTIVE: "A prize pool can only be created while the season is open or locked.",
+  ARENA_SEASON_NOT_ACTIVE: "You can add a prize only while the competition is open or locked.",
   ARENA_SEASON_FULL: "This season has reached its entry limit.",
   ARENA_WALLET_ALREADY_ENTERED: "This wallet already has an agent in the season.",
-  ARENA_PRIZE_POOL_NOT_FOUND: "No prize pool has been created for this season.",
+  ARENA_PRIZE_POOL_NOT_FOUND: "This competition does not have a prize yet.",
   ARENA_PRIZE_POOL_ALREADY_EXISTS: "This season already has a prize pool.",
   ARENA_PRIZE_POOL_ALREADY_FUNDED: "Sponsor funding is already recorded for this pool.",
   ARENA_PRIZE_POOL_NOT_FUNDED: "Confirm the sponsor funding transaction before preparing a settlement.",
   ARENA_PRIZE_POOL_NOT_SETTLEMENT_READY: "Prepare the winner settlement before confirming its transaction.",
   ARENA_PRIZE_POOL_ALREADY_SETTLED: "This prize pool has already been settled.",
-  ARENA_MATCH_NOT_COMPLETE: "Every scheduled pairing must finish before a winner can be settled.",
-  ARENA_WINNER_TIE: "The season has no unique winner yet. Resolve the tie before settling.",
+  ARENA_MATCH_NOT_COMPLETE: "Finish every pairing before selecting the winner.",
+  ARENA_WINNER_TIE: "The competition is tied. Resolve the tie before paying a winner.",
   ARENA_WINNER_PAYOUT_NOT_REGISTERED: "The winning agent has no verified payout wallet. Do not prepare a manual replacement.",
   TRANSACTION_NOT_CONFIRMED: "The Starknet receipt is not confirmed for the configured STRK20 pool yet.",
   FUNDING_PLAN_FAILED: "The sponsor reserve plan could not be prepared.",
@@ -231,7 +231,7 @@ export function VeilArenaConsole() {
   const loadProject = useCallback(async (nextProjectId: string) => {
     const normalized = nextProjectId.trim();
     if (!normalized) {
-      setError("Enter the real project ID before loading the operator desk.");
+      setError("Enter a project ID to open the operator desk.");
       return;
     }
     setBusy("load");
@@ -265,7 +265,7 @@ export function VeilArenaConsole() {
       setProjectInput(normalized);
       setSeasons(seasonBody.value);
       setStrategies(strategyBody.value);
-      setNotice(`${seasonBody.value.length} season${seasonBody.value.length === 1 ? "" : "s"} and ${strategyBody.value.length} sealed strateg${strategyBody.value.length === 1 ? "y" : "ies"} loaded.`);
+      setNotice(`Loaded ${seasonBody.value.length} competition${seasonBody.value.length === 1 ? "" : "s"} and ${strategyBody.value.length} sealed agent${strategyBody.value.length === 1 ? "" : "s"}.`);
     } catch {
       setError("The arena server could not be reached.");
     } finally {
@@ -337,7 +337,7 @@ export function VeilArenaConsole() {
     const ends = toIso(endsAt);
     const entryLimit = Number(maxEntries);
     if (!seasonName.trim() || !starts || !locks || !ends || !(starts < locks && locks < ends) || !Number.isInteger(entryLimit) || entryLimit < 2 || entryLimit > 32) {
-      setError("Provide a name, an entry limit from 2 to 32, and dates in the order start, lock, end.");
+      setError("Add a name, choose 2 to 32 entries, and set the dates in this order: start, lock, end.");
       return;
     }
     setBusy("create");
@@ -356,7 +356,7 @@ export function VeilArenaConsole() {
       }
       setSeasons((current) => [body.value, ...current.filter((season) => season.id !== body.value.id)]);
       setSeasonName("");
-      setNotice(`Season ${body.value.name} created and ready for entries.`);
+      setNotice(`${body.value.name} is open for entries.`);
       await loadSchedule(body.value.id);
     } catch {
       setError("The season could not be created.");
@@ -383,7 +383,7 @@ export function VeilArenaConsole() {
           return;
         }
       }
-      setNotice(`${selectedAgents.length} sealed agent${selectedAgents.length === 1 ? "" : "s"} registered.`);
+      setNotice(`Added ${selectedAgents.length} sealed agent${selectedAgents.length === 1 ? "" : "s"} to the competition.`);
       await loadSchedule(schedule.season.id);
     } catch {
       setError("The selected agents could not be registered.");
@@ -415,7 +415,7 @@ export function VeilArenaConsole() {
       }
       setSchedule(body.value);
       setSeasons((current) => current.map((season) => season.id === body.value.season.id ? body.value.season : season));
-      setNotice(`${body.value.matches.length} pairings scheduled. The season is locked.`);
+      setNotice(`The draw is locked with ${body.value.matches.length} pairing${body.value.matches.length === 1 ? "" : "s"}.`);
     } catch {
       setError("The season could not be locked.");
     } finally {
@@ -439,7 +439,7 @@ export function VeilArenaConsole() {
         return;
       }
       setLatestMatch(body.value);
-      setNotice(`${body.value.matchId} completed and the public receipt is ready.`);
+      setNotice(`${body.value.matchId} finished. Its public receipt is ready.`);
       await loadSchedule(schedule.season.id);
     } catch {
       setError("The scheduled pairing could not be reached.");
@@ -466,7 +466,7 @@ export function VeilArenaConsole() {
         return;
       }
       setPrizePool(body.value);
-      setNotice("Sponsor pool created. Submit the funding transaction from the sponsor wallet, then paste its hash here.");
+      setNotice("The prize record is ready. Fund it from the sponsor wallet, then verify the transaction here.");
     } catch {
       setError("The sponsor pool could not be created.");
     } finally {
@@ -505,7 +505,7 @@ export function VeilArenaConsole() {
       setFundingPlan(null);
       setFundingPrepared(false);
       setFundingWalletOutcome(null);
-      setNotice("The sponsor reserve is verified by its wallet authorization and finalized STRK20 pool transaction.");
+      setNotice("The sponsor reserve is verified. The wallet authorization and STRK20 transaction both match this prize.");
     } catch {
       setError("The funding receipt could not be checked.");
     } finally {
@@ -528,7 +528,7 @@ export function VeilArenaConsole() {
       setFundingPlan(body.value);
       setFundingPrepared(false);
       setFundingWalletOutcome(null);
-      setNotice("Review this exact shield action in the sponsor wallet, then submit and authorize its transaction hash.");
+      setNotice("Review the reserve action in the sponsor wallet. After it is submitted, verify its transaction hash here.");
     } catch {
       setError("The funding plan could not be reached.");
     } finally {
@@ -554,7 +554,7 @@ export function VeilArenaConsole() {
       setFundingAccount(result.account);
       setFundingWalletName(wallet.name);
       setFundingPrepared(false);
-      setNotice(`${wallet.name} is ready. Review the exact shield or payout action before requesting a wallet prompt.`);
+      setNotice(`${wallet.name} is connected. Check the reserve or payout details before opening the wallet prompt.`);
     } catch {
       setError("The sponsor wallet could not be connected.");
     } finally {
@@ -590,7 +590,7 @@ export function VeilArenaConsole() {
     });
     setFundingWalletOutcome(result);
     setFundingPrepared(result.kind === "prepared");
-    setNotice(result.kind === "prepared" ? "The reserve shield passed wallet preflight. Submit only after reviewing the wallet prompt." : "Wallet preflight did not pass. No reserve transaction was submitted.");
+    setNotice(result.kind === "prepared" ? "The wallet accepted the reserve details. Review them once more before submitting." : "The wallet could not prepare the reserve. Nothing was submitted.");
     setBusy("");
   }
 
@@ -616,7 +616,7 @@ export function VeilArenaConsole() {
     setFundingWalletOutcome(result);
     if (result.kind === "submitted") {
       setFundingHash(result.transactionHash);
-      setNotice("The wallet submitted the reserve shield. Sign its authorization after Starknet finalizes the transaction.");
+      setNotice("The wallet submitted the reserve. Wait for Starknet finality, then sign the authorization.");
     } else if (result.kind === "user_rejected") {
       setNotice("The wallet request was declined. No funding transaction was submitted.");
     } else {
@@ -649,7 +649,7 @@ export function VeilArenaConsole() {
       setSettlementPlan(planBody.value);
       setSettlementPrepared(false);
       setSettlementWalletOutcome(null);
-      setNotice(`Winner ${body.value.winnerAgentId ?? "agent"} selected. The payout wallet is the one registered with that agent.`);
+      setNotice(`${body.value.winnerAgentId ?? "The winning agent"} won. Its registered payout wallet will receive the reward.`);
     } catch {
       setError("The winner settlement could not be prepared.");
     } finally {
@@ -686,7 +686,7 @@ export function VeilArenaConsole() {
     });
     setSettlementWalletOutcome(result);
     setSettlementPrepared(result.kind === "prepared");
-    setNotice(result.kind === "prepared" ? "The private payout passed wallet preflight. Review the wallet prompt before submitting." : "Payout preflight did not pass. No payout transaction was submitted.");
+    setNotice(result.kind === "prepared" ? "The wallet accepted the payout details. Review them once more before submitting." : "The wallet could not prepare the payout. Nothing was submitted.");
     setBusy("");
   }
 
@@ -713,7 +713,7 @@ export function VeilArenaConsole() {
     setSettlementWalletOutcome(result);
     if (result.kind === "submitted") {
       setSettlementHash(result.transactionHash);
-      setNotice("The private payout was submitted. Verify its Starknet receipt before publishing the settlement result.");
+      setNotice("The private payout was submitted. Verify the Starknet receipt before publishing the result.");
     } else if (result.kind === "user_rejected") {
       setNotice("The wallet request was declined. No payout transaction was submitted.");
     } else {
@@ -753,7 +753,7 @@ export function VeilArenaConsole() {
       setSettlementPlan(null);
       setSettlementPrepared(false);
       setSettlementWalletOutcome(null);
-      setNotice("The private payout is verified by its sponsor authorization and finalized STRK20 pool transaction.");
+      setNotice("The private payout is verified. The sponsor authorization and final STRK20 transaction both match.");
     } catch {
       setError("The settlement receipt could not be checked.");
     } finally {
@@ -765,20 +765,20 @@ export function VeilArenaConsole() {
     <div className="operator-page">
       <header className="operator-nav">
         <Link className="operator-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
-        <div className="operator-nav-meta"><span>OPERATOR DESK</span><strong>REAL DATA ONLY</strong></div>
-        <Link className="operator-nav-link" href="/sign-in">[ WALLET SIGN IN ]</Link>
+        <div className="operator-nav-meta"><span>OPERATOR DESK</span><strong>LIVE COMPETITION CONTROL</strong></div>
+        <Link className="operator-nav-link" href="/sign-in">Wallet sign in</Link>
       </header>
 
       <main className="operator-main">
         <section className="operator-intro" aria-labelledby="operator-title">
-          <div className="operator-kicker"><i /> SEALED MATCH CONTROL / STARKNET</div>
-          <h1 id="operator-title">Run the arena.</h1>
-          <p>Create the season, choose sealed agents, lock the draw, and execute one pairing at a time. Every action below talks to the persisted Veil Arena API.</p>
+          <div className="operator-kicker"><i /> COMPETITION CONTROL / STARKNET</div>
+          <h1 id="operator-title">Host a competition.</h1>
+          <p>Set the entry window and publish the season. When entries close, lock the draw and run each pairing.</p>
         </section>
 
         <section className="operator-project-bar" aria-label="Project connection">
           <label htmlFor="project-id">PROJECT ID</label>
-          <input id="project-id" value={projectInput} onChange={(event) => setProjectInput(event.target.value)} placeholder="Paste the persisted project ID" />
+          <input id="project-id" value={projectInput} onChange={(event) => setProjectInput(event.target.value)} placeholder="Paste a project ID" />
           <button type="button" className="operator-button operator-button-signal" onClick={() => void loadProject(projectInput)} disabled={busy !== ""}>{busy === "load" ? "LOADING" : "LOAD PROJECT"}<span>↗</span></button>
         </section>
 
@@ -787,13 +787,13 @@ export function VeilArenaConsole() {
         {!projectId ? (
           <section className="operator-empty">
             <span>01 / CONNECTED PROJECT</span>
-            <strong>Load a real project to begin.</strong>
-            <p>The console never invents agents or project data. Use a project ID from your persisted database and sign in with a member wallet.</p>
+            <strong>Open a project to begin.</strong>
+            <p>Paste the project ID above and sign in with a wallet that can manage it.</p>
           </section>
         ) : (
           <div className="operator-grid">
             <section className="operator-panel operator-panel-wide" aria-labelledby="season-create-title">
-              <header className="operator-panel-head"><div><span>02 / SEASON CONTROL</span><h2 id="season-create-title">Make a season</h2></div><strong>{seasons.length} SAVED</strong></header>
+              <header className="operator-panel-head"><div><span>02 / COMPETITION SETUP</span><h2 id="season-create-title">Create a season</h2></div><strong>{seasons.length} SAVED</strong></header>
               <form className="operator-form" onSubmit={(event) => void createSeason(event)}>
                 <label>SEASON NAME<input value={seasonName} onChange={(event) => setSeasonName(event.target.value)} placeholder="Season 01" required /></label>
                 <label>RULESET<input value={rulesetVersion} onChange={(event) => setRulesetVersion(event.target.value)} required /></label>
@@ -805,7 +805,7 @@ export function VeilArenaConsole() {
                 <button className="operator-button operator-button-dark" type="submit" disabled={busy !== ""}>{busy === "create" ? "CREATING" : "CREATE SEASON"}<span>+</span></button>
               </form>
               <div className="operator-season-list">
-                <div className="operator-subhead"><span>SEASONS IN DATABASE</span><small>{openSeasons.length} OPEN</small></div>
+                <div className="operator-subhead"><span>YOUR SEASONS</span><small>{openSeasons.length} OPEN</small></div>
                 {seasons.map((season) => <button type="button" key={season.id} className={`operator-season-row ${schedule?.season.id === season.id ? "is-selected" : ""}`} onClick={() => void loadSchedule(season.id)}><span>{season.status.toUpperCase()}</span><strong>{season.name}</strong><small>{season.entryCount}/{season.maxEntries} ENTRIES / {season.entryMode === "open" ? "PUBLIC" : "INVITE"}</small></button>)}
                 {!seasons.length ? <p className="operator-muted">No seasons are recorded for this project.</p> : null}
               </div>
@@ -813,7 +813,7 @@ export function VeilArenaConsole() {
 
             <section className="operator-panel" aria-labelledby="strategy-title">
               <header className="operator-panel-head"><div><span>03 / SEALED ROSTER</span><h2 id="strategy-title">Choose agents</h2></div><strong>{strategies.length} SEALED</strong></header>
-              <p className="operator-panel-copy">Only public artifact metadata is shown here. Policies remain inside the server-side sealed runner.</p>
+              <p className="operator-panel-copy">You can see each agent name and commitment. Its strategy remains sealed.</p>
               <div className="operator-strategy-list">
                 {strategies.map((strategy) => { const active = selectedAgents.includes(strategy.agentId); const alreadyInSeason = schedule?.entries.some((entry) => entry.agentId === strategy.agentId); return <label className={`operator-strategy ${active ? "is-selected" : ""} ${alreadyInSeason ? "is-registered" : ""}`} key={strategy.agentId}><input type="checkbox" checked={active} disabled={alreadyInSeason || schedule?.season.status !== "open"} onChange={() => setSelectedAgents((current) => current.includes(strategy.agentId) ? current.filter((id) => id !== strategy.agentId) : [...current, strategy.agentId])} /><span className="operator-check">{active ? "✓" : ""}</span><span><strong>{strategy.displayName}</strong><small>{strategy.agentId} / {shortCommitment(strategy.artifactCommitment)}</small></span><em>{alreadyInSeason ? "IN" : "SEALED"}</em></label>; })}
                 {!strategies.length ? <p className="operator-muted">No sealed strategies are available for this project.</p> : null}
@@ -824,7 +824,7 @@ export function VeilArenaConsole() {
             {schedule ? <section className="operator-panel operator-panel-wide" aria-labelledby="schedule-title">
               <header className="operator-panel-head"><div><span>04 / DRAW CONTROL</span><h2 id="schedule-title">{schedule.season.name}</h2></div><strong>{schedule.season.status.toUpperCase()}</strong></header>
               <div className="operator-schedule-meta"><span>{schedule.entries.length} AGENTS</span><span>{schedule.matches.length} PAIRINGS</span><span>RULESET {schedule.season.rulesetVersion.toUpperCase()}</span><span>LOCK {readableDate(schedule.season.locksAt)}</span></div>
-              {schedule.season.status === "open" ? <div className="operator-lock-bar"><label htmlFor="hands">HANDS PER PAIRING<input id="hands" type="number" min="1" max="100" value={hands} onChange={(event) => setHands(event.target.value)} /></label><p>Locking fixes the roster and creates a deterministic round-robin draw.</p><button type="button" className="operator-button operator-button-dark" onClick={() => void lockSeason()} disabled={busy !== "" || schedule.entries.length < 2}>{busy === "lock" ? "LOCKING" : "LOCK DRAW"}<span>→</span></button></div> : null}
+              {schedule.season.status === "open" ? <div className="operator-lock-bar"><label htmlFor="hands">HANDS PER PAIRING<input id="hands" type="number" min="1" max="100" value={hands} onChange={(event) => setHands(event.target.value)} /></label><p>Locking closes entry and creates the round-robin match list. You cannot change the roster afterward.</p><button type="button" className="operator-button operator-button-dark" onClick={() => void lockSeason()} disabled={busy !== "" || schedule.entries.length < 2}>{busy === "lock" ? "LOCKING" : "LOCK DRAW"}<span>→</span></button></div> : null}
               <div className="operator-match-list">
                 {lockedMatches.map((match) => <article className="operator-match-row" key={match.id}><span className="operator-sequence">{String(match.sequence).padStart(2, "0")}</span><div><strong>{match.leftAgentId.toUpperCase()} <b>VS</b> {match.rightAgentId.toUpperCase()}</strong><small>{match.hands} HANDS / {match.status.toUpperCase()}{match.matchId ? ` / ${shortCommitment(match.matchId)}` : ""}</small></div><button type="button" className="operator-run-button" onClick={() => void runMatch(match)} disabled={match.status === "completed" || match.status === "running" || busy !== ""}>{busy === `run-${match.id}` ? "RUNNING" : match.status === "completed" ? "DONE" : "RUN"}</button></article>)}
                 {!lockedMatches.length ? <p className="operator-muted">Lock the season to create real pairings.</p> : null}
@@ -835,13 +835,13 @@ export function VeilArenaConsole() {
 
             {schedule && (schedule.season.status === "open" || schedule.season.status === "locked") ? <section className="operator-panel operator-panel-wide" aria-labelledby="pool-title">
               <header className="operator-panel-head"><div><span>06 / STRK20 SETTLEMENT</span><h2 id="pool-title">Sponsor the winner</h2></div><strong>{prizePool?.status.replaceAll("_", " ").toUpperCase() ?? "NOT CREATED"}</strong></header>
-              <p className="operator-panel-copy">The sponsor shields the listed reserve into their own STRK20 balance, then pays the winner privately. Veil Arena verifies the wallet authorization and chain receipt, but never signs, broadcasts, or holds the sponsor&apos;s funds.</p>
+              <p className="operator-panel-copy">A reward is optional. If you add one, the sponsor funds and pays it from their own STRK20 wallet. Veil Arena verifies the authorization and receipt but never holds the funds.</p>
               {!prizePool ? <form className="operator-form operator-pool-form" onSubmit={(event) => void createPrizePool(event)}><label>TOKEN CONTRACT<input value={tokenAddress} onChange={(event) => setTokenAddress(event.target.value)} placeholder="0x..." required /></label><label>TOKEN SYMBOL<input value={tokenSymbol} onChange={(event) => setTokenSymbol(event.target.value)} placeholder="USDC" required /></label><label>PRIZE AMOUNT IN MINOR UNITS<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="numeric" placeholder="1000000" required /></label><button className="operator-button operator-button-signal" type="submit" disabled={busy !== ""}>{busy === "pool-create" ? "CREATING" : "CREATE SPONSOR POOL"}<span>+</span></button></form> : null}
               {prizePool && (prizePool.status === "funding_pending" || prizePool.status === "unknown") ? (
                 <div className="operator-chain-step">
                   <div>
                     <span>SPONSOR RESERVE</span>
-                    <strong>Shield the reward, then sign its authorization</strong>
+                    <strong>Fund the reward from the sponsor wallet</strong>
                     <small>{prizePool.amountMinor} {prizePool.tokenSymbol} minor units / STRK20 pool {shortCommitment(prizePool.poolAddress)}</small>
                   </div>
                   <div className="operator-chain-actions">
@@ -852,20 +852,20 @@ export function VeilArenaConsole() {
                     <button type="button" className="operator-button operator-button-dark" onClick={() => void confirmFunding()} disabled={busy !== "" || !fundingPlan || !fundingAccount || !fundingHash.trim()}>{busy === "pool-funding" ? "SIGNING" : "SIGN AND VERIFY"}<span>↗</span></button>
                   </div>
                   {fundingPlan ? <div className="operator-plan" aria-label="Prepared sponsor shield"><span>{fundingPlan.network} / PRIVATE BALANCE SHIELD</span><code>{fundingPlan.amountMinor} {fundingPlan.tokenSymbol} / {shortCommitment(fundingPlan.tokenAddress)} → PRIVATE BALANCE {shortCommitment(fundingPlan.recipient)}</code><small>{fundingAccount ? "The sponsor wallet can review, submit, and authorize this exact plan." : "Connect the sponsor wallet to enable wallet preflight and submission."}</small></div> : null}
-                  <small className="operator-wallet-note">The chain confirms finality and a direct STRK20 pool call. The sponsor signature binds the listed plan. Veil Arena does not custody or lock the sponsor balance.</small>
+                  <small className="operator-wallet-note">Starknet confirms the transaction. The sponsor signature ties it to this reward. Veil Arena never holds the sponsor balance.</small>
                   {fundingWalletOutcome?.kind === "error" ? <small className="operator-wallet-note">Wallet preflight or submission failed. No arena state was changed.</small> : null}
                 </div>
               ) : null}
-              {prizePool?.status === "funded" && schedule.season.status === "open" ? <div className="operator-chain-step"><div><span>SPONSOR RESERVE VERIFIED</span><strong>Players can enter against an authorized reward plan</strong><small>The reserve is in the sponsor&apos;s private balance. Lock the roster and finish every pairing before payout.</small></div></div> : null}
-              {prizePool?.status === "funded" && schedule.season.status === "locked" ? <div className="operator-chain-step"><div><span>SPONSOR RESERVE VERIFIED</span><strong>All pairings must be complete before selection</strong><small>The winner receives the private payout at the wallet bound when that agent entered.</small></div><button type="button" className="operator-button operator-button-dark" onClick={() => void prepareSettlement()} disabled={busy !== ""}>{busy === "pool-settlement" ? "SELECTING" : "SELECT WINNER"}<span>→</span></button></div> : null}
+              {prizePool?.status === "funded" && schedule.season.status === "open" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>The competition now shows a funded reward</strong><small>Entry stays open until you lock the draw. The sponsor keeps custody until payout.</small></div></div> : null}
+              {prizePool?.status === "funded" && schedule.season.status === "locked" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>Finish every pairing before selecting the winner</strong><small>The payout goes to the wallet linked when the winning agent entered.</small></div><button type="button" className="operator-button operator-button-dark" onClick={() => void prepareSettlement()} disabled={busy !== ""}>{busy === "pool-settlement" ? "SELECTING" : "SELECT WINNER"}<span>→</span></button></div> : null}
               {prizePool?.status === "settlement_pending" ? <div className="operator-chain-step"><div><span>WINNER SELECTED / {prizePool.winnerAgentId?.toUpperCase()}</span><strong>Submit the private payout, then authorize it</strong><small>Recipient sealed as {shortCommitment(prizePool.recipientFingerprint ?? "")}</small></div><div className="operator-chain-actions">{settlementPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}{settlementPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletSettlement()} disabled={busy !== "" || settlementPrepared}>{busy === "settlement-prepare" ? "CHECKING" : settlementPrepared ? "PREPARED" : "CHECK WALLET"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletSettlement()} disabled={busy !== "" || !settlementPrepared}>{busy === "settlement-submit" ? "WAITING" : "REQUEST WALLET"}<span>↗</span></button></> : null}<label className="operator-inline-field">SETTLEMENT TRANSACTION HASH<input value={settlementHash} onChange={(event) => setSettlementHash(event.target.value)} placeholder="0x..." /></label><button type="button" className="operator-button operator-button-dark" onClick={() => void confirmSettlement()} disabled={busy !== "" || !settlementPlan || !fundingAccount || !settlementHash.trim()}>{busy === "pool-settlement-confirm" ? "SIGNING" : "SIGN AND VERIFY"}<span>↗</span></button></div>{settlementPlan ? <div className="operator-plan" aria-label="Prepared private payout"><span>{settlementPlan.network} / PRIVATE PAYOUT</span><code>{settlementPlan.amountMinor} {settlementPlan.tokenSymbol} / {shortCommitment(settlementPlan.tokenAddress)} → {shortCommitment(settlementPlan.recipient)}</code><small>{fundingAccount ? "The sponsor wallet can review, submit, and authorize this exact payout." : "Connect the sponsor wallet to enable wallet preflight and submission."}</small></div> : null}<small className="operator-wallet-note">The chain confirms finality and a direct STRK20 pool call. The sponsor signature binds the hidden payout plan without publishing its recipient.</small>{settlementWalletOutcome?.kind === "error" ? <small className="operator-wallet-note">Wallet preflight or submission failed. No arena state was changed.</small> : null}</div> : null}
-              {prizePool?.status === "settled" ? <div className="operator-chain-complete"><span>SETTLEMENT COMPLETE</span><strong>{prizePool.winnerAgentId?.toUpperCase()} / PRIVATE REWARD VERIFIED</strong><small>The chain receipts and sponsor authorizations are confirmed. Hidden payout details and recipient identity remain private.</small></div> : null}
+              {prizePool?.status === "settled" ? <div className="operator-chain-complete"><span>SETTLEMENT COMPLETE</span><strong>{prizePool.winnerAgentId?.toUpperCase()} / PRIVATE REWARD VERIFIED</strong><small>The receipt and sponsor authorization are confirmed. The amount and recipient remain private.</small></div> : null}
             </section> : null}
           </div>
         )}
       </main>
 
-      <footer className="operator-footer"><VeilLogo /><span>VEIL ARENA / OPERATOR SURFACE</span><span>WALLET SIGNS / SERVER NEVER BROADCASTS</span></footer>
+      <footer className="operator-footer"><VeilLogo /><span>VEIL ARENA / OPERATOR DESK</span><span>YOUR WALLET SIGNS AND SUBMITS TRANSACTIONS</span></footer>
     </div>
   );
 }

@@ -6,17 +6,17 @@ test("gives a first-time player a clear private-agent journey", async ({ page },
   await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 4_000 });
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Your coding agent builds it. You approve the entry.",
+    "Give the guide to a coding agent. Bring back a contender.",
   );
-  await expect(page.getByText("OPEN AGENT COMPETITION / PRIVATE STRATEGY")).toBeVisible();
+  await expect(page.getByText("NO CODING EXPERIENCE REQUIRED")).toBeVisible();
   await expect(page.getByRole("list", { name: "How to enter" })).toContainText(
-    "Copy AGENT.md into the coding agent you already use",
+    "Copy AGENT.md into your coding agent",
   );
   await expect(page.getByRole("heading", { name: "Choose your arena" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Bring your agent package" })).toBeVisible();
   await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
-  await expect(page.getByText("EVERYONE CAN SEE")).toBeVisible();
-  await expect(page.getByText("KEPT PRIVATE")).toBeVisible();
+  await expect(page.getByText("PUBLIC", { exact: true })).toBeVisible();
+  await expect(page.getByText("PRIVATE", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Wallet access" })).toBeVisible();
   await expect(page.getByRole("button", { name: /import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
   await expect(page.locator("body")).not.toContainText(/sample agent|preview data|synthetic project/i);

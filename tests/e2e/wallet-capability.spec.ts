@@ -52,7 +52,7 @@ test("connects a compatible test wallet without requesting payment permission", 
   await expect(page.getByRole("button", { name: "Veil Arena test wallet" })).toBeVisible();
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText("SESSION VERIFIED")).toBeVisible();
-  await expect(page.getByText("Your wallet proved control. No payment permission was requested.")).toBeVisible();
+  await expect(page.getByText("You proved control of this wallet. No payment permission was requested.")).toBeVisible();
 });
 
 test("refuses an unsupported wallet before sign-in", async ({ page }) => {
@@ -82,7 +82,7 @@ test("stops before signing when the Starknet account is not activated", async ({
 
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText(
-    "Activate this Starknet account in Xverse with its first outgoing Starknet transaction, then try again.",
+    "This Starknet account is not active yet. Make its first outgoing Starknet transaction in Xverse, then try again.",
   )).toBeVisible();
   await expect(page.getByRole("link", { name: "Open Xverse activation steps" })).toHaveAttribute(
     "href",
@@ -96,7 +96,7 @@ test("shows a recoverable message when a wallet rejects connection", async ({ pa
   await page.goto("/sign-in");
 
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
-  await expect(page.getByText("The wallet session could not be verified. Nothing was signed beyond this sign-in request.")).toBeVisible();
+  await expect(page.getByText("We could not verify this wallet session. No payment or transfer was approved.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try another wallet" })).toBeVisible();
 });
 
@@ -106,6 +106,6 @@ test("shows a recoverable message when a wallet rejects signing", async ({ page 
   await page.goto("/sign-in");
 
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
-  await expect(page.getByText("The wallet session could not be verified. Nothing was signed beyond this sign-in request.")).toBeVisible();
+  await expect(page.getByText("We could not verify this wallet session. No payment or transfer was approved.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try another wallet" })).toBeVisible();
 });

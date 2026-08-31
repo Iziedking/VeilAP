@@ -182,7 +182,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
         setSelectedSeasonId(body.value.seasonId);
         setAgentPackageText(JSON.stringify(body.value.agentPackage, null, 2));
         setClaimState("loaded");
-        setClaimMessage(`Package received. Review commitment ${shortCommitment(body.value.artifactCommitment)} before approving it.`);
+        setClaimMessage(`Package received. Check commitment ${shortCommitment(body.value.artifactCommitment)}, then approve the entry.`);
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       } catch {
         if (!active) return;
@@ -382,7 +382,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
           ? "No public season has been created yet."
             : joinableSeasons.length === 0
               ? "No public season is accepting agents right now."
-              : "Choose an open season, give AGENT.md to any coding agent, then approve the returned package.";
+              : "Choose a competition, give AGENT.md to a coding agent, then approve the package it returns.";
   const currentEntry = entry?.seasonId === selectedSeasonId ? entry : null;
 
   return (
@@ -397,13 +397,13 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
       <main>
         <section className="play-hero" aria-labelledby="play-title">
-          <span className="play-kicker">OPEN AGENT COMPETITION / PRIVATE STRATEGY</span>
-          <h1 id="play-title">Your coding agent builds it. You approve the entry.</h1>
-          <p>Copy the Veil Arena guide into any coding agent. It creates and validates your private poker package. You review the exact package commitment, sign from this interface, and send the agent into competition.</p>
+          <span className="play-kicker">NO CODING EXPERIENCE REQUIRED</span>
+          <h1 id="play-title">Give the guide to a coding agent. Bring back a contender.</h1>
+          <p>Copy AGENT.md into the coding agent you already use. It builds and checks the poker package. You review the result and approve the competition entry with your wallet.</p>
           <ol className="play-steps" aria-label="How to enter">
-            <li><span>01</span><strong>Copy AGENT.md into the coding agent you already use</strong></li>
-            <li><span>02</span><strong>Let it engineer and validate your private strategy package</strong></li>
-            <li><span>03</span><strong>Review the commitment and approve entry with your wallet</strong></li>
+            <li><span>01</span><strong>Copy AGENT.md into your coding agent</strong></li>
+            <li><span>02</span><strong>Ask it to build and validate your poker agent</strong></li>
+            <li><span>03</span><strong>Review the package and approve entry with your wallet</strong></li>
           </ol>
         </section>
 
@@ -453,7 +453,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
               <div className="play-success" role="status">
                 <span>ENTRY CONFIRMED</span>
                 <h3>{currentEntry.displayName} is sealed.</h3>
-                <p>Your strategy is encrypted and your agent is in the arena. Rivals can see the public handle and results, but not the rules that drive its decisions.</p>
+                <p>Your agent is entered and its strategy is encrypted. Other players can see its name and results, but they cannot read its rules.</p>
                 <dl>
                   <div><dt>AGENT</dt><dd>{currentEntry.agentId}</dd></div>
                   <div><dt>ENTRY PROOF</dt><dd><code>{shortCommitment(currentEntry.artifactCommitment)}</code></dd></div>
@@ -471,9 +471,9 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
                   <section className="play-agent-guide" aria-labelledby="agent-guide-title">
                     <div>
-                      <span>GIVE THIS GUIDE TO ANY CODING AGENT</span>
-                      <h3 id="agent-guide-title">No special builder account is required.</h3>
-                      <p>The guide contains the complete protocol, legal strategy inputs, package schema and validation rules. Your coding agent should return one <code>.veil-agent.json</code> file.</p>
+                      <span>START HERE</span>
+                      <h3 id="agent-guide-title">Copy the guide. Your coding agent handles the rest.</h3>
+                      <p>AGENT.md explains the game inputs, package format, and validation rules. The coding agent should return one <code>.veil-agent.json</code> file.</p>
                     </div>
                     <div className="play-agent-guide-actions">
                       <button type="button" onClick={copyAgentGuide}>[{guideCopyState === "copied" ? " GUIDE LINK COPIED " : " COPY AGENT.MD LINK "}]</button>
@@ -497,8 +497,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                       spellCheck={false}
                       aria-describedby="package-help"
                     />
-                    <p id="package-help">Veil Arena validates the package locally before it can be submitted. Executable code, unknown fields and packages above 64 KB are rejected.</p>
-                    {claimState !== "idle" && <p className={`play-claim-status${claimState === "error" ? " is-error" : ""}`} role="status">{claimState === "loading" ? "Opening the private package prepared by your coding agent..." : claimMessage}</p>}
+                    <p id="package-help">Veil Arena checks the package before submission. It rejects executable code, unknown fields, and files larger than 64 KB.</p>
+                    {claimState !== "idle" && <p className={`play-claim-status${claimState === "error" ? " is-error" : ""}`} role="status">{claimState === "loading" ? "Opening the package from your coding agent..." : claimMessage}</p>}
                     {packageReview.status === "invalid" && <p className="play-package-invalid" role="alert">{packageReview.message}</p>}
                   </section>
                 </fieldset>
@@ -517,21 +517,21 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                     </dl>
                   )}
                   <div className="play-privacy-grid">
-                    <p><span>EVERYONE CAN SEE</span> Agent name, entry proof, match score, and rank.</p>
-                    <p><span>KEPT PRIVATE</span> Every strategy rule, package contents, and the wallet that receives a win.</p>
+                    <p><span>PUBLIC</span> Agent name, entry commitment, match score, and rank.</p>
+                    <p><span>PRIVATE</span> Strategy rules, package contents, and the wallet that receives a reward.</p>
                   </div>
                   <details>
                     <summary>How privacy works</summary>
-                    <p>Your validated package reaches Veil Arena over HTTPS and is encrypted before storage with a project key protected by AWS KMS. The trusted match runner decrypts it only to execute fixed game rules. Veil Arena does not claim zero-knowledge execution.</p>
+                    <p>Veil Arena encrypts the validated package before storing it. The trusted match runner opens it only while running the fixed game rules. This version does not use zero-knowledge execution.</p>
                   </details>
                 </section>
 
                 {sessionState === "authenticated" ? (
-                  <div className="play-wallet-state"><span>WALLET SIGNATURE VERIFIED</span><strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong><small>Your signed session authorizes this wallet to approve an entry. It never authorizes a transfer.</small></div>
+                  <div className="play-wallet-state"><span>WALLET VERIFIED</span><strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong><small>This session can approve an arena entry. It cannot move funds.</small></div>
                 ) : (
                   <div className="play-sign-in-callout">
-                    <div><span>{sessionState === "checking" ? "CHECKING WALLET SESSION" : "WALLET SIGNATURE REQUIRED"}</span><p>Only you can approve the package and bind any winning reward to your wallet.</p></div>
-                    {sessionState !== "checking" && <Link href="/sign-in">[ SIGN IN SECURELY ]</Link>}
+                    <div><span>{sessionState === "checking" ? "CHECKING WALLET" : "SIGN IN TO ENTER"}</span><p>Your wallet approval links the agent and any reward to you.</p></div>
+                    {sessionState !== "checking" && <Link href="/sign-in">[ SIGN IN WITH WALLET ]</Link>}
                   </div>
                 )}
 
@@ -554,8 +554,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
       <footer className="play-footer">
         <VeilLogo />
-        <span>OPEN BUILDERS / SEALED STRATEGIES</span>
-        <span>REAL COMPETITIONS / HONEST REWARD STATUS</span>
+        <span>OPEN COMPETITIONS / SEALED STRATEGIES</span>
+        <span>REWARDS SHOW THEIR FUNDING STATUS</span>
       </footer>
     </div>
   );

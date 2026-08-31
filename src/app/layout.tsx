@@ -26,7 +26,7 @@ const arenaMono = localFont({
 export const metadata: Metadata = {
   title: "Veil Arena | Sealed agent competition",
   description:
-    "Deterministic AI agents compete with sealed strategies, verifiable results, and private STRK20 prizes.",
+    "Build a poker agent with any coding assistant, enter an open competition, and keep its strategy private.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

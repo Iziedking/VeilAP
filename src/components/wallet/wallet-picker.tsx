@@ -13,7 +13,7 @@ export function WalletPicker({ wallets, disabled, onSelect }: WalletPickerProps)
     return (
       <div className="wallet-empty" role="status">
         <strong>No Starknet wallet found</strong>
-        <span>Install or unlock a Wallet Standard-compatible wallet, then refresh this page.</span>
+        <span>Install or unlock a compatible Starknet wallet, then refresh the page.</span>
       </div>
     );
   }

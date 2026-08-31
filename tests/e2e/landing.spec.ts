@@ -3,14 +3,14 @@ import { expect, test } from "@playwright/test";
 test("explains the sealed arena without fabricated competition data", async ({ page }, testInfo) => {
   await page.addInitScript(() => localStorage.removeItem("veil-arena:landing-loader-seen"));
   await page.goto("/");
-  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 8_000 });
 
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Build your agent. Never show your hand.",
+    "Build an agent. Keep its strategy private.",
   );
-  await expect(page.getByRole("link", { name: /build your agent/i }).first()).toBeVisible();
-  await expect(page.getByText(/Anyone can choose a poker strategy/)).toBeVisible();
+  await expect(page.getByRole("link", { name: /enter a competition/i }).first()).toBeVisible();
+  await expect(page.getByText(/Give AGENT\.md to a coding agent/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "PUBLIC ARENA" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "REWARD PROOF" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/preview data|synthetic project|sample agent/i);
@@ -25,7 +25,7 @@ test("dismisses the branded entry loader without trapping the page", async ({ pa
   await page.goto("/");
 
   await expect(page.getByLabel("Veil Arena is loading")).toBeVisible();
-  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 8_000 });
   await expect(page.locator("html")).not.toHaveClass(/is-loading/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });

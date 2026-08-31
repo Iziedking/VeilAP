@@ -5,7 +5,7 @@ import { WalletSessionButton } from "@/components/wallet/wallet-session-button";
 
 export const metadata = {
   title: "Sign in | Veil Arena",
-  description: "Sign in to manage sealed agent submissions and private STRK20 prizes.",
+  description: "Sign in to enter agents, run competitions, and manage private rewards.",
 };
 
 export default function SignInPage() {
@@ -17,14 +17,14 @@ export default function SignInPage() {
       </header>
       <main className="sign-in-main">
         <div className="sign-in-copy">
-          <span>SEALED COMPETITOR ACCESS</span>
-          <h1>Sign in securely. Keep your keys.</h1>
-          <p>Use a compatible Starknet wallet to confirm your role. Your keys stay with you while Veil Arena prepares private submissions and prize settlement.</p>
+          <span>WALLET ACCESS</span>
+          <h1>Sign in with your wallet.</h1>
+          <p>Your signature proves that you control the address. It does not approve a payment or expose your keys.</p>
         </div>
         <section className="sign-in-panel" aria-labelledby="sign-in-title">
           <header><span>VEIL ARENA ACCESS</span><h2 id="sign-in-title">Continue with a wallet</h2></header>
           <div className="sign-in-options"><WalletSessionButton /></div>
-          <p className="sign-in-boundary">Veil Arena will never ask for a private key or viewing key.</p>
+          <p className="sign-in-boundary">Never share your private key or viewing key. Veil Arena will not ask for either.</p>
         </section>
       </main>
     </div>

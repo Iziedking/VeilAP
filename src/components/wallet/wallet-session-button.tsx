@@ -34,24 +34,24 @@ function signatureStrings(signature: unknown): string[] {
 
 function messageFor(code: string): string {
   if (code === "CONFIGURATION_MISSING") {
-    return "Wallet sign-in is unavailable until persisted security configuration is installed.";
+    return "Wallet sign-in is not configured on this server yet.";
   }
   if (code === "RPC_NOT_CONFIGURED") {
-    return "Mainnet verification is not configured yet. Add the server RPC setting and retry.";
+    return "Mainnet verification is not configured on the server yet.";
   }
   if (code === "WALLET_ACCOUNT_NOT_DEPLOYED") {
-    return "Activate this Starknet account in Xverse with its first outgoing Starknet transaction, then try again.";
+    return "This Starknet account is not active yet. Make its first outgoing Starknet transaction in Xverse, then try again.";
   }
   if (code === "RPC_UNAVAILABLE" || code === "SIGNATURE_UNAVAILABLE") {
-    return "Starknet could not verify this wallet account right now. Confirm the account is activated on Mainnet, then try again.";
+    return "Starknet could not verify this account. Check that it is active on Mainnet, then try again.";
   }
   if (code === "SIGNATURE_INVALID") {
-    return "Starknet rejected this wallet signature. Refresh the page and sign a new request.";
+    return "Starknet rejected the signature. Refresh the page and sign a new request.";
   }
   if (code === "CHALLENGE_EXPIRED") {
     return "The sign-in request expired. Try again to create a fresh request.";
   }
-  return "The wallet session could not be verified. Nothing was signed beyond this sign-in request.";
+  return "We could not verify this wallet session. No payment or transfer was approved.";
 }
 
 export function WalletSessionButton() {
@@ -171,7 +171,7 @@ export function WalletSessionButton() {
       <div className="wallet-authenticated" role="status">
         <span>SESSION VERIFIED</span>
         <strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong>
-        <p>Your wallet proved control. No payment permission was requested.</p>
+        <p>You proved control of this wallet. No payment permission was requested.</p>
         <Link className="sign-in-preview" href="/play">Enter the arena</Link>
         <button className="wallet-logout" type="button" onClick={logout}>Sign out</button>
       </div>
@@ -183,12 +183,12 @@ export function WalletSessionButton() {
     <>
       {flow !== "checking-session" ? <WalletPicker wallets={wallets} disabled={busy} onSelect={authenticate} /> : null}
       <p className="sign-in-status" aria-live="polite">
-        {flow === "checking-session" && "Checking your secure session..."}
-        {flow === "connecting" && "Checking STRK20 support before requesting access..."}
+        {flow === "checking-session" && "Checking your session..."}
+        {flow === "connecting" && "Checking wallet compatibility..."}
         {flow === "awaiting-signature" && "Review the Veil Arena sign-in message in your wallet."}
-        {flow === "verifying" && "Verifying the signed session on Starknet Mainnet..."}
+        {flow === "verifying" && "Verifying your signature on Starknet Mainnet..."}
         {!busy && message}
-        {flow === "idle" && "Choose a wallet. Signing proves control only. It cannot move funds."}
+        {flow === "idle" && "Choose a wallet. This signature proves control and cannot move funds."}
       </p>
       {(errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED"
         || flow === "error"

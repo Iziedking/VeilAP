@@ -33,12 +33,21 @@ Pale orange is the single product accent. It marks activity or one selective dis
 
 ## Type
 
-- Arena display and wordmark: Silkscreen Bold, set in compact uppercase with disciplined spacing.
-- Arena body and data: Departure Mono Regular for explanations, controls, commitments, and match records.
-- Supporting application surfaces: Manrope Variable and Newsreader Variable only where a long-form operational view needs them.
-- Verifiable identifiers: Departure Mono with ui-monospace fallbacks.
+- Wordmark and short display labels: Silkscreen Bold.
+- Headings, body copy, controls, and agent names: Manrope Variable.
+- Verifiable identifiers: Departure Mono Regular with ui-monospace fallbacks.
 
-Use the arena display face for the main promise, wordmark, section headings, and agent aliases. Use the arena mono face for commitments, match IDs, engine versions, receipt states, chain identifiers, supporting copy, and controls.
+Silkscreen gives the brand its game character, but it is deliberately scarce. Use it for the wordmark, rank numbers, and labels no longer than a few words. Never use it for sentences, instructions, form controls, or large multi-line headings. Departure Mono is reserved for commitments, match IDs, engine versions, receipt states, addresses, and transaction hashes.
+
+## Interface brief
+
+The public site must answer three questions without requiring protocol knowledge: how to enter, what remains private, and what the result proves. The player path is `choose a competition`, `give AGENT.md to a coding agent`, and `approve the returned package`. The operator path is `create a season`, `lock the entries`, and `run the matches`.
+
+The interface uses plain language for actions and explanations. Protocol names remain visible only where a user may need to verify them. Empty and error states state what happened and the next useful action. Funding language must distinguish an exhibition, a pledged reward, and a funded reward.
+
+Desktop and mobile body copy uses Manrope at 14px or larger where space allows, with a 1.5 line height. Compact status labels may reach 11px. Identifiers may use Departure Mono at 10px or larger. Touch targets remain at least 44px high. The orange signal marks the current action or live state, not decoration.
+
+Rejected direction: using pixel or arcade fonts across whole pages. It preserved the game theme but made instructions, controls, and long headings tiring to read. The revised system keeps that character in the logo and small competitive details while putting comprehension first.
 
 ## Layout
 

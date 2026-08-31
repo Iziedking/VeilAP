@@ -121,8 +121,8 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
         <div className="arena-nav-inner">
           <a className="arena-brand" href="#top" aria-label="Veil Arena home"><VeilLogo /></a>
           <div className="arena-nav-actions">
-            <a className="arena-button arena-button-quiet" href="#broadcast">[ WATCH ARENA ]</a>
-            <Link className="arena-button arena-button-signal" href="/play">[ BUILD YOUR AGENT ]</Link>
+            <a className="arena-button arena-button-quiet" href="#broadcast">Watch the arena</a>
+            <Link className="arena-button arena-button-signal" href="/play">Enter a competition</Link>
           </div>
         </div>
       </header>
@@ -131,7 +131,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
         <section className="arena-hero" aria-labelledby="arena-hero-title">
           <div className="arena-title-row">
             <span className="arena-hero-mark" aria-hidden="true"><VeilLogo /></span>
-            <h1 id="arena-hero-title">Build your agent. Never show your hand.</h1>
+            <h1 id="arena-hero-title">Build an agent. Keep its strategy private.</h1>
           </div>
 
           <div className="arena-hero-meta" aria-label="Arena facts">
@@ -144,7 +144,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
           </div>
 
           <p className="arena-hero-lede">
-            Anyone can choose a poker strategy, seal it, and enter a season with a sponsor-authorized private reward. Match results go public. Strategies and payout details stay private.
+            Give AGENT.md to a coding agent and it will build your poker package. You approve the entry. Veil Arena publishes the match result while keeping the strategy and payout details private.
           </p>
 
           <article className="arena-latest" aria-label="Latest public match receipt">
@@ -161,21 +161,21 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
                     <span>SCORE {latestScore}</span>
                     <small>POLICIES SEALED</small>
                   </div>
-                  <p>Duplicate deals complete. Seats reversed. Result committed. {latestMatch.selectiveReveal ? "One losing action is disclosed." : "No action is disclosed."}</p>
+                  <p>Each match uses duplicate deals and reversed seats. The receipt records the result while both policies stay sealed. {latestMatch.selectiveReveal ? "One losing action is available for audit." : "No action has been revealed."}</p>
                     <small className="arena-latest-receipt">TRANSCRIPT ROOT {shortCommitment(latestMatch.transcriptRoot)} / {latestMatch.signedReceipt ? "SIGNED" : "LEGACY RECEIPT"}</small>
                 </>
               ) : (
                 <div className="arena-empty-state">
                   <strong>{error || (projectId ? "NO COMPLETED MATCHES" : "ARENA PROJECT NOT CONFIGURED")}</strong>
-                  <p>Only real completed matches publish a receipt here.</p>
+                  <p>A receipt appears here after the first match finishes.</p>
                 </div>
               )}
             </div>
           </article>
 
           <div className="arena-hero-actions">
-            <Link className="arena-button arena-button-signal" href="/play">[ BUILD YOUR AGENT ]</Link>
-            <a className="arena-button arena-button-quiet" href="#broadcast">[ WATCH REAL RESULTS ]</a>
+            <Link className="arena-button arena-button-signal" href="/play">Enter a competition</Link>
+            <a className="arena-button arena-button-quiet" href="#broadcast">View match results</a>
           </div>
         </section>
 
@@ -217,7 +217,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
                 )) : (
                   <div className="arena-empty-state">
                     <strong>{projectId ? "NO RECEIPTS YET" : "ARENA PROJECT NOT CONFIGURED"}</strong>
-                    <p>Completed matches appear here after at least two real agents enter and the season runs.</p>
+                    <p>Matches appear here after at least two agents enter and the operator starts the draw.</p>
                   </div>
                 )}
               </div>
@@ -235,7 +235,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
                     <span role="cell"><code>{shortCommitment(agent.artifactCommitment)}</code><small>SEALED</small></span>
                   </div>
                 ))}
-                {!arena?.leaderboard.length && <div className="arena-empty-state"><strong>NO AGENTS REGISTERED</strong><p>Enter a funded public season to start the leaderboard.</p></div>}
+                {!arena?.leaderboard.length && <div className="arena-empty-state"><strong>NO AGENTS REGISTERED</strong><p>The leaderboard starts when agents enter an open competition. A reward is optional.</p></div>}
               </div>
             )}
 
@@ -260,7 +260,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
             <article>
               <span>WINNER</span>
               <strong>POLICY SEALED</strong>
-              <p>{latestMatch ? "The winning strategy remains hidden." : "A real match is required before a winner can be shown."}</p>
+              <p>{latestMatch ? "The receipt names the winner without publishing its strategy." : "The winner will appear after the first match finishes."}</p>
               <i className="arena-redaction" aria-hidden="true" />
             </article>
             <article className="is-signal">
@@ -272,7 +272,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
             <article>
               <span>LOSING MOVE</span>
               <strong>{latestMatch?.selectiveReveal ? latestMatch.selectiveReveal.action.toUpperCase() : "SEALED"}</strong>
-              <p>{latestMatch?.selectiveReveal ? "One losing action is revealed for an accountable audit." : "An authorized reviewer may reveal one losing action."}</p>
+              <p>{latestMatch?.selectiveReveal ? "One losing action is available for audit." : "An authorized reviewer can reveal one losing action without opening either strategy."}</p>
               <small>{latestMatch?.selectiveReveal ? "LEAF " + String(latestMatch.selectiveReveal.handIndex).padStart(2, "0") + " / PROOF ATTACHED" : "WINNER STRATEGY STAYS SEALED"}</small>
             </article>
           </div>
@@ -310,7 +310,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
           ) : (
             <div className="arena-empty-state arena-settlement-empty">
               <strong>{projectId ? "NO REWARDS SETTLED YET" : "ARENA PROJECT NOT CONFIGURED"}</strong>
-              <p>When a season settles, the finalized pool receipt and sponsor authorization are committed publicly. The hidden amount and recipient stay private.</p>
+              <p>After a sponsored season pays out, the public receipt confirms settlement. The amount and recipient remain private.</p>
             </div>
           )}
         </section>
@@ -319,7 +319,7 @@ export function VeilArenaLanding({ defaultProjectId }: { defaultProjectId: strin
       <footer className="arena-footer">
         <VeilLogo />
         <span>SEALED AGENT COMPETITION / STARKNET</span>
-        <Link href="/arena-console">HOST A SEASON / OPERATOR DESK</Link>
+        <Link href="/arena-console">Host a competition</Link>
       </footer>
     </div>
   );

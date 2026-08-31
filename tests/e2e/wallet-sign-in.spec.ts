@@ -7,13 +7,14 @@ test("wallet sign-in keeps the security boundary visible", async ({ page }, test
   });
 
   await page.goto("/sign-in");
+  await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 4_000 });
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Sign in securely. Keep your keys.",
+    "Sign in with your wallet.",
   );
-  await expect(page.getByText("Checking your secure session...")).toBeHidden({ timeout: 15_000 });
+  await expect(page.getByText("Checking your session...")).toBeHidden({ timeout: 15_000 });
   await expect(page.getByText("No Starknet wallet found")).toBeVisible();
-  await expect(page.getByText(/Signing proves control only/)).toBeVisible();
-  await expect(page.getByText(/never ask for a private key or viewing key/)).toBeVisible();
+  await expect(page.getByText(/This signature proves control and cannot move funds/)).toBeVisible();
+  await expect(page.getByText(/will not ask for either/i)).toBeVisible();
 
   const layout = await page.evaluate(() => ({
     h1Count: document.querySelectorAll("h1").length,
