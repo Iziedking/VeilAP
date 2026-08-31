@@ -39,6 +39,18 @@ function messageFor(code: string): string {
   if (code === "RPC_NOT_CONFIGURED") {
     return "Mainnet verification is not configured yet. Add the server RPC setting and retry.";
   }
+  if (code === "WALLET_ACCOUNT_NOT_DEPLOYED") {
+    return "Activate this Starknet account in Xverse with its first outgoing Starknet transaction, then try again.";
+  }
+  if (code === "RPC_UNAVAILABLE" || code === "SIGNATURE_UNAVAILABLE") {
+    return "Starknet could not verify this wallet account right now. Confirm the account is activated on Mainnet, then try again.";
+  }
+  if (code === "SIGNATURE_INVALID") {
+    return "Starknet rejected this wallet signature. Refresh the page and sign a new request.";
+  }
+  if (code === "CHALLENGE_EXPIRED") {
+    return "The sign-in request expired. Try again to create a fresh request.";
+  }
   return "The wallet session could not be verified. Nothing was signed beyond this sign-in request.";
 }
 
@@ -46,6 +58,7 @@ export function WalletSessionButton() {
   const wallets = useDiscoveredWallets();
   const [flow, setFlow] = useState<FlowState>("checking-session");
   const [message, setMessage] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
 
   useEffect(() => {
@@ -74,6 +87,7 @@ export function WalletSessionButton() {
 
   async function authenticate(wallet: WalletStandardWallet) {
     setMessage("");
+    setErrorCode("");
     setFlow("connecting");
     let connected: Awaited<ReturnType<typeof connectSessionWallet>> | undefined;
     try {
@@ -130,6 +144,7 @@ export function WalletSessionButton() {
       setFlow("authenticated");
     } catch (error) {
       const code = error instanceof Error ? error.message : "AUTH_FAILED";
+      setErrorCode(code);
       setMessage(messageFor(code));
       setFlow("error");
     } finally {
@@ -143,6 +158,7 @@ export function WalletSessionButton() {
       if (!response.ok) throw new Error("LOGOUT_FAILED");
       setWalletAddress("");
       setMessage("");
+      setErrorCode("");
       setFlow("idle");
     } catch {
       setMessage("The session could not be cleared. Refresh and try again.");
@@ -174,8 +190,22 @@ export function WalletSessionButton() {
         {!busy && message}
         {flow === "idle" && "Choose a wallet. Signing proves control only. It cannot move funds."}
       </p>
+      {errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED" && (
+        <a
+          className="wallet-activation-help"
+          href="https://support.xverse.app/hc/en-us/articles/37797696568077-How-to-Activate-Your-Starknet-Account-in-Xverse"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open Xverse activation steps
+        </a>
+      )}
       {(flow === "error" || flow === "unsupported" || flow === "wrong-network") && (
-        <button className="wallet-retry" type="button" onClick={() => setFlow("idle")}>
+        <button className="wallet-retry" type="button" onClick={() => {
+          setErrorCode("");
+          setMessage("");
+          setFlow("idle");
+        }}>
           Try another wallet
         </button>
       )}

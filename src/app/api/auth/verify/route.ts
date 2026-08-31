@@ -18,6 +18,7 @@ import {
 import { createSessionToken } from "@/server/auth/session";
 import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
+import { checkWalletAccountReadiness } from "@/server/auth/starknet-account";
 import { randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
   try {
     const input = bodySchema.parse(await readJsonBody(request));
     const provider = new RpcProvider({ nodeUrl: rpcUrl });
+    const readiness = await checkWalletAccountReadiness(provider, input.walletAddress);
+    if (!readiness.ok) {
+      return json(readiness, readiness.code === "WALLET_ACCOUNT_NOT_DEPLOYED" ? 409 : 503);
+    }
     const result = await getAuthChallenges().verify({
       challenge: input.challenge as AuthChallenge,
       requestOrigin: origin,

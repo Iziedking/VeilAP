@@ -2,6 +2,16 @@ import { expect, test } from "@playwright/test";
 
 import { installFakeWallet } from "../fixtures/wallet";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/auth/session", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, code: "SESSION_MISSING" }),
+    });
+  });
+});
+
 async function stubPreviewAuth(page: Parameters<typeof installFakeWallet>[0]): Promise<void> {
   await page.route("**/api/auth/challenge", async (route) => {
     await route.fulfill({
@@ -52,6 +62,33 @@ test("refuses an unsupported wallet before sign-in", async ({ page }) => {
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText("This wallet needs STRK20 Wallet API 0.10.3 or newer.")).toBeVisible();
   await expect(page.getByText("SESSION VERIFIED")).toHaveCount(0);
+});
+
+test("stops before signing when the Starknet account is not activated", async ({ page }) => {
+  await installFakeWallet(page);
+  let verifyCalled = false;
+  await page.route("**/api/auth/challenge", async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, code: "WALLET_ACCOUNT_NOT_DEPLOYED" }),
+    });
+  });
+  await page.route("**/api/auth/verify", async (route) => {
+    verifyCalled = true;
+    await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+  });
+  await page.goto("/sign-in");
+
+  await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
+  await expect(page.getByText(
+    "Activate this Starknet account in Xverse with its first outgoing Starknet transaction, then try again.",
+  )).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Xverse activation steps" })).toHaveAttribute(
+    "href",
+    "https://support.xverse.app/hc/en-us/articles/37797696568077-How-to-Activate-Your-Starknet-Account-in-Xverse",
+  );
+  expect(verifyCalled).toBe(false);
 });
 
 test("shows a recoverable message when a wallet rejects connection", async ({ page }) => {

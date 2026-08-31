@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { RpcProvider } from "starknet";
 import { z } from "zod";
 
 import {
@@ -8,6 +9,7 @@ import {
   requestOrigin,
 } from "@/server/auth/runtime";
 import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
+import { checkWalletAccountReadiness } from "@/server/auth/starknet-account";
 
 export const runtime = "nodejs";
 
@@ -39,9 +41,18 @@ export async function POST(request: Request) {
   if (!origin || origin !== expectedOrigin(request)) {
     return json({ ok: false, code: "ORIGIN_MISMATCH" }, 403);
   }
+  const rpcUrl = process.env.STARKNET_RPC_URL;
+  if (!rpcUrl) return json({ ok: false, code: "RPC_NOT_CONFIGURED" }, 503);
 
   try {
     const input = requestSchema.parse(await readJsonBody(request));
+    const readiness = await checkWalletAccountReadiness(
+      new RpcProvider({ nodeUrl: rpcUrl }),
+      input.walletAddress,
+    );
+    if (!readiness.ok) {
+      return json(readiness, readiness.code === "WALLET_ACCOUNT_NOT_DEPLOYED" ? 409 : 503);
+    }
     const challenge = await getAuthChallenges().issue({ ...input, origin });
     return json({ ok: true, challenge });
   } catch (error) {
