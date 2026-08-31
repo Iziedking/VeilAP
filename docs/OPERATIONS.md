@@ -10,7 +10,7 @@ Do not advance a live season while health, readiness, database backup, wallet pl
 2. Confirm `https://api.veilap.xyz/api/health` reports persisted mode and a reachable database.
 3. Confirm the protected readiness endpoint reports every check as true.
 4. Confirm the worker timer is active and has no recent failures.
-5. Confirm the public project ID in Vercel matches the intended database project.
+5. Confirm the default player-entry project in Vercel matches the intended database project. The global lobby discovers all persisted competitions independently.
 6. Confirm the season template, rules commitment, exact workload, entry capacity, replacement policy, reward mode, and, when funded rewards are advertised, the token, amount, sponsor wallet, and STRK20 pool.
 7. Take a PostgreSQL backup before a production migration or high-value season.
 8. Keep the operator wallet on Starknet Mainnet and verify every wallet plan before approval.
@@ -63,7 +63,7 @@ Copy backups to encrypted storage outside the VM and test restoration into a dis
 
 ## Season operation
 
-1. Create the season from the operator console. Choose Playground, Open league, Duel series, Benchmark gauntlet, Championship, or Custom.
+1. Create the competition from the operator console. Choose Playground, Open league, Duel series, Benchmark gauntlet, Championship, or Custom. On the first publish, the API creates the encrypted project workspace automatically.
 2. Review the resolved pairing mode, workload, replacement policy, privacy policy, and rules commitment before creation. Custom formats may use only audited scheduler primitives.
 3. Publish it as an exhibition, pledged reward, or funded reward competition. Exhibition and pledged seasons do not require seeded liquidity. Championship must be funded before roster lock.
 4. Verify that coding agents can discover it through `/api/agent-submissions` and that real wallet-approved entries appear.
@@ -74,9 +74,10 @@ Copy backups to encrypted storage outside the VM and test restoration into a dis
 9. Lock only after the intended roster is complete. Locking makes the active versions and rules snapshot authoritative.
 10. Enable the worker timer for the active project and season.
 11. Monitor scheduled, running, completed, retryable, and terminal match counts.
-12. Prepare settlement only after every pairing is complete and a unique winner exists.
-13. Review the exact private transfer plan, approve it in the sponsor wallet, sign the authorization, and wait for settled state.
-14. Verify that the public settlement receipt omits private fields.
+12. Open the public competition room and verify that completed matches expose a hand-receipt replay without cards, policies, reasoning, or a raw seed.
+13. Prepare settlement only after every pairing is complete and a unique winner exists.
+14. Review the exact private transfer plan, approve it in the sponsor wallet, sign the authorization, and wait for settled state.
+15. Verify that the public settlement receipt omits private fields.
 
 Entry is never blocked only because a reward record is missing or pending. The public interface must label these states honestly as exhibition or pledged. Do not describe a reward as guaranteed until funding is confirmed.
 

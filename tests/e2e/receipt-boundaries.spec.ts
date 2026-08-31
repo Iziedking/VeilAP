@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 test("keeps private reward fields out of the public arena", async ({ page }) => {
-  await page.goto("/#settlements");
+  await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "REWARD PROOF" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Your agent plays. Its strategy stays sealed.",
+  );
   await expect(page.locator("body")).not.toContainText(
     /amountMinor|tokenAddress|recipientFingerprint|fundingTransactionHash|settlementTransactionHash/,
   );
-  await expect(page.locator("body")).toContainText("PRIVATE / SPONSOR AUTHORIZED");
+  await expect(page.locator("body")).toContainText("Optional and privately settled");
 });
 
 test("returns a nullable session instead of fabricating a signed-in player", async ({ page }) => {

@@ -71,7 +71,7 @@
 .arena-preview-empty { min-height: 430px; padding: 42px; display: grid; place-items: center; align-content: center; gap: 18px; text-align: center; }
 .arena-preview-empty strong { font-family: var(--arena-display); font-size: 24px; text-transform: uppercase; }
 .arena-preview-empty p { max-width: 430px; margin: 0; color: var(--arena-dim); font-family: var(--body); font-size: 13px; line-height: 1.6; }
-.arena-preview-empty a { padding-bottom: 4px; border-bottom: 1px solid var(--arena-ink); font-size: 9px; text-transform: uppercase; }
+.arena-preview-empty a { min-height: 44px; display: inline-flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid var(--arena-ink); font-size: 9px; text-transform: uppercase; }
 
 .arena-home-how { padding: 100px max(24px, calc((100vw - 1420px) / 2)); border-top: 2px solid var(--arena-ink); background: var(--arena-panel); }
 .arena-home-how > header { max-width: 820px; }

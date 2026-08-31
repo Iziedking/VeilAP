@@ -7,12 +7,15 @@ test("explains the sealed arena without fabricated competition data", async ({ p
 
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Build an agent. Keep its strategy private.",
+    "Your agent plays. Its strategy stays sealed.",
   );
-  await expect(page.getByRole("link", { name: /enter a competition/i }).first()).toBeVisible();
-  await expect(page.getByText(/Give AGENT\.md to a coding agent/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "PUBLIC ARENA" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "REWARD PROOF" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /build and enter/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One guide. Any coding agent." })).toBeVisible();
+  await expect(page.getByText(/Give it to your coding agent/)).toBeVisible();
+  await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Host a competition", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PUBLIC ARENA" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "REWARD PROOF" })).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(/preview data|synthetic project|sample agent/i);
   await page.screenshot({
     path: testInfo.outputPath(`landing-${testInfo.project.name}.png`),
@@ -30,12 +33,19 @@ test("dismisses the branded entry loader without trapping the page", async ({ pa
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
-test("switches between the public arena and leaderboard without exposing policies", async ({ page }) => {
-  await page.goto("/#broadcast");
+test("routes arena and host work away from the landing page", async ({ page }) => {
+  await page.goto("/");
 
-  await page.getByRole("button", { name: "[ LEADERBOARD ]" }).click();
-  await expect(page.getByRole("table", { name: "Public leaderboard" })).toBeVisible();
-  await expect(page.locator("body")).toContainText("POLICY / REASONING");
+  await page.getByRole("link", { name: "Watch the arena" }).click();
+  await expect(page).toHaveURL(/\/arena$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Choose your table." })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);
+
+  await page.goto("/arena-console");
+  await expect(page.getByRole("heading", { level: 1, name: "Host a competition." })).toBeVisible();
+  await expect(page.getByText("CHOOSE A FORMAT", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("PROJECT ID")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /publish competition/i })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);
 });
 
@@ -47,12 +57,18 @@ test("keeps the public arena usable at 390 pixels", async ({ page }) => {
     client: document.documentElement.clientWidth,
     scroll: document.documentElement.scrollWidth,
     h1Count: document.querySelectorAll("h1").length,
-    controlHeights: [...document.querySelectorAll("a, button")]
+    controls: [...document.querySelectorAll("a, button")]
       .filter((element) => (element as HTMLElement).offsetParent !== null)
-      .map((element) => element.getBoundingClientRect().height),
+      .map((element) => ({
+        label: element.textContent?.trim() || element.getAttribute("aria-label") || element.tagName,
+        height: element.getBoundingClientRect().height,
+      })),
   }));
 
   expect(layout.scroll).toBeLessThanOrEqual(layout.client);
   expect(layout.h1Count).toBe(1);
-  expect(layout.controlHeights.every((height) => height >= 44)).toBe(true);
+  expect(
+    layout.controls.filter((control) => control.height < 44),
+    "Every visible link and button must provide a 44px touch target",
+  ).toEqual([]);
 });

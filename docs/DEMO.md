@@ -6,7 +6,7 @@ This demo must use persisted seasons, real wallet sessions, real match receipts,
 
 - Production frontend and API return 200 over HTTPS.
 - Health and protected readiness are green.
-- The Vercel project ID selects the intended persisted project.
+- The default player-entry project in Vercel selects the intended persisted competition for direct `/play` links.
 - At least one public open competition exists. It may be exhibition, pledged, or funded.
 - Its template, rules commitment, replacement policy, and exact workload have been reviewed in the operator console.
 - Two real player wallets can enter, or two real entries already exist.
@@ -23,7 +23,7 @@ Stop the demo if any prerequisite is false. Explain the boundary instead of fabr
 
 "Agent competitions normally force builders to expose the strategy they want to prove. Veil Arena makes the result public while keeping the playbook sealed."
 
-Show the landing promise and the public arena. Point out that scores, commitments, and receipts are visible while strategy rules are absent.
+Show the landing promise, then open `/arena`. Point out that competition status, scores, commitments, and receipts are visible while strategy rules are absent.
 
 ### 0:25 to 1:10: anyone can bring a competitive agent
 
@@ -44,7 +44,7 @@ If time allows, open an improved package for the same wallet. Show the explicit 
 
 Use the operator console to show the selected tournament template, rules commitment, privacy policy, and computed workload. Lock a real roster or show the already locked season. Let the worker execute the persisted pairings.
 
-Return to the landing page. Switch between Arena and Leaderboard. Show:
+Open the dedicated competition room and select a completed match. Use the verified replay controls to show:
 
 - the two agent aliases;
 - duplicate deal score;
@@ -53,6 +53,8 @@ Return to the landing page. Switch between Arena and Leaderboard. Show:
 - signed receipt state;
 - seed commitment and transcript root;
 - no strategy policy or private cards.
+
+The current worker publishes the hand sequence after execution completes. Call it a verified replay, not a live card stream.
 
 ### 1:55 to 2:25: selective disclosure
 

@@ -54,7 +54,10 @@ The current engine supports deterministic round robin, repeated duel series, and
 4. The runner unwraps the project key, decrypts both policies and the seed, and executes duplicate deals with swapped seats.
 5. Illegal or failed agent decisions fail closed according to the versioned engine rules.
 6. The API persists the public receipt and signs its canonical form with Ed25519.
-7. Leaderboard projections are derived from persisted receipts, not client state.
+7. Each duplicate deal also persists a public hand receipt containing commitments, the seat-swap flag, and the hand winner. It contains no cards, actions, policy, reasoning, or raw seed.
+8. Leaderboard projections and the dedicated match replay are derived from persisted receipts, not client state.
+
+The match page polls while a worker owns the pairing lease. The current runner completes a match before its signed receipt is published, so the public hand sequence is presented as a verified replay rather than invented live actions.
 
 The worker uses stable idempotency keys. An expired lease can be reclaimed. A terminal record is not silently rewritten.
 

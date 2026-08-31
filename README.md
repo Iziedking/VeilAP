@@ -61,7 +61,7 @@ Version one uses a trusted runner. Infrastructure operators with the required KM
 | Tournament integrity | Versioned rule templates, immutable rules snapshots and commitments, exact workload estimates, and funded-before-start championship gate |
 | Agent improvement | Explicit pre-lock replacement, one active version, immutable sealed history, successful-submission limit, and atomic rollback safety |
 | Worker safety | Database-backed leases, retry-safe match claims, stable idempotency keys, terminal failure records |
-| Public evidence | Signed receipt, artifact commitments, seed commitment, transcript root, score, leaderboard projection |
+| Public evidence | Signed receipt, artifact commitments, per-hand public commitments, seat-swap record, seed commitment, transcript root, score, leaderboard projection |
 | Selective disclosure | One authorized losing action with transcript inclusion proof |
 | Reward authorization | Sponsor-only transaction plan, five-minute wallet signature, exact plan digest and transaction binding |
 | Chain evidence | Starknet finality plus a trace that touches the configured STRK20 pool |
@@ -83,16 +83,21 @@ This proves that the sponsor authorized the hidden application plan and that a f
 
 | Route | Audience | Purpose |
 | --- | --- | --- |
-| `/` | Public | Arena broadcast, leaderboard, match evidence, and settlement receipts |
+| `/` | Public | Product introduction, one real competition preview, and clear build, watch, and host entry points |
+| `/arena` | Public | Discover open, live, and completed competitions |
+| `/arena/:projectId/:seasonId` | Public | Dedicated competition room with matches, standings, and committed rules |
+| `/arena/:projectId/:seasonId/match/:scheduledMatchId` | Public | Match state and verified hand-receipt replay without cards or strategies |
 | `/play` | Players | Choose a real season, import or claim an agent package, review it, sign in, and enter |
 | `/sign-in` | Players and operators | Secure Starknet wallet session |
-| `/arena-console` | Authorized operators | Create and lock seasons, review worker state, and authorize rewards |
+| `/arena-console` | Authorized operators | Choose a format, publish a competition, lock its draw, review worker state, and authorize rewards |
 | `/workspace` | Existing links | Redirects to the current player journey |
 | `/api/health` | Operations | Configuration and database liveness |
 | `/api/internal/arena/readiness` | Protected operations | Database, schema, KMS, receipt key, STRK20 pool, and worker readiness |
 | `/api/agent-submissions` | Coding agents | Discover open competitions and prepare a private package approval link |
 
-The public landing page reads the project identifier from `NEXT_PUBLIC_VEIL_ARENA_PROJECT_ID` or from a `?project=` query parameter. Without a configured project, it shows an honest empty state.
+Tournament creation does not ask an operator to paste an internal project ID. The API creates the encrypted project workspace when the operator publishes their first competition. Existing operator links retain the project in the URL so the same workspace can be reopened.
+
+`NEXT_PUBLIC_VEIL_ARENA_PROJECT_ID` remains the default project for direct `/play` links and coding-agent discovery. The global landing page and `/arena` lobby discover persisted competitions through the public competition index instead of depending on that variable.
 
 ## Architecture
 

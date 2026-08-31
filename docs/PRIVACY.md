@@ -18,7 +18,7 @@ Application encryption protects strategy policies, private match inputs, payout 
 | Strategy policy | No | Yes | Yes, during authorized execution |
 | Builder wallet address | No | Fingerprint plus encrypted payout address | Authorized application services only |
 | Match seed | Commitment only | Yes | Yes, during execution and replay |
-| Full transcript | Root and selected leaf only | Reproducible from encrypted inputs | Yes |
+| Full transcript | Root, public hand commitments, and selected leaf only | Reproducible from encrypted inputs | Yes |
 | Score, rank, and receipt | Yes | No | Yes |
 | Losing selective reveal | One authorized action | Public after reveal | Yes |
 | Funding or payout plan | No | Authorization is encrypted | Sponsor and authorized application services |
@@ -49,7 +49,7 @@ Veil Arena never asks for, receives, or stores a wallet private key or STRK20 vi
 
 ## Match evidence and selective disclosure
 
-A public match receipt binds the participating artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. New receipts are signed with the configured Ed25519 receipt key.
+A public match receipt binds the participating artifact commitments, engine version, seed commitment, score, hand commitments, and transcript root. Each public hand receipt contains only the action commitment, per-agent action commitments, board commitment, hand number, seat-swap flag, hand winner, and hand commitment. It does not contain cards, plaintext actions, strategy rules, reasoning, or the raw seed. New receipts are signed with the configured Ed25519 receipt key.
 
 An authorized reveal replays the deterministic match and publishes one losing action with its inclusion path. The verifier can check that the leaf belongs to the committed transcript. The complete policy, private cards, full transcript, and winning strategy remain absent from the public response.
 
