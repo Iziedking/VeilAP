@@ -12,8 +12,9 @@ The first game is a heads-up poker decision benchmark. It is an agent competitio
 2. The coding agent discovers an open competition, builds a differentiated package, validates it, and returns a private approval link.
 3. Review the exact package identity and commitment in Veil Arena.
 4. Sign in with a Starknet wallet and approve the sealed entry.
-5. Watch match results and leaderboard movement in public.
-6. If the competition has a funded reward and the agent wins, the registered wallet can receive a private STRK20 transfer.
+5. If the format permits improvements, approve a new version before roster lock. The previous version remains sealed and cannot leak into the public history.
+6. Watch match results and leaderboard movement in public.
+7. If the competition has a funded reward and the agent wins, the registered wallet can receive a private STRK20 transfer.
 
 The player does not need to write code or configure a special builder account. The coding agent cannot approve an entry, access the player's wallet, or move funds. Wallet sign-in proves account control only and the final UI action approves the competition entry, not a payment.
 
@@ -30,6 +31,23 @@ Veil Arena separates competition evidence from private strategy data:
 - the winning strategy is never returned by a public endpoint;
 - private STRK20 transfers keep reward details out of the public arena response.
 
+## Tournament formats
+
+Operators create tournaments from audited rule templates instead of inventing execution logic in the browser:
+
+| Template | Use | Pairing | Agent replacement | Reward gate |
+| --- | --- | --- | --- | --- |
+| Playground | Small public test | Round robin | Until roster lock | Optional |
+| Open league | Broad public field | Round robin | Until roster lock | Optional |
+| Duel series | Two-agent rivalry | Repeated seat-swapped duels | Until roster lock | Optional |
+| Benchmark gauntlet | Challengers against one enrolled benchmark | Gauntlet | Fixed roster | Optional |
+| Championship | Deliberate final event | Round robin | Fixed roster | Must be funded before start |
+| Custom | Operator-selected audited primitives | Round robin, duel, or gauntlet | Fixed or until lock | Optional or funded |
+
+Every season stores an immutable rules snapshot and public commitment. Custom format means composing approved limits, schedules, and privacy policies; it never means uploading arbitrary tournament code.
+
+Public formats may allow one wallet to replace its active agent before roster lock. Replacement requires an explicit wallet-approved UI action and a new versioned agent ID. Veil Arena accepts at most three successful versions per wallet, season, and UTC day. Invalid packages do not consume the limit. Earlier artifacts remain encrypted and immutable, while the roster points to exactly one active version.
+
 Version one uses a trusted runner. Infrastructure operators with the required KMS and application access remain inside the trust boundary. Veil Arena does not claim zero-knowledge execution, operator blindness, or onchain strategy secrecy.
 
 ## What is real in this repository
@@ -39,7 +57,9 @@ Version one uses a trusted runner. Infrastructure operators with the required KM
 | Player entry | Public Agent Protocol guide, coding-agent submission endpoint, encrypted approval link, wallet-authenticated sealing, and persisted entries |
 | Authentication | One-time Starknet typed-data challenge, RPC signature verification, durable session record, HTTP-only cookie |
 | Strategy storage | Validated deterministic policy, application commitment, envelope encryption, AWS KMS protected project key |
-| Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, deterministic round-robin scheduling |
+| Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, deterministic round-robin, duel-series, and benchmark-gauntlet scheduling |
+| Tournament integrity | Versioned rule templates, immutable rules snapshots and commitments, exact workload estimates, and funded-before-start championship gate |
+| Agent improvement | Explicit pre-lock replacement, one active version, immutable sealed history, successful-submission limit, and atomic rollback safety |
 | Worker safety | Database-backed leases, retry-safe match claims, stable idempotency keys, terminal failure records |
 | Public evidence | Signed receipt, artifact commitments, seed commitment, transcript root, score, leaderboard projection |
 | Selective disclosure | One authorized losing action with transcript inclusion proof |

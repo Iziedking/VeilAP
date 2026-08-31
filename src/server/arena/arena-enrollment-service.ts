@@ -193,7 +193,7 @@ export class ArenaEnrollmentService {
         seasonId,
         agentId,
         artifactCommitment,
-        replaceExisting: input.replaceExisting ?? false,
+        ...(input.replaceExisting ? { replaceExisting: true } : {}),
       });
 
       const existingByKey = await this.repositories.getArenaSeasonEntryByIdempotencyKey(

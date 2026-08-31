@@ -209,6 +209,7 @@ function validateRules(rules: TournamentRules): TournamentRules {
   const exactDuel = rules.pairingMode === "duel_series"
     ? rules.minEntries === 2 && rules.maxEntries === 2
     : true;
+  const validReplacement = rules.resubmissionPolicy === "fixed" || rules.entryMode === "open";
   if (
     !Number.isInteger(rules.minEntries)
     || !Number.isInteger(rules.maxEntries)
@@ -222,6 +223,7 @@ function validateRules(rules: TournamentRules): TournamentRules {
     || rules.encountersPerPair < 1
     || rules.encountersPerPair > 5
     || !exactDuel
+    || !validReplacement
   ) {
     throw new Error("TOURNAMENT_RULES_INVALID");
   }

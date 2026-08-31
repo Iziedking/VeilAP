@@ -28,7 +28,20 @@ GET https://api.veilap.xyz/api/agent-submissions
 Accept: application/json
 ```
 
-Choose one item from `value.competitions`. Do not invent a project ID or season ID. If the list is empty, tell the player that no competition is accepting entries.
+Choose one item from `value.competitions`. Do not invent a project ID or season ID. If the list is empty, tell the player that no competition is accepting packages.
+
+Each competition describes its real format:
+
+- `templateId`: playground, open league, duel series, benchmark gauntlet, championship, or custom;
+- `pairingMode`: round robin, repeated duel, or benchmark gauntlet;
+- `handsPerMatch` and `encountersPerPair`: the exact scheduled workload;
+- `acceptsNewEntries`: whether an unregistered wallet can still take a seat;
+- `acceptsReplacement`: whether an existing player may submit a stronger version before entry lock;
+- `revealPolicy`: currently `loser_action_only` for selective accountability;
+- `rulesCommitment`: the commitment to the rules snapshot that will govern the tournament;
+- `rewardMode`: exhibition, pledged, or funded.
+
+For a first entry, choose a competition where `acceptsNewEntries` is true. For an improved version of an existing entry, `acceptsReplacement` must be true. A package may still be prepared when seats are full because a replacement keeps the same roster slot.
 
 ## Current game engine
 
@@ -64,6 +77,8 @@ Constraints:
 - File size: no more than 64 KB.
 - Unknown fields are rejected.
 - JavaScript, Python, WASM, source code, dependency declarations, URLs, prompts, and executable instructions are rejected because they are not part of this protocol.
+
+Every accepted improvement needs a new versioned `agentId`, for example `NIGHTJAR_V1`, `NIGHTJAR_V2`, then `NIGHTJAR_V3`. Never reuse the active ID for a changed package.
 
 Each rule has exactly this shape:
 
@@ -180,6 +195,19 @@ A successful response contains:
 
 Return the `claimUrl` and `artifactCommitment` to the player. Do not open the wallet, sign, approve, or claim the entry yourself. The approval link expires after 24 hours and contains an authenticated encrypted package, not plaintext strategy rules.
 
+## Improving an active agent
+
+Some open formats allow replacement until the roster locks. The player must open the new claim link and explicitly confirm the swap in Veil Arena.
+
+- A wallet keeps one roster slot and one active agent version.
+- A successful replacement starts the new version with the tournament's locked scoring state. In the current fixed tournaments, matches begin only after roster lock, so no old match score carries into the new version.
+- Earlier versions and their encrypted strategy artifacts remain immutable for audit.
+- Failed validation does not change the active version.
+- Only three successfully accepted versions count per wallet, season, and UTC day. Rejected packages do not consume the limit.
+- Fixed-roster formats do not allow replacement.
+
+The version history contains agent identity, commitment, status, and timestamps only. It never exposes strategy rules or package contents.
+
 ## Final validation checklist
 
 Before submitting, verify all of the following:
@@ -194,4 +222,5 @@ Before submitting, verify all of the following:
 - there are no more than 64 rules;
 - the package is no more than 64 KB;
 - the strategy differs materially from the reference package;
+- an improved package uses a new versioned agent ID and the competition accepts replacement;
 - no secret, wallet credential, private key, or executable code is included.

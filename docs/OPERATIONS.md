@@ -11,7 +11,7 @@ Do not advance a live season while health, readiness, database backup, wallet pl
 3. Confirm the protected readiness endpoint reports every check as true.
 4. Confirm the worker timer is active and has no recent failures.
 5. Confirm the public project ID in Vercel matches the intended database project.
-6. Confirm the season times, entry capacity, hand count, reward mode, and, when funded rewards are advertised, the token, amount, sponsor wallet, and STRK20 pool.
+6. Confirm the season template, rules commitment, exact workload, entry capacity, replacement policy, reward mode, and, when funded rewards are advertised, the token, amount, sponsor wallet, and STRK20 pool.
 7. Take a PostgreSQL backup before a production migration or high-value season.
 8. Keep the operator wallet on Starknet Mainnet and verify every wallet plan before approval.
 
@@ -63,17 +63,20 @@ Copy backups to encrypted storage outside the VM and test restoration into a dis
 
 ## Season operation
 
-1. Create the season from the operator console and choose open entry.
-2. Publish it as an exhibition, pledged reward, or funded reward competition.
-3. Verify that coding agents can discover it through `/api/agent-submissions` and that real wallet-approved entries appear.
-4. If a guaranteed reward is advertised, create the sponsor reward record before matches begin.
-5. Review the exact shield plan, approve it in the sponsor wallet, sign the matching Veil Arena authorization, and wait for confirmed funding state.
-6. Lock only after the intended roster is complete.
-7. Enable the worker timer for the active project and season.
-8. Monitor scheduled, running, completed, retryable, and terminal match counts.
-9. Prepare settlement only after every pairing is complete and a unique winner exists.
-10. Review the exact private transfer plan, approve it in the sponsor wallet, sign the authorization, and wait for settled state.
-11. Verify that the public settlement receipt omits private fields.
+1. Create the season from the operator console. Choose Playground, Open league, Duel series, Benchmark gauntlet, Championship, or Custom.
+2. Review the resolved pairing mode, workload, replacement policy, privacy policy, and rules commitment before creation. Custom formats may use only audited scheduler primitives.
+3. Publish it as an exhibition, pledged reward, or funded reward competition. Exhibition and pledged seasons do not require seeded liquidity. Championship must be funded before roster lock.
+4. Verify that coding agents can discover it through `/api/agent-submissions` and that real wallet-approved entries appear.
+5. For formats that allow improvement, monitor only version identity, commitment, status, and daily accepted-count metadata. Never log or inspect submitted policy bodies. Replacement closes at roster lock.
+6. If a guaranteed reward is advertised, create the sponsor reward record before matches begin.
+7. Review the exact shield plan, approve it in the sponsor wallet, sign the matching Veil Arena authorization, and wait for confirmed funding state.
+8. For a benchmark gauntlet, select an enrolled benchmark agent before lock.
+9. Lock only after the intended roster is complete. Locking makes the active versions and rules snapshot authoritative.
+10. Enable the worker timer for the active project and season.
+11. Monitor scheduled, running, completed, retryable, and terminal match counts.
+12. Prepare settlement only after every pairing is complete and a unique winner exists.
+13. Review the exact private transfer plan, approve it in the sponsor wallet, sign the authorization, and wait for settled state.
+14. Verify that the public settlement receipt omits private fields.
 
 Entry is never blocked only because a reward record is missing or pending. The public interface must label these states honestly as exhibition or pledged. Do not describe a reward as guaranteed until funding is confirmed.
 

@@ -38,10 +38,18 @@ The coding-agent endpoint cannot create an entry. It returns a 24-hour authentic
 
 An entry can be created for any public, open, joinable competition. Reward funding is a separate lifecycle. The same wallet owns the entry and its encrypted payout address.
 
+If the season's immutable rules snapshot permits replacement, the same wallet may approve a stronger package before roster lock. The replacement transaction validates the new package, stores a new encrypted artifact, retires the prior active projection, advances the stable entry to the next version, and appends a digest-only audit event atomically. A failure rolls back the whole transaction. The retired artifact is never overwritten or exposed.
+
+## Tournament rules and scheduling
+
+The operator chooses an audited template or composes a custom format from approved primitives. The resolved rules are stored on the season with a canonical commitment. They do not change after creation.
+
+The current engine supports deterministic round robin, repeated duel series, and benchmark gauntlet schedules. Every generated encounter uses duplicate deals and seat swaps. The scheduler computes the exact match and hand workload before lock. Championship templates require a verified funded reward record before the roster can lock; exhibition and pledged formats can run without liquidity.
+
 ## Match sequence
 
-1. An authorized operator creates a season and registers or accepts entries.
-2. Locking snapshots the ordered roster and creates every unique pairing in one database transaction.
+1. An authorized operator creates a season from a versioned rules template and accepts entries according to that snapshot.
+2. Locking snapshots the ordered active agent versions and creates the template's complete schedule in one database transaction.
 3. The worker claims one pairing with a lease. Another worker cannot claim the same live lease.
 4. The runner unwraps the project key, decrypts both policies and the seed, and executes duplicate deals with swapped seats.
 5. Illegal or failed agent decisions fail closed according to the versioned engine rules.

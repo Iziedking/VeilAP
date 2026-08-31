@@ -46,7 +46,6 @@ export async function GET() {
         && season.entryMode === "open"
         && Date.parse(season.startsAt) <= now
         && now < Date.parse(season.locksAt)
-        && season.entryCount < season.maxEntries
       ))
       .map((season) => ({
         projectId,
@@ -54,7 +53,15 @@ export async function GET() {
         name: season.name,
         rulesetVersion: season.rulesetVersion,
         locksAt: season.locksAt,
-        seatsRemaining: season.maxEntries - season.entryCount,
+        seatsRemaining: Math.max(0, season.maxEntries - season.entryCount),
+        acceptsNewEntries: season.entryCount < season.maxEntries,
+        acceptsReplacement: season.rules?.resubmissionPolicy === "replace_until_lock",
+        templateId: season.templateId ?? "legacy",
+        pairingMode: season.rules?.pairingMode ?? "round_robin",
+        handsPerMatch: season.rules?.handsPerMatch ?? 8,
+        encountersPerPair: season.rules?.encountersPerPair ?? 1,
+        revealPolicy: season.rules?.revealPolicy ?? "loser_action_only",
+        rulesCommitment: season.rulesCommitment,
         rewardMode: season.prizeStatus === "funded"
           ? "funded"
           : season.prizeStatus === "funding_pending"
@@ -86,7 +93,7 @@ export async function POST(request: Request) {
     if (!schedule.ok) return NextResponse.json(schedule, { status: 404, headers: { "Cache-Control": "no-store" } });
     const season = schedule.value.season;
     const now = Date.now();
-    if (season.status !== "open" || season.entryMode !== "open" || now < Date.parse(season.startsAt) || now >= Date.parse(season.locksAt) || season.entryCount >= season.maxEntries) {
+    if (season.status !== "open" || season.entryMode !== "open" || now < Date.parse(season.startsAt) || now >= Date.parse(season.locksAt)) {
       return NextResponse.json({ ok: false, code: "ARENA_SEASON_NOT_OPEN" }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
     const agentPackage = parseAgentPackage(input.agentPackage);

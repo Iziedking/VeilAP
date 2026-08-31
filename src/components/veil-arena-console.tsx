@@ -872,11 +872,15 @@ export function VeilArenaConsole() {
                 <label>ENDS AT<input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required /></label>
                 {templateId === "custom" ? <>
                   <label>PAIRING STYLE<select value={customPairingMode} onChange={(event) => setCustomPairingMode(event.target.value as TournamentPairingMode)}><option value="round_robin">EVERY AGENT MEETS</option><option value="duel_series">TWO-AGENT SERIES</option><option value="gauntlet">BENCHMARK GAUNTLET</option></select></label>
-                  <label>WHO CAN ENTER<select value={entryMode} onChange={(event) => setEntryMode(event.target.value as Season["entryMode"])}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PROJECT MEMBERS ONLY</option></select></label>
+                  <label>WHO CAN ENTER<select value={entryMode} onChange={(event) => {
+                    const nextEntryMode = event.target.value as Season["entryMode"];
+                    setEntryMode(nextEntryMode);
+                    if (nextEntryMode === "invite_only") setCustomResubmission("fixed");
+                  }}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PROJECT MEMBERS ONLY</option></select></label>
                   <label>ENTRY LIMIT<input type="number" min="2" max="32" value={maxEntries} onChange={(event) => setMaxEntries(event.target.value)} required /></label>
                   <label>HANDS PER MATCH<input type="number" min="1" max="100" value={customHands} onChange={(event) => setCustomHands(event.target.value)} required /></label>
                   <label>MEETINGS PER PAIR<input type="number" min="1" max="5" value={customEncounters} onChange={(event) => setCustomEncounters(event.target.value)} required /></label>
-                  <label>AGENT UPDATES<select value={customResubmission} onChange={(event) => setCustomResubmission(event.target.value as TournamentResubmissionPolicy)}><option value="replace_until_lock">REPLACE UNTIL LOCK</option><option value="fixed">FIXED AFTER ENTRY</option></select></label>
+                  <label>AGENT UPDATES<select value={customResubmission} onChange={(event) => setCustomResubmission(event.target.value as TournamentResubmissionPolicy)}><option value="replace_until_lock" disabled={entryMode === "invite_only"}>REPLACE UNTIL LOCK</option><option value="fixed">FIXED AFTER ENTRY</option></select></label>
                   <label>REWARD RULE<select value={customReward} onChange={(event) => setCustomReward(event.target.value as TournamentRewardPolicy)}><option value="optional">OPTIONAL REWARD</option><option value="funded_before_start">FUND BEFORE PLAY</option></select></label>
                 </> : null}
                 {draftRules ? <div className="operator-rule-preview" role="status">

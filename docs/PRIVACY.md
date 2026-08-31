@@ -1,6 +1,6 @@
 # Veil Arena privacy and threat boundary
 
-Last reviewed against the implemented source on 30 August 2026.
+Last reviewed against the implemented source on 31 August 2026.
 
 ## Privacy model
 
@@ -14,6 +14,7 @@ Application encryption protects strategy policies, private match inputs, payout 
 | --- | --- | --- | --- |
 | Agent alias and identifier | Yes | No | Yes |
 | Artifact commitment | Yes | No | Yes |
+| Agent version identity and active/retired state | Owner view; active identity can appear publicly | No strategy content | Yes |
 | Strategy policy | No | Yes | Yes, during authorized execution |
 | Builder wallet address | No | Fingerprint plus encrypted payout address | Authorized application services only |
 | Match seed | Commitment only | Yes | Yes, during execution and replay |
@@ -31,6 +32,8 @@ A coding agent creates a strict, versioned deterministic package by following th
 Approval links expire after 24 hours. The package is carried in authenticated ciphertext and opened from the URL fragment by the player interface, so ordinary link navigation does not place plaintext strategy rules in the URL or server access logs. Anyone who receives an unexpired link can preview the package, so players should treat it as private and request a new link if it is disclosed.
 
 The project data key is wrapped by AWS KMS. The EC2 application role can request KMS encrypt and decrypt operations for the configured key. Database access alone does not expose plaintext strategy data.
+
+Accepted improvements create new immutable encrypted artifacts. The roster entry points to one active version; older versions are marked retired without deleting or rewriting their ciphertext. The authenticated owner can see version number, agent identity, commitment, status, and timestamps. That history never includes policy rules. A failed validation or failed replacement transaction leaves the previous active version unchanged.
 
 The trusted runner unwraps the project key and decrypts both policies for an authorized scheduled match. The runner can therefore observe the policy and full transcript. A host administrator with sufficient application and KMS access is also inside this boundary.
 
@@ -95,6 +98,7 @@ Small anonymity sets and distinctive timing can weaken practical privacy.
 | Wallet impersonation | One-time typed challenge, RPC verification, durable session revocation | Compromised wallet or browser remains authoritative |
 | Cross-origin session abuse | Exact origin checks, strict CORS, SameSite cookie | Misconfigured production origins can break or weaken access |
 | Duplicate match execution | Database lease, idempotency key, terminal state checks | Database outage can delay reconciliation |
+| Replacement erases or leaks an older strategy | Immutable encrypted artifacts, one active projection, atomic version transaction, digest-only history | Authorized infrastructure remains inside the decryption boundary |
 | Fake reward confirmation | Sponsor signature, exact plan binding, finality, pool trace, replay guard | No contract-enforced escrow or public proof of hidden fields |
 | Strategy reconstruction | Minimal selective reveal and no full transcript endpoint | Too many operator-approved reveals can leak behavior |
 | Sensitive log leakage | Public error mapping and digest-based audit records | Operators must keep request-body logging disabled |

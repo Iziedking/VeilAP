@@ -27,6 +27,14 @@ type ArenaSeason = {
   maxEntries: number;
   entryCount: number;
   prizeStatus?: PrizeStatus;
+  templateId?: string;
+  rules?: {
+    resubmissionPolicy: "fixed" | "replace_until_lock";
+    pairingMode: "round_robin" | "duel_series" | "gauntlet";
+    handsPerMatch: number;
+    encountersPerPair: number;
+    revealPolicy: "loser_action_only";
+  };
 };
 
 type Enrollment = {
@@ -35,7 +43,17 @@ type Enrollment = {
   agentId: string;
   displayName: string;
   artifactCommitment: string;
+  version: number;
   joinedAt: string;
+  versions: Array<{
+    version: number;
+    agentId: string;
+    displayName: string;
+    artifactCommitment: string;
+    status: "active" | "retired";
+    submittedAt: string;
+    retiredAt?: string;
+  }>;
 };
 
 type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
@@ -51,13 +69,23 @@ function isJoinable(season: ArenaSeason, now: number): boolean {
     && now < new Date(season.locksAt).getTime();
 }
 
+function acceptsReplacement(season: ArenaSeason, now: number): boolean {
+  return season.status === "open"
+    && season.entryMode === "open"
+    && season.rules?.resubmissionPolicy === "replace_until_lock"
+    && new Date(season.startsAt).getTime() <= now
+    && now < new Date(season.locksAt).getTime();
+}
+
 function seasonStateLabel(season: ArenaSeason, now: number): string {
   if (season.entryMode !== "open") return "INVITE ONLY";
   if (season.status === "cancelled") return "CANCELLED";
   if (season.status === "completed") return "COMPLETED";
   if (season.status === "locked" || now >= new Date(season.locksAt).getTime()) return "ENTRY LOCKED";
   if (now < new Date(season.startsAt).getTime()) return "OPENS SOON";
-  if (season.entryCount >= season.maxEntries) return "ARENA FULL";
+  if (season.entryCount >= season.maxEntries) {
+    return acceptsReplacement(season, now) ? "IMPROVEMENTS OPEN" : "ARENA FULL";
+  }
   return "OPEN TO PLAY";
 }
 
@@ -95,6 +123,11 @@ function enrollmentMessage(code: string): string {
     ARENA_SEASON_NOT_PUBLIC: "This season is not open to public players.",
     ARENA_SEASON_NOT_STARTED: "This season has not opened yet.",
     ARENA_WALLET_ALREADY_ENTERED: "This wallet already has an agent in the selected season.",
+    ARENA_REPLACEMENT_CONFIRMATION_REQUIRED: "Your current agent is still active. Confirm replacement before submitting the new version.",
+    ARENA_RESUBMISSION_FORBIDDEN: "This tournament uses a fixed roster. Its active agent cannot be replaced.",
+    ARENA_REPLACEMENT_AGENT_ID_REQUIRED: "Give the improved package a new versioned agent ID, such as NIGHTJAR_V2.",
+    ARENA_SUBMISSION_LIMIT_REACHED: "You have used today's three accepted submissions for this tournament. Try again after 00:00 UTC.",
+    ARENA_ENTRY_VERSION_CONFLICT: "Your active agent changed during submission. Reload the entry before trying again.",
     STRATEGY_ARTIFACT_ALREADY_EXISTS: "That agent handle is already taken. Choose a different one.",
     IDEMPOTENCY_KEY_REUSED: "The submission changed during a retry. Review it and submit again.",
     AUTH_REQUIRED: "Your secure session expired. Sign in again before entering.",
@@ -143,6 +176,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
   const [claimMessage, setClaimMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [replacementMode, setReplacementMode] = useState(false);
+  const [replacementConfirmed, setReplacementConfirmed] = useState(false);
   const [entryRefresh, setEntryRefresh] = useState(0);
   const idempotencyKey = useRef<string | null>(null);
 
@@ -181,6 +216,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
         }
         setSelectedSeasonId(body.value.seasonId);
         setAgentPackageText(JSON.stringify(body.value.agentPackage, null, 2));
+        setReplacementMode(true);
         setClaimState("loaded");
         setClaimMessage(`Package received. Check commitment ${shortCommitment(body.value.artifactCommitment)}, then approve the entry.`);
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
@@ -297,9 +333,14 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
     };
   }, [entryRefresh, projectId, selectedSeasonId, sessionState]);
 
+  const currentEntry = entry?.seasonId === selectedSeasonId ? entry : null;
+  const selectedSeasonAcceptsReplacement = selectedSeason ? acceptsReplacement(selectedSeason, now) : false;
+  const canSubmitToSelectedSeason = currentEntry ? selectedSeasonAcceptsReplacement : selectedSeasonJoinable;
+
   function resetSubmission() {
     idempotencyKey.current = null;
     setSubmitError("");
+    setReplacementConfirmed(false);
   }
 
   function updateAgentPackage(value: string) {
@@ -330,12 +371,16 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
   async function enterArena(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedSeason || !selectedSeasonJoinable || sessionState !== "authenticated") return;
+    if (!selectedSeason || !canSubmitToSelectedSeason || sessionState !== "authenticated") return;
     if (packageReview.status !== "ready") {
       setSubmitError(packageReview.status === "invalid" ? packageReview.message : "Import the package created by your coding agent first.");
       return;
     }
     const { agentPackage } = packageReview;
+    if (currentEntry && !replacementConfirmed) {
+      setSubmitError("Confirm that this package should replace your active agent.");
+      return;
+    }
     const requestKey = idempotencyKey.current ?? `arena-entry-${crypto.randomUUID()}`;
     idempotencyKey.current = requestKey;
     setSubmitting(true);
@@ -352,6 +397,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
           body: JSON.stringify({
             agentId: agentPackage.agentId,
             policy: agentPackage,
+            replaceExisting: Boolean(currentEntry),
           }),
         },
       );
@@ -365,6 +411,9 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
       }
       setEntry(body.value);
       setEntryState("ready");
+      setAgentPackageText("");
+      setReplacementMode(false);
+      setReplacementConfirmed(false);
     } catch {
       setSubmitError("The arena API could not be reached. Your retry will use the same safe submission key.");
     } finally {
@@ -383,11 +432,10 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
             : joinableSeasons.length === 0
               ? "No public season is accepting agents right now."
               : "Choose a competition, give AGENT.md to a coding agent, then approve the package it returns.";
-  const currentEntry = entry?.seasonId === selectedSeasonId ? entry : null;
   let submitLabel = "APPROVE, SEAL AND ENTER";
   if (submitting) {
     submitLabel = "SEALING APPROVED PACKAGE...";
-  } else if (!selectedSeasonJoinable) {
+  } else if (!canSubmitToSelectedSeason) {
     submitLabel = selectedSeason
       ? "THIS ARENA IS NOT ACCEPTING ENTRIES"
       : "NO OPEN ARENA AVAILABLE";
@@ -395,6 +443,10 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
     submitLabel = "CHECKING ENTRY...";
   } else if (packageReview.status !== "ready") {
     submitLabel = "IMPORT A VALID AGENT PACKAGE";
+  } else if (currentEntry && !replacementConfirmed) {
+    submitLabel = "CONFIRM ACTIVE AGENT REPLACEMENT";
+  } else if (currentEntry) {
+    submitLabel = "APPROVE AND REPLACE ACTIVE AGENT";
   }
 
   return (
@@ -430,23 +482,26 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
             <div className="play-season-list">
               {seasons.map((season) => {
                 const joinable = isJoinable(season, now);
+                const replacementOpen = acceptsReplacement(season, now);
+                const available = joinable || replacementOpen;
                 const selected = season.id === selectedSeasonId;
                 return (
                   <button
-                    className={`play-season${selected ? " is-selected" : ""}${joinable ? "" : " is-unavailable"}`}
+                    className={`play-season${selected ? " is-selected" : ""}${available ? "" : " is-unavailable"}`}
                     type="button"
                     key={season.id}
                     aria-pressed={selected}
-                    aria-disabled={!joinable}
+                    aria-disabled={!available}
                     onClick={() => {
                       setSelectedSeasonId(season.id);
                       setEntry(null);
                       setEntryState("idle");
+                      setReplacementMode(false);
                       resetSubmission();
                     }}
                   >
                     <span className="play-season-index">{String(seasons.indexOf(season) + 1).padStart(2, "0")}</span>
-                    <span className="play-season-name"><strong>{season.name}</strong><small>{season.rulesetVersion}</small></span>
+                    <span className="play-season-name"><strong>{season.name}</strong><small>{(season.templateId ?? season.rulesetVersion).replaceAll("_", " ")}</small></span>
                     <span><strong>{season.entryCount} / {season.maxEntries}</strong><small>AGENTS</small></span>
                     <span><strong>{seasonStateLabel(season, now)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "EXHIBITION"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
                   </button>
@@ -461,22 +516,50 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
               <strong>{selectedSeasonJoinable ? "OPEN FOR ENTRY" : selectedSeason ? "VIEW ONLY" : "WAITING FOR SEASON"}</strong>
             </header>
 
-            {currentEntry ? (
-              <div className="play-success" role="status">
-                <span>ENTRY CONFIRMED</span>
+            {currentEntry && (
+              <div className="play-success">
+                <span>ACTIVE ENTRY / VERSION {currentEntry.version}</span>
                 <h3>{currentEntry.displayName} is sealed.</h3>
-                <p>Your agent is entered and its strategy is encrypted. Other players can see its name and results, but they cannot read its rules.</p>
+                <p>Your active strategy is encrypted. Earlier accepted versions remain sealed for audit, but only this version enters the locked roster.</p>
                 <dl>
-                  <div><dt>AGENT</dt><dd>{currentEntry.agentId}</dd></div>
+                  <div><dt>ACTIVE AGENT</dt><dd>{currentEntry.agentId} / V{currentEntry.version}</dd></div>
                   <div><dt>ENTRY PROOF</dt><dd><code>{shortCommitment(currentEntry.artifactCommitment)}</code></dd></div>
                   <div><dt>IF YOU WIN</dt><dd>PAID PRIVATELY</dd></div>
                 </dl>
+                {currentEntry.versions.length > 1 && (
+                  <section className="play-version-history" aria-labelledby="version-history-title">
+                    <div><span>SEALED HISTORY</span><h4 id="version-history-title">Accepted versions</h4></div>
+                    <ol>
+                      {[...currentEntry.versions].reverse().map((version) => (
+                        <li key={`${version.version}-${version.artifactCommitment}`}>
+                          <strong>V{version.version} / {version.agentId}</strong>
+                          <code>{shortCommitment(version.artifactCommitment)}</code>
+                          <span>{version.status.toUpperCase()}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
                 <div className="play-success-actions">
                   <Link className="play-primary" href={`/?project=${encodeURIComponent(projectId)}#broadcast`}>[ WATCH YOUR AGENT ]</Link>
+                  {selectedSeasonAcceptsReplacement && (
+                    <button
+                      className="play-secondary"
+                      type="button"
+                      onClick={() => {
+                        setReplacementMode((current) => !current);
+                        setReplacementConfirmed(false);
+                        setSubmitError("");
+                      }}
+                    >[{replacementMode ? " CANCEL IMPROVEMENT " : " SUBMIT IMPROVED VERSION "}]</button>
+                  )}
                   <Link className="play-secondary" href="/">[ BACK TO HOME ]</Link>
                 </div>
+                {!selectedSeasonAcceptsReplacement && <p className="play-roster-note">This tournament has a fixed roster or has reached its entry lock. The active version cannot change.</p>}
               </div>
-            ) : (
+            )}
+
+            {(!currentEntry || replacementMode) && (
               <form className="play-form" onSubmit={enterArena}>
                 <fieldset disabled={submitting}>
                   <legend className="sr-only">Import a Veil Agent Protocol package</legend>
@@ -538,6 +621,21 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                   </details>
                 </section>
 
+                {currentEntry && (
+                  <label className="play-replacement-confirmation">
+                    <input
+                      type="checkbox"
+                      checked={replacementConfirmed}
+                      onChange={(event) => {
+                        setReplacementConfirmed(event.target.checked);
+                        resetSubmission();
+                        setReplacementConfirmed(event.target.checked);
+                      }}
+                    />
+                    <span><strong>Replace version {currentEntry.version}</strong><small>The new package becomes active. Version {currentEntry.version} stays sealed in the audit history, and this tournament allows three accepted versions per UTC day.</small></span>
+                  </label>
+                )}
+
                 {sessionState === "authenticated" ? (
                   <div className="play-wallet-state"><span>WALLET VERIFIED</span><strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong><small>This session can approve an arena entry. It cannot move funds.</small></div>
                 ) : (
@@ -553,7 +651,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                 <button
                   className="play-submit"
                   type="submit"
-                  disabled={!selectedSeasonJoinable || sessionState !== "authenticated" || submitting || entryState !== "ready" || packageReview.status !== "ready"}
+                  disabled={!canSubmitToSelectedSeason || sessionState !== "authenticated" || submitting || entryState !== "ready" || packageReview.status !== "ready" || Boolean(currentEntry && !replacementConfirmed)}
                 >
                   <span>{submitLabel}</span>
                   <strong aria-hidden="true">↓</strong>

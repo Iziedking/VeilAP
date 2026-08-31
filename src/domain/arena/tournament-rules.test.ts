@@ -89,6 +89,19 @@ describe("tournament rules", () => {
       },
     })).toThrow("TOURNAMENT_RULES_INVALID");
 
+    expect(() => resolveTournamentRules({
+      templateId: "custom",
+      custom: {
+        pairingMode: "round_robin",
+        entryMode: "invite_only",
+        maxEntries: 8,
+        handsPerMatch: 10,
+        encountersPerPair: 1,
+        resubmissionPolicy: "replace_until_lock",
+        rewardPolicy: "optional",
+      },
+    })).toThrow("TOURNAMENT_RULES_INVALID");
+
     const rules = resolveTournamentRules({ templateId: "playground" });
     expect(() => buildTournamentSchedule({
       rules,

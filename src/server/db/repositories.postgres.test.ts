@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 
+import { resolveTournamentRules, tournamentRulesCommitment } from "@/domain/arena/tournament-rules";
 import type { AuthChallenge } from "@/server/auth/challenge";
 import { ArenaEnrollmentService } from "@/server/arena/arena-enrollment-service";
 import { checkArenaDatabaseReadiness } from "@/server/arena/arena-readiness-database";
@@ -90,6 +91,10 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
         status: "open",
         entryMode: "open",
         maxEntries: 2,
+        templateId: "playground",
+        templateVersion: 1,
+        rulesSnapshot: resolveTournamentRules({ templateId: "playground" }),
+        rulesCommitment: tournamentRulesCommitment(resolveTournamentRules({ templateId: "playground" })),
         createdBy: `owner-${suffix}`,
         createdAt: now,
       });
@@ -136,11 +141,31 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
         }),
       ]);
       expect(duplicateWalletResults.filter((result) => result.ok)).toHaveLength(1);
-      expect(duplicateWalletResults.filter((result) => !result.ok)).toEqual([
-        { ok: false, code: "ARENA_WALLET_ALREADY_ENTERED" },
-      ]);
+      const rejectedDuplicate = duplicateWalletResults.find((result) => !result.ok);
+      expect(rejectedDuplicate?.ok).toBe(false);
+      if (rejectedDuplicate?.ok === false) {
+        expect(["ARENA_WALLET_ALREADY_ENTERED", "ARENA_REPLACEMENT_CONFIRMATION_REQUIRED"])
+          .toContain(rejectedDuplicate.code);
+      }
       await expect(repositories.projects.listArenaSeasonEntries(projectId, seasonId)).resolves.toHaveLength(1);
       await expect(repositories.projects.listArenaStrategyArtifacts(projectId)).resolves.toHaveLength(1);
+
+      const firstEntry = (await repositories.projects.listArenaSeasonEntries(projectId, seasonId))[0]!;
+      const replacement = await enrollment.enroll({
+        projectId,
+        seasonId,
+        actorWalletAddress: address("2"),
+        agentId: "REPLACED_PG",
+        policy: strategy("Replacement", "raise"),
+        idempotencyKey: `join-replaced-${suffix}`,
+        replaceExisting: true,
+      });
+      expect(replacement).toMatchObject({ ok: true, value: { agentId: "REPLACED_PG", version: 2 } });
+      const versions = await repositories.projects.listArenaEntryVersions(projectId, seasonId, firstEntry.id);
+      expect(versions).toMatchObject([
+        { version: 1, status: "retired" },
+        { version: 2, status: "active", agentId: "REPLACED_PG" },
+      ]);
 
       const capacityResults = await Promise.all([
         enrollment.enroll({
@@ -168,13 +193,12 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
       const entries = await repositories.projects.listArenaSeasonEntries(projectId, seasonId);
       const artifacts = await repositories.projects.listArenaStrategyArtifacts(projectId);
       expect(entries).toHaveLength(2);
-      expect(artifacts).toHaveLength(2);
-      expect(new Set(artifacts.map((record) => record.agentId))).toEqual(
-        new Set(entries.map((record) => record.agentId)),
-      );
+      expect(artifacts).toHaveLength(3);
+      expect(entries.every((entry) => artifacts.some((artifact) => artifact.agentId === entry.agentId))).toBe(true);
     } finally {
       await db.transaction(async (tx) => {
         await tx.execute(sql`delete from audit_events where project_id = ${projectId}`);
+        await tx.execute(sql`delete from arena_entry_versions where project_id = ${projectId}`);
         await tx.execute(sql`delete from arena_season_entries where project_id = ${projectId}`);
         await tx.execute(sql`delete from arena_strategy_artifacts where project_id = ${projectId}`);
         await tx.execute(sql`delete from arena_prize_pools where project_id = ${projectId}`);

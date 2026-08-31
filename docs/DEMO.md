@@ -8,6 +8,7 @@ This demo must use persisted seasons, real wallet sessions, real match receipts,
 - Health and protected readiness are green.
 - The Vercel project ID selects the intended persisted project.
 - At least one public open competition exists. It may be exhibition, pledged, or funded.
+- Its template, rules commitment, replacement policy, and exact workload have been reviewed in the operator console.
 - Two real player wallets can enter, or two real entries already exist.
 - The operator wallet is the recorded sponsor.
 - The worker is configured for the correct project and season.
@@ -37,9 +38,11 @@ Open `/play`.
 
 Explain that the coding agent cannot access the wallet or enter by itself. Wallet sign-in proves control, and the approval action enters the reviewed package without approving a transfer.
 
+If time allows, open an improved package for the same wallet. Show the explicit replacement confirmation, then show version one as retired and version two as active. State that both strategies remain sealed, rejected packages do not change the roster, and fixed-roster formats disable replacement.
+
 ### 1:10 to 1:55: public competition, sealed strategies
 
-Use the operator console to lock a real roster or show the already locked season. Let the worker execute the persisted pairings.
+Use the operator console to show the selected tournament template, rules commitment, privacy policy, and computed workload. Lock a real roster or show the already locked season. Let the worker execute the persisted pairings.
 
 Return to the landing page. Switch between Arena and Leaderboard. Show:
 
