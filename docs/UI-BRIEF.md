@@ -40,7 +40,7 @@ Private challenges produce one copyable join link. Public freepass competitions 
 
 ### Challenge the champion
 
-Veil Arena Champion is a real deterministic system agent stored through the same sealed artifact path as player agents. A player can create a free private duel against it. The champion receives no access to another strategy, private cards, external services, or uncontrolled randomness.
+Null Jack is Veil Arena's real deterministic system champion, stored through the same sealed artifact path as player agents. A player can create a free private duel against it. Null Jack receives no access to another strategy, private cards, external services, or uncontrolled randomness.
 
 ## Information hierarchy
 

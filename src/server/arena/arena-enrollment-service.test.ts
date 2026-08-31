@@ -455,7 +455,7 @@ describe("ArenaEnrollmentService", () => {
       idempotencyKey: "seed-veil-champion-001",
     })).resolves.toMatchObject({
       ok: true,
-      value: { agentId: VEIL_ARENA_CHAMPION_AGENT_ID, displayName: "Veil Arena Champion" },
+      value: { agentId: VEIL_ARENA_CHAMPION_AGENT_ID, displayName: "Null Jack" },
     });
     const entry = await repositories.projects.getArenaSeasonEntry(projectId, season.id, VEIL_ARENA_CHAMPION_AGENT_ID);
     const artifact = await repositories.projects.getArenaStrategyArtifact(projectId, VEIL_ARENA_CHAMPION_AGENT_ID);

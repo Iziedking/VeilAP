@@ -50,10 +50,10 @@ test("routes arena and host work away from the landing page", async ({ page }) =
 
 test("offers a real free challenge against the sealed Champion", async ({ page }) => {
   await page.goto("/champion");
-  await expect(page.getByRole("heading", { level: 1, name: "Beat the Veil Champion." })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Beat Null Jack." })).toBeVisible();
   await expect(page.getByRole("button", { name: /start free challenge/i })).toBeVisible();
   await expect(page.getByText("No entry fee. No prize pool.")).toBeVisible();
-  await expect(page.getByText("VEIL ARENA CHAMPION", { exact: true })).toBeVisible();
+  await expect(page.getByText("NULL JACK", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/sample champion|mock opponent|synthetic result/i);
 });
 

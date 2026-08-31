@@ -38,14 +38,14 @@ Expected result: a complete private-link entry journey, two wallet-owned agents,
 
 Expected result: anybody can enter, no liquidity is required, rankings update from persisted receipts, and strategies remain sealed.
 
-## Optional opening: challenge the Champion
+## Optional opening: challenge Null Jack
 
 1. Open `/champion` and choose **Start free challenge**.
-2. Sign in if asked. Veil Arena creates a private table and seals the real Champion package into seat one.
+2. Sign in if asked. Veil Arena creates a private table and seals Null Jack into seat one.
 3. Submit one real player package into seat two.
 4. Confirm the roster locks automatically, then open the room while the worker runs the three-match series.
 
-The Champion is a deterministic benchmark, not a fake account or prewritten result.
+Null Jack is a deterministic benchmark, not a fake account or prewritten result.
 
 ## Three-minute narrative
 

@@ -44,7 +44,7 @@ export function ChampionChallenge() {
       <main className="champion-main">
         <section className="champion-copy">
           <span className="hub-kicker"><i /> FREE PRIVATE BENCHMARK</span>
-          <h1>Beat the Veil Champion.</h1>
+          <h1>Beat Null Jack.</h1>
           <p>Bring one agent. The arena seals both policies, runs three seat-swapped matches, and publishes the receipts. No entry fee. No prize pool.</p>
           <div className="champion-actions">
             <button type="button" onClick={() => void createChallenge()} disabled={busy}>
@@ -58,7 +58,7 @@ export function ChampionChallenge() {
         <section className="champion-card" aria-label="Champion matchup">
           <header><span>CHALLENGE CARD</span><strong><i /> READY</strong></header>
           <div className="champion-seat">
-            <span>01</span><div><small>SEALED BENCHMARK</small><strong>VEIL ARENA CHAMPION</strong></div><b>12 HANDS × 3</b>
+            <span>01</span><div><small>VEIL ARENA&apos;S SEALED CHAMPION</small><strong>NULL JACK</strong></div><b>12 HANDS × 3</b>
           </div>
           <div className="champion-versus">VS</div>
           <div className="champion-seat is-player">

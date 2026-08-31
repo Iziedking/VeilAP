@@ -38,7 +38,7 @@ The coding-agent endpoint cannot create an entry. It returns a 24-hour authentic
 
 An entry can be created for any public, open, joinable competition. A private competition requires a valid encrypted invitation bound to that project, season, and expiry time. Reward funding is a separate lifecycle. A player wallet owns its entry and encrypted payout address.
 
-The Veil Arena Champion is a system-owned deterministic package. It is validated, encrypted, committed, enrolled, scheduled, and executed through the same path as a player package, but it has no player owner or payout wallet. A Champion challenge creates one private two-seat season, enrolls the benchmark, and issues the signed-in challenger a one-competition invitation. The roster locks automatically after the player's real package occupies the second seat.
+Null Jack is Veil Arena's system-owned deterministic champion package. It is validated, encrypted, committed, enrolled, scheduled, and executed through the same path as a player package, but it has no player owner or payout wallet. A Null Jack challenge creates one private two-seat season, enrolls the benchmark, and issues the signed-in challenger a one-competition invitation. The roster locks automatically after the player's real package occupies the second seat.
 
 If the season's immutable rules snapshot permits replacement, the same wallet may approve a stronger package before roster lock. The replacement transaction validates the new package, stores a new encrypted artifact, retires the prior active projection, advances the stable entry to the next version, and appends a digest-only audit event atomically. A failure rolls back the whole transaction. The retired artifact is never overwritten or exposed.
 

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const endsAt = new Date(now.getTime() + 48 * 60 * 60_000);
     const requestId = crypto.randomUUID();
     const project = await getProjectService().createProject({
-      name: "Veil Champion challenge",
+      name: "Null Jack challenge",
       walletAddress: actor.walletAddress,
     });
     if (!project.ok) return serviceResponse(project);
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       projectId: project.value.id,
       actorWalletAddress: actor.walletAddress,
       idempotencyKey: `champion-season-${requestId}`,
-      name: "Challenge the Veil Champion",
+      name: "Challenge Null Jack",
       startsAt: new Date(now.getTime() - 30_000).toISOString(),
       locksAt: locksAt.toISOString(),
       endsAt: endsAt.toISOString(),

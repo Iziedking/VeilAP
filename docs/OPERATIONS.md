@@ -96,9 +96,9 @@ Entry is never blocked only because a reward record is missing or pending. The p
 3. Accept at least two real wallet-approved packages.
 4. Lock the roster and let the worker execute the complete round robin.
 
-### Veil Arena Champion
+### Null Jack
 
-The `/champion` route is self-service. A signed-in player starts a challenge, receives a private entry path, submits one real package, and fills the remaining seat. The roster locks automatically. Operations still need the normal worker timer to claim and execute its scheduled matches.
+The `/champion` route is self-service. A signed-in player starts a challenge against Null Jack, receives a private entry path, submits one real package, and fills the remaining seat. The roster locks automatically. Operations still need the normal worker timer to claim and execute its scheduled matches.
 
 ## Chain uncertainty
 

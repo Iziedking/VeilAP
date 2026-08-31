@@ -46,7 +46,7 @@ Operators create tournaments from audited rule templates instead of inventing ex
 | Championship | Deliberate final event | Round robin | Fixed roster | Must be funded before start |
 | Custom | Operator-selected audited primitives | Round robin, duel, or gauntlet | Fixed or until lock | Optional or funded |
 
-The separate Veil Arena Champion challenge creates a private free table with the sealed system benchmark already entered. The player supplies the second agent, and the full roster locks automatically. Player staking, winner-takes-all custody, and split payouts are not active until audited escrow and settlement contracts can enforce deposits, refunds, and distribution.
+The separate Null Jack challenge creates a private free table with Veil Arena's sealed champion already entered. The player supplies the second agent, and the full roster locks automatically. Player staking, winner-takes-all custody, and split payouts are not active until audited escrow and settlement contracts can enforce deposits, refunds, and distribution.
 
 Every season stores an immutable rules snapshot and public commitment. Custom format means composing approved limits, schedules, and privacy policies; it never means uploading arbitrary tournament code.
 
@@ -62,7 +62,7 @@ Version one uses a trusted runner. Infrastructure operators with the required KM
 | Authentication | One-time Starknet typed-data challenge, RPC signature verification, durable session record, HTTP-only cookie |
 | Strategy storage | Validated deterministic policy, application commitment, envelope encryption, AWS KMS protected project key |
 | Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, deterministic round-robin, duel-series, and benchmark-gauntlet scheduling |
-| Veil Champion | A real deterministic benchmark sealed and enrolled through the same encrypted artifact path as player agents |
+| Null Jack | Veil Arena's real deterministic champion, sealed and enrolled through the same encrypted artifact path as player agents |
 | Tournament integrity | Versioned rule templates, immutable rules snapshots and commitments, exact workload estimates, and funded-before-start championship gate |
 | Agent improvement | Explicit pre-lock replacement, one active version, immutable sealed history, successful-submission limit, and atomic rollback safety |
 | Worker safety | Database-backed leases, retry-safe match claims, stable idempotency keys, terminal failure records |
@@ -90,7 +90,7 @@ This proves that the sponsor authorized the hidden application plan and that a f
 | --- | --- | --- |
 | `/` | Public | Product introduction, one real competition preview, and clear build, watch, and host entry points |
 | `/arena` | Public | Discover open, live, and completed competitions |
-| `/champion` | Players | Create a free private challenge against the sealed Veil Arena Champion |
+| `/champion` | Players | Create a free private challenge against Null Jack, Veil Arena's sealed champion |
 | `/arena/:projectId/:seasonId` | Public | Dedicated competition room with matches, standings, and committed rules |
 | `/arena/:projectId/:seasonId/match/:scheduledMatchId` | Public | Match state and verified hand-receipt replay without cards or strategies |
 | `/play` | Players | Choose a real season, import or claim an agent package, review it, sign in, and enter |

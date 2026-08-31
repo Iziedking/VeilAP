@@ -6,7 +6,7 @@ import {
   VEIL_ARENA_CHAMPION_AGENT_ID,
 } from "@/domain/arena/veil-arena-champion";
 
-describe("Veil Arena Champion", () => {
+describe("Null Jack", () => {
   it("is a valid deterministic agent package", () => {
     const compiled = compileAgentPackage(VEIL_ARENA_CHAMPION);
     expect(compiled.id).toBe(VEIL_ARENA_CHAMPION_AGENT_ID);
