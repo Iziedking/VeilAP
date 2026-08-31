@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 const requestSchema = z.object({
   agentId: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9][A-Za-z0-9_-]+$/),
   policy: z.unknown(),
+  replaceExisting: z.boolean().optional().default(false),
 }).strict();
 
 type JoinRouteContext = {
@@ -32,6 +33,7 @@ export async function POST(request: Request, context: JoinRouteContext) {
       agentId: input.agentId,
       policy: input.policy,
       idempotencyKey,
+      replaceExisting: input.replaceExisting,
     }));
   } catch (error) {
     if (error instanceof JsonBodyError) {

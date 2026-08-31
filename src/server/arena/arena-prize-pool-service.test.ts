@@ -70,6 +70,7 @@ describe("ArenaPrizePoolService", () => {
         { projectId: project.value.id, recordType: "arena_season_entry", recordId: "winner-entry", fieldName: "payout_wallet" },
         keyMaterial,
       ),
+      version: 1,
       joinedAt: now,
     });
     await repositories.projects.saveArenaScheduledMatch({

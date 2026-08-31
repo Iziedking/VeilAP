@@ -8,7 +8,11 @@ import {
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import { encryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
-import type { ArenaSeasonEntryRecord, ProjectRepository } from "@/server/db/repositories";
+import type {
+  ArenaEntryVersionRecord,
+  ArenaSeasonEntryRecord,
+  ProjectRepository,
+} from "@/server/db/repositories";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 
 import { buildStrategyArtifact } from "./strategy-artifacts";
@@ -23,6 +27,11 @@ export type ArenaEnrollmentErrorCode =
   | "ARENA_SEASON_CLOSED"
   | "ARENA_SEASON_FULL"
   | "ARENA_WALLET_ALREADY_ENTERED"
+  | "ARENA_REPLACEMENT_CONFIRMATION_REQUIRED"
+  | "ARENA_RESUBMISSION_FORBIDDEN"
+  | "ARENA_REPLACEMENT_AGENT_ID_REQUIRED"
+  | "ARENA_SUBMISSION_LIMIT_REACHED"
+  | "ARENA_ENTRY_VERSION_CONFLICT"
   | "STRATEGY_ARTIFACT_ALREADY_EXISTS"
   | "IDEMPOTENCY_KEY_REUSED"
   | "ENCRYPTION_FAILED"
@@ -38,7 +47,17 @@ export interface ArenaEnrollmentView {
   agentId: string;
   displayName: string;
   artifactCommitment: string;
+  version: number;
   joinedAt: string;
+  versions: Array<{
+    version: number;
+    agentId: string;
+    displayName: string;
+    artifactCommitment: string;
+    status: "active" | "retired";
+    submittedAt: string;
+    retiredAt?: string;
+  }>;
 }
 
 export interface ArenaEnrollmentServiceDependencies {
@@ -51,6 +70,7 @@ export interface ArenaEnrollmentServiceDependencies {
 
 const agentIdPattern = /^[A-Z0-9][A-Z0-9_-]{2,31}$/;
 const idempotencyKeyPattern = /^[\x21-\x7e]{8,200}$/;
+const successfulSubmissionLimitPerUtcDay = 3;
 
 function mapError(error: unknown): ArenaEnrollmentErrorCode {
   if (!(error instanceof Error)) return "PERSISTENCE_FAILED";
@@ -67,6 +87,8 @@ function mapError(error: unknown): ArenaEnrollmentErrorCode {
   if (error.message === "ARENA_SEASON_CLOSED") return "ARENA_SEASON_CLOSED";
   if (error.message === "ARENA_SEASON_FULL") return "ARENA_SEASON_FULL";
   if (error.message === "ARENA_WALLET_ALREADY_ENTERED") return "ARENA_WALLET_ALREADY_ENTERED";
+  if (error.message === "ARENA_RESUBMISSION_FORBIDDEN") return "ARENA_RESUBMISSION_FORBIDDEN";
+  if (error.message === "ARENA_ENTRY_VERSION_CONFLICT") return "ARENA_ENTRY_VERSION_CONFLICT";
   if (
     error.message === "ARENA_ARTIFACT_ALREADY_EXISTS"
     || error.message === "ARENA_ARTIFACT_COMMITMENT_ALREADY_EXISTS"
@@ -79,15 +101,41 @@ function mapError(error: unknown): ArenaEnrollmentErrorCode {
   return "PERSISTENCE_FAILED";
 }
 
-function view(record: ArenaSeasonEntryRecord): ArenaEnrollmentView {
+function view(record: ArenaSeasonEntryRecord, versions: ArenaEntryVersionRecord[] = []): ArenaEnrollmentView {
+  const history = versions.length > 0 ? versions : [{
+    id: `${record.id}:v${record.version}`,
+    entryId: record.id,
+    seasonId: record.seasonId,
+    projectId: record.projectId,
+    version: record.version,
+    agentId: record.agentId,
+    displayName: record.displayName,
+    artifactCommitment: record.artifactCommitment,
+    status: "active" as const,
+    submittedAt: record.joinedAt,
+  }];
   return {
     id: record.id,
     seasonId: record.seasonId,
     agentId: record.agentId,
     displayName: record.displayName,
     artifactCommitment: record.artifactCommitment,
+    version: record.version,
     joinedAt: record.joinedAt.toISOString(),
+    versions: history.map((item) => ({
+      version: item.version,
+      agentId: item.agentId,
+      displayName: item.displayName,
+      artifactCommitment: item.artifactCommitment,
+      status: item.status,
+      submittedAt: item.submittedAt.toISOString(),
+      ...(item.retiredAt ? { retiredAt: item.retiredAt.toISOString() } : {}),
+    })),
   };
+}
+
+function utcDayStart(value: Date): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
 }
 
 export class ArenaEnrollmentService {
@@ -112,6 +160,7 @@ export class ArenaEnrollmentService {
     agentId: string;
     policy: unknown;
     idempotencyKey: string;
+    replaceExisting?: boolean;
   }): Promise<ArenaEnrollmentResult<ArenaEnrollmentView>> {
     const projectId = input.projectId.trim();
     const seasonId = input.seasonId.trim();
@@ -144,6 +193,7 @@ export class ArenaEnrollmentService {
         seasonId,
         agentId,
         artifactCommitment,
+        replaceExisting: input.replaceExisting ?? false,
       });
 
       const existingByKey = await this.repositories.getArenaSeasonEntryByIdempotencyKey(
@@ -152,9 +202,9 @@ export class ArenaEnrollmentService {
         input.idempotencyKey,
       );
       if (existingByKey) {
-        return existingByKey.requestDigest === requestDigest
-          ? { ok: true, value: view(existingByKey) }
-          : { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+        if (existingByKey.requestDigest !== requestDigest) return { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+        const versions = await this.repositories.listArenaEntryVersions(projectId, seasonId, existingByKey.id);
+        return { ok: true, value: view(existingByKey, versions) };
       }
       const existingOwner = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(
         projectId,
@@ -162,9 +212,90 @@ export class ArenaEnrollmentService {
         actorFingerprint,
       );
       if (existingOwner) {
-        return existingOwner.requestDigest === requestDigest
-          ? { ok: true, value: view(existingOwner) }
-          : { ok: false, code: "ARENA_WALLET_ALREADY_ENTERED" };
+        if (existingOwner.requestDigest === requestDigest) {
+          const versions = await this.repositories.listArenaEntryVersions(projectId, seasonId, existingOwner.id);
+          return { ok: true, value: view(existingOwner, versions) };
+        }
+        if (!input.replaceExisting) return { ok: false, code: "ARENA_REPLACEMENT_CONFIRMATION_REQUIRED" };
+        if (season.rulesSnapshot?.resubmissionPolicy !== "replace_until_lock") {
+          return { ok: false, code: "ARENA_RESUBMISSION_FORBIDDEN" };
+        }
+        if (existingOwner.agentId === agentId) return { ok: false, code: "ARENA_REPLACEMENT_AGENT_ID_REQUIRED" };
+        if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_NOT_OPEN" };
+        if ((season.entryMode ?? "invite_only") !== "open") return { ok: false, code: "ARENA_SEASON_NOT_PUBLIC" };
+        if (now < season.startsAt) return { ok: false, code: "ARENA_SEASON_NOT_STARTED" };
+        if (now >= season.locksAt) return { ok: false, code: "ARENA_SEASON_CLOSED" };
+
+        const versions = await this.repositories.listArenaEntryVersions(projectId, seasonId, existingOwner.id);
+        const dayStart = utcDayStart(now).getTime();
+        const acceptedToday = versions.filter((item) => item.submittedAt.getTime() >= dayStart).length;
+        if (acceptedToday >= successfulSubmissionLimitPerUtcDay) {
+          return { ok: false, code: "ARENA_SUBMISSION_LIMIT_REACHED" };
+        }
+        const existingArtifact = await this.repositories.getArenaStrategyArtifact(projectId, agentId);
+        if (existingArtifact) return { ok: false, code: "STRATEGY_ARTIFACT_ALREADY_EXISTS" };
+
+        const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
+        const keyMaterial = { dataKey, wrappedKey: project.wrappedDataKey };
+        const artifact = buildStrategyArtifact({
+          projectId,
+          agentId,
+          policy: parsedPolicy,
+          keyMaterial,
+          ownerFingerprint: actorFingerprint,
+          ownerWalletAddress: input.actorWalletAddress,
+          now: () => now,
+          idFactory: this.idFactory,
+        });
+        const nextVersion = existingOwner.version + 1;
+        const entry: ArenaSeasonEntryRecord = {
+          ...existingOwner,
+          agentId,
+          displayName: artifact.displayName,
+          artifactCommitment: artifact.artifactCommitment,
+          version: nextVersion,
+          idempotencyKey: input.idempotencyKey,
+          requestDigest,
+        };
+        const version: ArenaEntryVersionRecord = {
+          id: `${entry.id}:v${nextVersion}`,
+          entryId: entry.id,
+          seasonId,
+          projectId,
+          version: nextVersion,
+          agentId,
+          displayName: artifact.displayName,
+          artifactCommitment: artifact.artifactCommitment,
+          status: "active",
+          submittedAt: now,
+          idempotencyKey: input.idempotencyKey,
+          requestDigest,
+        };
+        await this.repositories.replaceArenaEnrollment({
+          artifact,
+          entry,
+          previousVersion: existingOwner.version,
+          version,
+          now,
+          audit: {
+            id: this.idFactory(),
+            projectId,
+            actorFingerprint,
+            eventType: "public_arena_entry_replaced",
+            payloadDigest: commitment({
+              seasonId,
+              entryId: entry.id,
+              previousVersion: existingOwner.version,
+              previousArtifactCommitment: existingOwner.artifactCommitment,
+              nextVersion,
+              nextArtifactCommitment: artifact.artifactCommitment,
+            }),
+            createdAt: now,
+          },
+        });
+        return { ok: true, value: view(entry, [...versions.map((item) => item.status === "active"
+          ? { ...item, status: "retired" as const, retiredAt: now }
+          : item), version]) };
       }
 
       if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_NOT_OPEN" };
@@ -203,6 +334,7 @@ export class ArenaEnrollmentService {
           { projectId, recordType: "arena_season_entry", recordId: entryId, fieldName: "payout_wallet" },
           keyMaterial,
         ),
+        version: 1,
         joinedAt: now,
         idempotencyKey: input.idempotencyKey,
         requestDigest,
@@ -233,13 +365,19 @@ export class ArenaEnrollmentService {
             seasonId,
             input.idempotencyKey,
           );
-          if (existingByKey?.requestDigest === requestDigest) return { ok: true, value: view(existingByKey) };
+          if (existingByKey?.requestDigest === requestDigest) {
+            const versions = await this.repositories.listArenaEntryVersions(projectId, seasonId, existingByKey.id);
+            return { ok: true, value: view(existingByKey, versions) };
+          }
           const existingOwner = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(
             projectId,
             seasonId,
             actorFingerprint,
           );
-          if (existingOwner?.requestDigest === requestDigest) return { ok: true, value: view(existingOwner) };
+          if (existingOwner?.requestDigest === requestDigest) {
+            const versions = await this.repositories.listArenaEntryVersions(projectId, seasonId, existingOwner.id);
+            return { ok: true, value: view(existingOwner, versions) };
+          }
         } catch {
           return { ok: false, code: "PERSISTENCE_FAILED" };
         }
@@ -264,7 +402,9 @@ export class ArenaEnrollmentService {
       if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
       const ownerFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
       const entry = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(projectId, seasonId, ownerFingerprint);
-      return { ok: true, value: entry ? view(entry) : null };
+      if (!entry) return { ok: true, value: null };
+      const versions = await this.repositories.listArenaEntryVersions(projectId, seasonId, entry.id);
+      return { ok: true, value: view(entry, versions) };
     } catch (error) {
       return { ok: false, code: mapError(error) };
     }

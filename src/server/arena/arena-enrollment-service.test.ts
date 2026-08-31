@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
+import { resolveTournamentRules, tournamentRulesCommitment } from "@/domain/arena/tournament-rules";
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import { decryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
@@ -11,6 +12,7 @@ import {
   type ArenaSeasonRecord,
 } from "@/server/db/repositories";
 import { ProjectService } from "@/server/projects/project-service";
+import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 
 import { ArenaEnrollmentService } from "./arena-enrollment-service";
 import { openStrategyArtifact } from "./strategy-artifacts";
@@ -71,10 +73,14 @@ async function setup(
     status: "open",
     entryMode: "open",
     maxEntries: 2,
+    templateId: "playground",
+    templateVersion: 1,
+    rulesSnapshot: resolveTournamentRules({ templateId: "playground" }),
     createdBy: "operator-fingerprint",
     createdAt: new Date("2026-08-30T10:00:00.000Z"),
     ...overrides,
   };
+  season.rulesCommitment = season.rulesSnapshot ? tournamentRulesCommitment(season.rulesSnapshot) : undefined;
   await repositories.projects.saveArenaSeason(season);
   if (prizeStatus !== "missing") {
     await repositories.projects.saveArenaPrizePool({
@@ -116,6 +122,8 @@ describe("ArenaEnrollmentService", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.code);
     expect(result.value.agentId).toBe("EMBER_01");
+    expect(result.value.version).toBe(1);
+    expect(result.value.versions).toEqual([expect.objectContaining({ version: 1, status: "active" })]);
 
     const project = await repositories.projects.getProject(projectId);
     const artifact = await repositories.projects.getArenaStrategyArtifact(projectId, "EMBER_01");
@@ -222,7 +230,7 @@ describe("ArenaEnrollmentService", () => {
     })).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
   });
 
-  it("allows only one entry per wallet in a season", async () => {
+  it("requires explicit confirmation before replacing a wallet's active agent", async () => {
     const { projectId, season, service } = await setup();
     await expect(service.enroll({
       projectId,
@@ -239,7 +247,133 @@ describe("ArenaEnrollmentService", () => {
       agentId: "NOVA_03",
       policy: policy("Nova", "raise"),
       idempotencyKey: "join-nova-0003",
-    })).resolves.toEqual({ ok: false, code: "ARENA_WALLET_ALREADY_ENTERED" });
+    })).resolves.toEqual({ ok: false, code: "ARENA_REPLACEMENT_CONFIRMATION_REQUIRED" });
+  });
+
+  it("atomically replaces the active agent while preserving sealed immutable versions", async () => {
+    const { repositories, projectId, season, service } = await setup();
+    await expect(service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_V1",
+      policy: agentPackage("EMBER_V1", "Ember one"),
+      idempotencyKey: "join-ember-version-001",
+    })).resolves.toMatchObject({ ok: true, value: { version: 1 } });
+
+    const replacementInput = {
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_V2",
+      policy: agentPackage("EMBER_V2", "Ember two"),
+      idempotencyKey: "join-ember-version-002",
+      replaceExisting: true,
+    };
+    const replaced = await service.enroll(replacementInput);
+    expect(replaced).toMatchObject({
+      ok: true,
+      value: {
+        agentId: "EMBER_V2",
+        version: 2,
+        versions: [
+          { version: 1, agentId: "EMBER_V1", status: "retired" },
+          { version: 2, agentId: "EMBER_V2", status: "active" },
+        ],
+      },
+    });
+    await expect(service.enroll(replacementInput)).resolves.toEqual(replaced);
+
+    const entries = await repositories.projects.listArenaSeasonEntries(projectId, season.id);
+    const artifacts = await repositories.projects.listArenaStrategyArtifacts(projectId);
+    const versions = await repositories.projects.listArenaEntryVersions(projectId, season.id, entries[0]!.id);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ agentId: "EMBER_V2", version: 2 });
+    expect(artifacts.map((artifact) => artifact.agentId)).toEqual(["EMBER_V1", "EMBER_V2"]);
+    expect(versions).toMatchObject([
+      { version: 1, status: "retired", agentId: "EMBER_V1" },
+      { version: 2, status: "active", agentId: "EMBER_V2" },
+    ]);
+    expect(JSON.stringify(versions)).not.toContain("fallbackAction");
+    expect(JSON.stringify(versions)).not.toContain("handCategories");
+  });
+
+  it("keeps the current agent active when a replacement package fails validation", async () => {
+    const { repositories, projectId, season, service } = await setup();
+    await service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_SAFE_1",
+      policy: agentPackage("EMBER_SAFE_1", "Ember safe"),
+      idempotencyKey: "join-ember-safe-001",
+    });
+    await expect(service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_BAD_2",
+      policy: { executable: "do not accept" },
+      idempotencyKey: "join-ember-safe-002",
+      replaceExisting: true,
+    })).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
+    const entry = await repositories.projects.getArenaSeasonEntryByOwnerFingerprint(
+      projectId,
+      season.id,
+      fingerprintWallet(playerOne, "test-wallet-pepper-0123456789012345"),
+    );
+    expect(entry).toMatchObject({ agentId: "EMBER_SAFE_1", version: 1 });
+  });
+
+  it("counts only three accepted versions per UTC day", async () => {
+    const { projectId, season, service } = await setup();
+    for (const [index, agentId] of ["EMBER_DAY_1", "EMBER_DAY_2", "EMBER_DAY_3"].entries()) {
+      const result = await service.enroll({
+        projectId,
+        seasonId: season.id,
+        actorWalletAddress: playerOne,
+        agentId,
+        policy: agentPackage(agentId, `Ember day ${index + 1}`),
+        idempotencyKey: `join-ember-day-00${index + 1}`,
+        replaceExisting: index > 0,
+      });
+      expect(result).toMatchObject({ ok: true, value: { version: index + 1 } });
+    }
+    await expect(service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_DAY_4",
+      policy: agentPackage("EMBER_DAY_4", "Ember day four"),
+      idempotencyKey: "join-ember-day-004",
+      replaceExisting: true,
+    })).resolves.toEqual({ ok: false, code: "ARENA_SUBMISSION_LIMIT_REACHED" });
+  });
+
+  it("forbids replacement when the tournament locked a fixed roster policy", async () => {
+    const fixedRules = resolveTournamentRules({ templateId: "championship" });
+    const { projectId, season, service } = await setup({
+      templateId: "championship",
+      rulesSnapshot: fixedRules,
+      rulesCommitment: tournamentRulesCommitment(fixedRules),
+    });
+    await service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_FIXED_1",
+      policy: agentPackage("EMBER_FIXED_1", "Ember fixed"),
+      idempotencyKey: "join-ember-fixed-001",
+    });
+    await expect(service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_FIXED_2",
+      policy: agentPackage("EMBER_FIXED_2", "Ember fixed two"),
+      idempotencyKey: "join-ember-fixed-002",
+      replaceExisting: true,
+    })).resolves.toEqual({ ok: false, code: "ARENA_RESUBMISSION_FORBIDDEN" });
   });
 
   it("serializes concurrent joins at the season capacity", async () => {
