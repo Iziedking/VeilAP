@@ -19,6 +19,17 @@ function copyChallenge(challenge: AuthChallenge): AuthChallenge {
 }
 
 describe("wallet authentication challenge", () => {
+  it("generates a nonce that fits the Starknet felt boundary", () => {
+    const challenge = createAuthChallengeService({ now: () => NOW }).issue({
+      walletAddress: WALLET,
+      origin: ORIGIN,
+      chainId: CHAIN_ID,
+    });
+
+    expect(challenge.nonce).toMatch(/^0x[0-9a-f]{62}$/);
+    expect(BigInt(challenge.nonce)).toBeLessThan(1n << 248n);
+  });
+
   it("accepts one valid signature for the exact challenge", async () => {
     const service = makeService();
     const challenge = service.issue({ walletAddress: WALLET, origin: ORIGIN, chainId: CHAIN_ID });

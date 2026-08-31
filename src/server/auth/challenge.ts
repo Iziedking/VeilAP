@@ -97,7 +97,9 @@ export type StoredChallenge = { challenge: AuthChallenge; digest: string; consum
 
 export function createAuthChallengeService(options: ChallengeServiceOptions = {}) {
   let clock = options.now ?? Date.now;
-  const makeNonce = options.nonce ?? (() => `0x${randomBytes(32).toString("hex")}`);
+  // Starknet typed-data felts must fit below the field prime. 31 random bytes
+  // stay below that boundary while preserving 248 bits of nonce entropy.
+  const makeNonce = options.nonce ?? (() => `0x${randomBytes(31).toString("hex")}`);
   const persistence = options.persistence;
   const active = new Map<string, StoredChallenge>();
   const consumed = new Map<string, number>();
