@@ -84,6 +84,7 @@
 .operator-season-row span, .operator-season-row small { color: var(--ink-soft); font-size: 8px; letter-spacing: .6px; }
 .operator-season-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--arena-display); font-size: 15px; text-transform: uppercase; }
 .operator-muted { margin: 18px 0 14px; color: var(--ink-soft); font-size: 10px; line-height: 1.5; }
+.operator-create-note { margin: 0; padding: 18px 19px 20px; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: 10px; line-height: 1.6; }
 
 .operator-strategy-list { padding: 9px 19px 14px; }
 .operator-strategy { min-height: 65px; padding: 9px 0; display: grid; grid-template-columns: 25px 1fr auto; align-items: center; gap: 11px; border-bottom: 1px solid var(--rule); cursor: pointer; }

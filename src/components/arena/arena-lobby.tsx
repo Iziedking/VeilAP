@@ -35,7 +35,10 @@ export function ArenaLobby() {
     }
   }
 
-  useEffect(() => { void loadCompetitions(); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadCompetitions(), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const filtered = useMemo(() => competitions.filter((competition) => (
     filter === "all" || competitionPhase(competition) === filter
@@ -117,4 +120,3 @@ export function ArenaLobby() {
     </div>
   );
 }
-

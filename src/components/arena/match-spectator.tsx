@@ -74,7 +74,7 @@ export function MatchSpectator({
     return () => { active = false; window.clearTimeout(timer); };
   }, [projectId, seasonId, scheduledMatchId]);
 
-  const handReceipts = receipt?.publicHandReceipts ?? [];
+  const handReceipts = useMemo(() => receipt?.publicHandReceipts ?? [], [receipt?.publicHandReceipts]);
   const currentHand = handReceipts[activeIndex];
   const currentScore = useMemo(() => scoreThrough(handReceipts, activeIndex), [activeIndex, handReceipts]);
 
