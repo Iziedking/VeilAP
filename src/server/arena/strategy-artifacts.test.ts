@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
 import { createProjectKeyMaterial } from "@/server/crypto/key-provider";
 import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
 import { createMemoryRepositories } from "@/server/db/repositories";
@@ -15,6 +16,17 @@ const policy = {
   displayName: "Cinder Baseline",
   rules: [{ minBoardCards: 0, action: "check" as const }],
   fallbackAction: "fold" as const,
+};
+
+const agentPackage = {
+  protocolVersion: "veil-agent.v1" as const,
+  engineVersion: ARENA_ENGINE_VERSION,
+  agentId: "NIGHTJAR",
+  displayName: "Nightjar",
+  policy: {
+    rules: [{ when: { pocketPair: true }, action: "raise" as const }],
+    fallbackAction: "fold" as const,
+  },
 };
 
 describe("sealed strategy artifacts", () => {
@@ -72,5 +84,25 @@ describe("sealed strategy artifacts", () => {
       idFactory: () => "artifact-repository-1",
     });
     await expect(store.get("season-00", "NIGHTJAR")).resolves.toEqual(record);
+  });
+
+  it("seals and reopens a coding-agent package without storing its strategy in plaintext", async () => {
+    const provider = createPreviewKeyProvider();
+    const keyMaterial = await createProjectKeyMaterial(provider, "season-00");
+    const store = createMemoryStrategyArtifactStore();
+    const record = await submitStrategyArtifact({
+      projectId: "season-00",
+      agentId: agentPackage.agentId,
+      policy: agentPackage,
+      keyMaterial,
+      store,
+      idFactory: () => "artifact-package-1",
+    });
+    expect(record.displayName).toBe("Nightjar");
+    expect(record.encryptedPolicy.ciphertext).not.toContain("pocketPair");
+    await expect(openStrategyArtifact({ record, keyMaterial })).resolves.toMatchObject({
+      policy: agentPackage,
+      agent: { id: "NIGHTJAR", artifactCommitment: record.artifactCommitment },
+    });
   });
 });

@@ -6,18 +6,19 @@ test("gives a first-time player a clear private-agent journey", async ({ page },
   await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 4_000 });
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Build your agent. Keep its playbook private. Win rewards.",
+    "Your coding agent builds it. You approve the entry.",
   );
-  await expect(page.getByText("NO CODE NEEDED / PRIVATE STRATEGY")).toBeVisible();
+  await expect(page.getByText("OPEN AGENT COMPETITION / PRIVATE STRATEGY")).toBeVisible();
   await expect(page.getByRole("list", { name: "How to enter" })).toContainText(
-    "Answer three questions to build your agent",
+    "Copy AGENT.md into the coding agent you already use",
   );
   await expect(page.getByRole("heading", { name: "Choose your arena" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Choose how your agent plays" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bring your agent package" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
   await expect(page.getByText("EVERYONE CAN SEE")).toBeVisible();
   await expect(page.getByText("KEPT PRIVATE")).toBeVisible();
   await expect(page.getByRole("link", { name: "Wallet access" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /seal agent and enter|this arena is not accepting entries/i })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
   await expect(page.locator("body")).not.toContainText(/sample agent|preview data|synthetic project/i);
   await page.screenshot({
     path: testInfo.outputPath(`play-${testInfo.project.name}.png`),
@@ -25,7 +26,7 @@ test("gives a first-time player a clear private-agent journey", async ({ page },
   });
 });
 
-test("keeps the player builder usable at 390 pixels", async ({ page }) => {
+test("keeps agent entry usable at 390 pixels", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/play");
 

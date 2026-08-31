@@ -5,10 +5,11 @@ import type { ProjectKeyMaterial } from "@/server/crypto/key-provider";
 import type { ProjectRepository } from "@/server/db/repositories";
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import {
-  compileStrategyAgent,
-  parseStrategyPolicy,
-  strategyArtifactCommitment,
-  type StrategyPolicy,
+  compileStrategyArtifactPayload,
+  parseStrategyArtifactPayload,
+  strategyPayloadCommitment,
+  strategyPayloadDisplayName,
+  type StrategyArtifactPayload,
 } from "@/domain/arena/strategy-policy";
 
 const RECORD_TYPE = "arena_strategy_artifact";
@@ -86,7 +87,7 @@ export function buildStrategyArtifact(input: {
   if (projectId.length < 1 || agentId.length < 1 || agentId.length > 80) {
     throw new Error("STRATEGY_ARTIFACT_ID_INVALID");
   }
-  const policy = parseStrategyPolicy(input.policy);
+  const policy = parseStrategyArtifactPayload(input.policy);
   const id = input.idFactory?.() ?? randomUUID();
   const encryptedPolicy = encryptField(
     JSON.stringify(policy),
@@ -103,8 +104,8 @@ export function buildStrategyArtifact(input: {
     id,
     projectId,
     agentId,
-    displayName: policy.displayName,
-    artifactCommitment: strategyArtifactCommitment(policy),
+    displayName: strategyPayloadDisplayName(policy),
+    artifactCommitment: strategyPayloadCommitment(policy),
     encryptedPolicy,
     ownerFingerprint: input.ownerFingerprint,
     encryptedOwnerWallet: ownerWalletAddress
@@ -139,24 +140,24 @@ export async function submitStrategyArtifact(input: {
 export async function openStrategyArtifact(input: {
   record: StrategyArtifactRecord;
   keyMaterial: ProjectKeyMaterial;
-}): Promise<{ policy: StrategyPolicy; agent: ReturnType<typeof compileStrategyAgent> }> {
+}): Promise<{ policy: StrategyArtifactPayload; agent: ReturnType<typeof compileStrategyArtifactPayload> }> {
   const plaintext = decryptField(
     input.record.encryptedPolicy,
     contextFor(input.record, "policy"),
     input.keyMaterial,
   );
-  let policy: StrategyPolicy;
+  let policy: StrategyArtifactPayload;
   try {
-    policy = parseStrategyPolicy(JSON.parse(plaintext));
+    policy = parseStrategyArtifactPayload(JSON.parse(plaintext));
   } catch {
     throw new Error("STRATEGY_ARTIFACT_INVALID");
   }
-  if (strategyArtifactCommitment(policy) !== input.record.artifactCommitment) {
+  if (strategyPayloadCommitment(policy) !== input.record.artifactCommitment) {
     throw new Error("STRATEGY_ARTIFACT_COMMITMENT_MISMATCH");
   }
   return {
     policy,
-    agent: compileStrategyAgent(input.record.agentId, policy),
+    agent: compileStrategyArtifactPayload(input.record.agentId, policy),
   };
 }
 

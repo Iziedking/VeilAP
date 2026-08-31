@@ -7,7 +7,7 @@ This demo must use persisted seasons, real wallet sessions, real match receipts,
 - Production frontend and API return 200 over HTTPS.
 - Health and protected readiness are green.
 - The Vercel project ID selects the intended persisted project.
-- At least one open reward-ready season exists.
+- At least one public open competition exists. It may be exhibition, pledged, or funded.
 - Two real player wallets can enter, or two real entries already exist.
 - The operator wallet is the recorded sponsor.
 - The worker is configured for the correct project and season.
@@ -24,18 +24,18 @@ Stop the demo if any prerequisite is false. Explain the boundary instead of fabr
 
 Show the landing promise and the public arena. Point out that scores, commitments, and receipts are visible while strategy rules are absent.
 
-### 0:25 to 1:10: anyone can build an agent
+### 0:25 to 1:10: anyone can bring a competitive agent
 
 Open `/play`.
 
-1. Choose the open season.
-2. Name the agent.
-3. Answer the three poker questions.
-4. Show the privacy summary: public entry proof and results, private strategy and reward wallet.
-5. Sign in with the wallet.
-6. Seal and enter.
+1. Copy `AGENT.md` into a coding agent.
+2. Show that it discovers an open competition and produces a strict `.veil-agent.json` package.
+3. Open the private approval link returned by the coding agent.
+4. Review the agent identity, protocol, engine, rule count, and package commitment.
+5. Show the privacy summary: public entry proof and results, private strategy and reward wallet.
+6. Sign in with the wallet, approve, seal, and enter.
 
-Explain that sign-in proves wallet control and does not approve a transfer.
+Explain that the coding agent cannot access the wallet or enter by itself. Wallet sign-in proves control, and the approval action enters the reviewed package without approving a transfer.
 
 ### 1:10 to 1:55: public competition, sealed strategies
 

@@ -190,24 +190,31 @@ export function WalletSessionButton() {
         {!busy && message}
         {flow === "idle" && "Choose a wallet. Signing proves control only. It cannot move funds."}
       </p>
-      {errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED" && (
-        <a
-          className="wallet-activation-help"
-          href="https://support.xverse.app/hc/en-us/articles/37797696568077-How-to-Activate-Your-Starknet-Account-in-Xverse"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open Xverse activation steps
-        </a>
-      )}
-      {(flow === "error" || flow === "unsupported" || flow === "wrong-network") && (
-        <button className="wallet-retry" type="button" onClick={() => {
-          setErrorCode("");
-          setMessage("");
-          setFlow("idle");
-        }}>
-          Try another wallet
-        </button>
+      {(errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED"
+        || flow === "error"
+        || flow === "unsupported"
+        || flow === "wrong-network") && (
+        <div className="wallet-recovery-actions">
+          {errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED" && (
+            <a
+              className="wallet-activation-help"
+              href="https://support.xverse.app/hc/en-us/articles/37797696568077-How-to-Activate-Your-Starknet-Account-in-Xverse"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open Xverse activation steps
+            </a>
+          )}
+          {(flow === "error" || flow === "unsupported" || flow === "wrong-network") && (
+            <button className="wallet-retry" type="button" onClick={() => {
+              setErrorCode("");
+              setMessage("");
+              setFlow("idle");
+            }}>
+              Try another wallet
+            </button>
+          )}
+        </div>
       )}
     </>
   );

@@ -1296,16 +1296,6 @@ export function createPostgresRepositories(db: VeilapDatabase): {
             if (season.entryMode !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
             if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
             if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
-            const pools = await tx
-              .select({ status: arenaPrizePools.status })
-              .from(arenaPrizePools)
-              .where(and(
-                eq(arenaPrizePools.projectId, input.entry.projectId),
-                eq(arenaPrizePools.seasonId, input.entry.seasonId),
-              ))
-              .limit(1)
-              .for("update");
-            if (pools[0]?.status !== "funded") throw new Error("ARENA_PRIZE_POOL_NOT_FUNDED");
             const totals = await tx
               .select({ value: count() })
               .from(arenaSeasonEntries)
@@ -1912,8 +1902,6 @@ export function createMemoryRepositories(): {
         if ((season.entryMode ?? "invite_only") !== "open") throw new Error("ARENA_SEASON_NOT_PUBLIC");
         if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
         if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
-        const prizePool = [...arenaPrizePoolRows.values()].find((row) => row.projectId === input.entry.projectId && row.seasonId === input.entry.seasonId);
-        if (prizePool?.status !== "funded") throw new Error("ARENA_PRIZE_POOL_NOT_FUNDED");
         const entries = [...arenaSeasonEntryRows.values()].filter((row) => row.projectId === input.entry.projectId && row.seasonId === input.entry.seasonId);
         if (entries.length >= (season.maxEntries ?? 16)) throw new Error("ARENA_SEASON_FULL");
         if (arenaStrategyArtifactRows.has(input.artifact.id) || [...arenaStrategyArtifactRows.values()].some((row) => row.projectId === input.artifact.projectId && row.agentId === input.artifact.agentId)) {

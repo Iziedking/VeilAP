@@ -1,20 +1,21 @@
 # Veil Arena
 
-Build a poker agent without writing code. Keep its strategy sealed. Compete for sponsor-authorized private rewards.
+Build a private poker agent with any coding agent. Keep its strategy sealed. Compete in open tournaments.
 
-Veil Arena is a private competition platform for deterministic agents on Starknet. A player answers three poker questions, signs in with a compatible wallet, and enters an open season. The arena runs every agent under the same fixed rules, publishes verifiable match receipts, and never returns a submitted strategy through a public API.
+Veil Arena is a private competition platform for deterministic agents on Starknet. A player gives [`AGENT.md`](public/AGENT.md) to the coding agent they already use. That agent engineers a strict strategy package and returns a private approval link. The player reviews the package commitment, signs in with a compatible wallet, and approves entry. The arena runs every package under the same fixed rules, publishes verifiable match receipts, and never returns a submitted strategy through a public API.
 
 The first game is a heads-up poker decision benchmark. It is an agent competition, not a casino and not a token price market.
 
 ## The player experience
 
-1. Choose an open season with a reward plan.
-2. Answer three questions that define how the agent plays.
-3. Sign in with a Starknet wallet and seal the entry.
-4. Watch match results and leaderboard movement in public.
-5. If the agent wins, the registered wallet can receive a private STRK20 transfer.
+1. Copy `AGENT.md` into any coding agent.
+2. The coding agent discovers an open competition, builds a differentiated package, validates it, and returns a private approval link.
+3. Review the exact package identity and commitment in Veil Arena.
+4. Sign in with a Starknet wallet and approve the sealed entry.
+5. Watch match results and leaderboard movement in public.
+6. If the competition has a funded reward and the agent wins, the registered wallet can receive a private STRK20 transfer.
 
-No code is required for the current agent builder. Wallet sign-in proves account control only. It does not approve a payment or give Veil Arena custody of funds.
+The player does not need to write code or configure a special builder account. The coding agent cannot approve an entry, access the player's wallet, or move funds. Wallet sign-in proves account control only and the final UI action approves the competition entry, not a payment.
 
 ## Why privacy matters
 
@@ -35,7 +36,7 @@ Version one uses a trusted runner. Infrastructure operators with the required KM
 
 | Capability | Implementation |
 | --- | --- |
-| Player entry | Public no-code agent builder backed by persisted seasons and entries |
+| Player entry | Public Agent Protocol guide, coding-agent submission endpoint, encrypted approval link, wallet-authenticated sealing, and persisted entries |
 | Authentication | One-time Starknet typed-data challenge, RPC signature verification, durable session record, HTTP-only cookie |
 | Strategy storage | Validated deterministic policy, application commitment, envelope encryption, AWS KMS protected project key |
 | Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, deterministic round-robin scheduling |
@@ -63,12 +64,13 @@ This proves that the sponsor authorized the hidden application plan and that a f
 | Route | Audience | Purpose |
 | --- | --- | --- |
 | `/` | Public | Arena broadcast, leaderboard, match evidence, and settlement receipts |
-| `/play` | Players | Choose a real season, build an agent, sign in, and enter |
+| `/play` | Players | Choose a real season, import or claim an agent package, review it, sign in, and enter |
 | `/sign-in` | Players and operators | Secure Starknet wallet session |
 | `/arena-console` | Authorized operators | Create and lock seasons, review worker state, and authorize rewards |
 | `/workspace` | Existing links | Redirects to the current player journey |
 | `/api/health` | Operations | Configuration and database liveness |
 | `/api/internal/arena/readiness` | Protected operations | Database, schema, KMS, receipt key, STRK20 pool, and worker readiness |
+| `/api/agent-submissions` | Coding agents | Discover open competitions and prepare a private package approval link |
 
 The public landing page reads the project identifier from `NEXT_PUBLIC_VEIL_ARENA_PROJECT_ID` or from a `?project=` query parameter. Without a configured project, it shows an honest empty state.
 

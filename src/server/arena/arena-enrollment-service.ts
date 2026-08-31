@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
-import { parseStrategyPolicy, strategyArtifactCommitment } from "@/domain/arena/strategy-policy";
+import {
+  parseStrategyArtifactPayload,
+  strategyPayloadCommitment,
+} from "@/domain/arena/strategy-policy";
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import { encryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
@@ -19,7 +22,6 @@ export type ArenaEnrollmentErrorCode =
   | "ARENA_SEASON_NOT_STARTED"
   | "ARENA_SEASON_CLOSED"
   | "ARENA_SEASON_FULL"
-  | "ARENA_PRIZE_POOL_NOT_FUNDED"
   | "ARENA_WALLET_ALREADY_ENTERED"
   | "STRATEGY_ARTIFACT_ALREADY_EXISTS"
   | "IDEMPOTENCY_KEY_REUSED"
@@ -54,6 +56,7 @@ function mapError(error: unknown): ArenaEnrollmentErrorCode {
   if (!(error instanceof Error)) return "PERSISTENCE_FAILED";
   if (
     error.message === "STRATEGY_POLICY_INVALID"
+    || error.message === "AGENT_PACKAGE_INVALID"
     || error.message === "STRATEGY_ARTIFACT_ID_INVALID"
     || error.message === "STRATEGY_OWNER_INVALID"
   ) return "INVALID_INPUT";
@@ -63,7 +66,6 @@ function mapError(error: unknown): ArenaEnrollmentErrorCode {
   if (error.message === "ARENA_SEASON_NOT_STARTED") return "ARENA_SEASON_NOT_STARTED";
   if (error.message === "ARENA_SEASON_CLOSED") return "ARENA_SEASON_CLOSED";
   if (error.message === "ARENA_SEASON_FULL") return "ARENA_SEASON_FULL";
-  if (error.message === "ARENA_PRIZE_POOL_NOT_FUNDED") return "ARENA_PRIZE_POOL_NOT_FUNDED";
   if (error.message === "ARENA_WALLET_ALREADY_ENTERED") return "ARENA_WALLET_ALREADY_ENTERED";
   if (
     error.message === "ARENA_ARTIFACT_ALREADY_EXISTS"
@@ -132,8 +134,11 @@ export class ArenaEnrollmentService {
       if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
       const now = this.now();
       actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
-      const parsedPolicy = parseStrategyPolicy(input.policy);
-      const artifactCommitment = strategyArtifactCommitment(parsedPolicy);
+      const parsedPolicy = parseStrategyArtifactPayload(input.policy);
+      if ("protocolVersion" in parsedPolicy && parsedPolicy.agentId !== agentId) {
+        return { ok: false, code: "INVALID_INPUT" };
+      }
+      const artifactCommitment = strategyPayloadCommitment(parsedPolicy);
       requestDigest = commitment({
         actorFingerprint,
         seasonId,
@@ -166,9 +171,6 @@ export class ArenaEnrollmentService {
       if ((season.entryMode ?? "invite_only") !== "open") return { ok: false, code: "ARENA_SEASON_NOT_PUBLIC" };
       if (now < season.startsAt) return { ok: false, code: "ARENA_SEASON_NOT_STARTED" };
       if (now >= season.locksAt) return { ok: false, code: "ARENA_SEASON_CLOSED" };
-      const prizePool = await this.repositories.getArenaPrizePool(projectId, seasonId);
-      if (prizePool?.status !== "funded") return { ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" };
-
       const existingArtifact = await this.repositories.getArenaStrategyArtifact(projectId, agentId);
       if (existingArtifact) return { ok: false, code: "STRATEGY_ARTIFACT_ALREADY_EXISTS" };
 

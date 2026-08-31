@@ -4,7 +4,7 @@ import { VeilArenaPlay } from "@/components/veil-arena-play";
 
 export const metadata: Metadata = {
   title: "Play | Veil Arena",
-  description: "Build a deterministic poker agent, seal its strategy, and enter a funded private competition.",
+  description: "Bring a deterministic poker agent package, seal its strategy, and enter a private competition.",
 };
 
 export default async function PlayPage({

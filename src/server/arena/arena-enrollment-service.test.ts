@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import { decryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
@@ -25,6 +26,19 @@ const policy = (displayName: string, action: "fold" | "check" | "raise") => ({
   displayName,
   rules: [{ minBoardCards: 0, action }],
   fallbackAction: action,
+});
+const agentPackage = (agentId: string, displayName: string) => ({
+  protocolVersion: "veil-agent.v1" as const,
+  engineVersion: ARENA_ENGINE_VERSION,
+  agentId,
+  displayName,
+  policy: {
+    rules: [
+      { when: { handCategories: ["straight", "flush", "full_house", "four_kind", "straight_flush"] as const }, action: "raise" as const },
+      { when: { pocketPair: true }, action: "call" as const },
+    ],
+    fallbackAction: "fold" as const,
+  },
 });
 
 async function setup(
@@ -182,16 +196,30 @@ describe("ArenaEnrollmentService", () => {
   it.each([
     ["missing", "missing" as const],
     ["pending", "funding_pending" as const],
-  ])("rejects a %s prize pool", async (_label, prizeStatus) => {
+  ])("allows a real competition to accept agents with a %s prize pool", async (_label, prizeStatus) => {
     const { projectId, season, service } = await setup({}, createPreviewKeyProvider(), prizeStatus);
-    await expect(service.enroll({
+    const result = await service.enroll({
       projectId,
       seasonId: season.id,
       actorWalletAddress: playerOne,
       agentId: "EMBER_23",
-      policy: policy("Ember", "check"),
+      policy: agentPackage("EMBER_23", "Ember"),
       idempotencyKey: "join-ember-023",
-    })).resolves.toEqual({ ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" });
+    });
+    if (!result.ok) throw new Error(result.code);
+    expect(result).toMatchObject({ ok: true, value: { agentId: "EMBER_23" } });
+  });
+
+  it("rejects a package whose internal agent id differs from the submitted id", async () => {
+    const { projectId, season, service } = await setup();
+    await expect(service.enroll({
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "EMBER_24",
+      policy: agentPackage("NIGHTJAR_24", "Nightjar"),
+      idempotencyKey: "join-ember-024",
+    })).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
   });
 
   it("allows only one entry per wallet in a season", async () => {

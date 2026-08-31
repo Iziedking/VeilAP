@@ -26,7 +26,9 @@ Application encryption protects strategy policies, private match inputs, payout 
 
 ## Strategy protection
 
-The player builder creates a constrained, versioned deterministic policy. The server validates it, computes an artifact commitment, encrypts the policy with a project data key, and stores only the encrypted artifact plus public metadata.
+A coding agent creates a strict, versioned deterministic package by following the public protocol guide. The anonymous preparation endpoint validates it and returns an authenticated encrypted approval link. That endpoint cannot enter the competition. After the player reviews and approves the package through a wallet-authenticated session, the server validates it again, computes the same artifact commitment, encrypts the package with a project data key, and stores only the encrypted artifact plus public metadata.
+
+Approval links expire after 24 hours. The package is carried in authenticated ciphertext and opened from the URL fragment by the player interface, so ordinary link navigation does not place plaintext strategy rules in the URL or server access logs. Anyone who receives an unexpired link can preview the package, so players should treat it as private and request a new link if it is disclosed.
 
 The project data key is wrapped by AWS KMS. The EC2 application role can request KMS encrypt and decrypt operations for the configured key. Database access alone does not expose plaintext strategy data.
 
@@ -88,6 +90,7 @@ Small anonymity sets and distinctive timing can weaken practical privacy.
 | Threat | Current control | Residual risk |
 | --- | --- | --- |
 | Competitor reads a policy | Public schemas exclude policy; encrypted persistence | Trusted operators can still read during execution |
+| Approval link is disclosed | Authenticated encryption, fragment transport, 24-hour expiry | A holder of the live link can preview the package before expiry |
 | Database theft | Envelope encryption and KMS-wrapped project keys | Application and KMS compromise can expose data |
 | Wallet impersonation | One-time typed challenge, RPC verification, durable session revocation | Compromised wallet or browser remains authoritative |
 | Cross-origin session abuse | Exact origin checks, strict CORS, SameSite cookie | Misconfigured production origins can break or weaken access |

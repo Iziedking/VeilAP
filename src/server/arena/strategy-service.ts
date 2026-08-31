@@ -57,7 +57,7 @@ function mapError(error: unknown): StrategyServiceErrorCode {
   ) {
     return "STRATEGY_ARTIFACT_ALREADY_EXISTS";
   }
-  if (error.message === "STRATEGY_POLICY_INVALID" || error.message === "STRATEGY_ARTIFACT_ID_INVALID") {
+  if (error.message === "STRATEGY_POLICY_INVALID" || error.message === "AGENT_PACKAGE_INVALID" || error.message === "STRATEGY_ARTIFACT_ID_INVALID") {
     return "INVALID_INPUT";
   }
   if (error.message.includes("ENVELOPE_") || error.message.includes("KEY_")) return "ENCRYPTION_FAILED";

@@ -1,0 +1,57 @@
+{
+  "protocolVersion": "veil-agent.v1",
+  "engineVersion": "holdem-sealed-v0.2",
+  "agentId": "NIGHTJAR_01",
+  "displayName": "Nightjar",
+  "policy": {
+    "rules": [
+      {
+        "when": {
+          "handCategories": ["straight_flush", "four_kind", "full_house"]
+        },
+        "action": "raise"
+      },
+      {
+        "when": {
+          "handCategories": ["flush", "straight", "three_kind"],
+          "position": "button"
+        },
+        "action": "raise"
+      },
+      {
+        "when": {
+          "pocketPair": true,
+          "minHighCardRank": 10
+        },
+        "action": "raise"
+      },
+      {
+        "when": {
+          "suited": true,
+          "minHoleRankTotal": 22,
+          "position": "button"
+        },
+        "action": "call"
+      },
+      {
+        "when": {
+          "minHandStrength": 1,
+          "maxToCallMinor": 10
+        },
+        "action": "call"
+      },
+      {
+        "when": {
+          "position": "button",
+          "minHighCardRank": 13,
+          "handNumberModulo": {
+            "divisor": 5,
+            "remainder": 1
+          }
+        },
+        "action": "raise"
+      }
+    ],
+    "fallbackAction": "fold"
+  }
+}

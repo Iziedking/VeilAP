@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { VeilLogo } from "@/components/veil-logo";
+import {
+  agentPackageCommitment,
+  parseAgentPackage,
+  type AgentPackage,
+} from "@/domain/arena/strategy-policy";
 import { apiFetch } from "@/lib/api/client";
 
 type SeasonStatus = "open" | "locked" | "completed" | "cancelled";
 type PrizeStatus = "funding_pending" | "funded" | "settlement_pending" | "settled" | "unknown";
-type OpeningRange = "tight" | "balanced" | "wide";
-type PlayAction = "fold" | "call" | "raise";
 
 type ArenaSeason = {
   id: string;
@@ -38,17 +41,11 @@ type Enrollment = {
 type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SessionState = "checking" | "authenticated" | "signed-out" | "unavailable";
-
-const rangeThreshold: Record<OpeningRange, number> = {
-  tight: 22,
-  balanced: 18,
-  wide: 14,
-};
+type ClaimState = "idle" | "loading" | "loaded" | "error";
 
 function isJoinable(season: ArenaSeason, now: number): boolean {
   return season.status === "open"
     && season.entryMode === "open"
-    && season.prizeStatus === "funded"
     && season.entryCount < season.maxEntries
     && new Date(season.startsAt).getTime() <= now
     && now < new Date(season.locksAt).getTime();
@@ -61,7 +58,6 @@ function seasonStateLabel(season: ArenaSeason, now: number): string {
   if (season.status === "locked" || now >= new Date(season.locksAt).getTime()) return "ENTRY LOCKED";
   if (now < new Date(season.startsAt).getTime()) return "OPENS SOON";
   if (season.entryCount >= season.maxEntries) return "ARENA FULL";
-  if (season.prizeStatus !== "funded") return "REWARD NOT FUNDED";
   return "OPEN TO PLAY";
 }
 
@@ -91,20 +87,8 @@ function shortCommitment(value: string): string {
   return value.length > 24 ? `${value.slice(0, 12)}...${value.slice(-10)}` : value;
 }
 
-function handleFrom(name: string, walletAddress: string): string {
-  const base = name
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 22);
-  const walletSuffix = walletAddress.replace(/^0x/i, "").slice(-5).toUpperCase();
-  const candidate = [base || "AGENT", walletSuffix].filter(Boolean).join("_");
-  return candidate.slice(0, 32);
-}
-
 function enrollmentMessage(code: string): string {
   const messages: Record<string, string> = {
-    ARENA_PRIZE_POOL_NOT_FUNDED: "Entry is paused until the real reward pool is funded.",
     ARENA_SEASON_CLOSED: "Entry closed before this submission completed. Choose another open season.",
     ARENA_SEASON_FULL: "The final seat was taken. Choose another open season.",
     ARENA_SEASON_NOT_OPEN: "This season is no longer accepting agents.",
@@ -115,34 +99,31 @@ function enrollmentMessage(code: string): string {
     IDEMPOTENCY_KEY_REUSED: "The submission changed during a retry. Review it and submit again.",
     AUTH_REQUIRED: "Your secure session expired. Sign in again before entering.",
     CONFIGURATION_MISSING: "Private strategy encryption is not configured on the server yet.",
-    INVALID_INPUT: "Review the agent name and strategy choices, then try again.",
+    INVALID_INPUT: "The agent package is invalid or no longer matches this entry. Validate it and try again.",
   };
   return messages[code] ?? "The agent could not be entered. Nothing was submitted. Try again.";
 }
 
-function FieldChoice({
-  checked,
-  description,
-  label,
-  name,
-  onChange,
-  value,
-}: {
-  checked: boolean;
-  description: string;
-  label: string;
-  name: string;
-  onChange: () => void;
-  value: string;
-}) {
-  return (
-    <label className={`play-choice${checked ? " is-selected" : ""}`}>
-      <input type="radio" name={name} value={value} checked={checked} onChange={onChange} />
-      <span aria-hidden="true" />
-      <strong>{label}</strong>
-      <small>{description}</small>
-    </label>
-  );
+type PackageReview =
+  | { status: "empty" }
+  | { status: "invalid"; message: string }
+  | { status: "ready"; agentPackage: AgentPackage; commitment: string };
+
+function reviewAgentPackage(value: string): PackageReview {
+  if (!value.trim()) return { status: "empty" };
+  if (new TextEncoder().encode(value).byteLength > 64 * 1024) {
+    return { status: "invalid", message: "The package is larger than the 64 KB protocol limit." };
+  }
+  try {
+    const agentPackage = parseAgentPackage(JSON.parse(value));
+    return {
+      status: "ready",
+      agentPackage,
+      commitment: agentPackageCommitment(agentPackage),
+    };
+  } catch {
+    return { status: "invalid", message: "This is not a valid Veil Agent Protocol v1 package." };
+  }
 }
 
 export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }) {
@@ -156,12 +137,10 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
   const [entryState, setEntryState] = useState<LoadState>("idle");
   const [entry, setEntry] = useState<Enrollment | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [displayName, setDisplayName] = useState("");
-  const [agentId, setAgentId] = useState("");
-  const [handleEdited, setHandleEdited] = useState(false);
-  const [openingRange, setOpeningRange] = useState<OpeningRange>("balanced");
-  const [strongAction, setStrongAction] = useState<Exclude<PlayAction, "fold">>("raise");
-  const [defaultAction, setDefaultAction] = useState<Exclude<PlayAction, "raise">>("call");
+  const [agentPackageText, setAgentPackageText] = useState("");
+  const [guideCopyState, setGuideCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [claimState, setClaimState] = useState<ClaimState>("idle");
+  const [claimMessage, setClaimMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [entryRefresh, setEntryRefresh] = useState(0);
@@ -171,6 +150,50 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!projectId || claimState !== "idle") return;
+    const parameters = new URLSearchParams(window.location.hash.slice(1));
+    const token = parameters.get("submission");
+    if (!token) return;
+    let active = true;
+    void Promise.resolve().then(async () => {
+      if (!active) return;
+      setClaimState("loading");
+      try {
+        const response = await apiFetch("/api/agent-submissions/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const body = await response.json() as ApiEnvelope<{
+          projectId: string;
+          seasonId: string;
+          agentPackage: AgentPackage;
+          artifactCommitment: string;
+          expiresAt: string;
+        }>;
+        if (!active) return;
+        if (!response.ok || !body.ok || body.value.projectId !== projectId) {
+          setClaimState("error");
+          setClaimMessage("This private submission link is invalid, expired, or belongs to another arena.");
+          return;
+        }
+        setSelectedSeasonId(body.value.seasonId);
+        setAgentPackageText(JSON.stringify(body.value.agentPackage, null, 2));
+        setClaimState("loaded");
+        setClaimMessage(`Package received. Review commitment ${shortCommitment(body.value.artifactCommitment)} before approving it.`);
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      } catch {
+        if (!active) return;
+        setClaimState("error");
+        setClaimMessage("The private submission link could not be checked. Ask the coding agent for a fresh link.");
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [claimState, projectId]);
 
   useEffect(() => {
     let active = true;
@@ -242,6 +265,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
   );
   const selectedSeason = seasons.find((season) => season.id === selectedSeasonId);
   const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now) : false;
+  const packageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
 
   useEffect(() => {
     if (sessionState !== "authenticated" || !projectId || !selectedSeasonId) {
@@ -278,26 +302,40 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
     setSubmitError("");
   }
 
-  function updateDisplayName(value: string) {
-    setDisplayName(value);
-    if (!handleEdited) setAgentId(handleFrom(value, walletAddress));
+  function updateAgentPackage(value: string) {
+    setAgentPackageText(value);
     resetSubmission();
   }
 
-  function updateAgentId(value: string) {
-    setHandleEdited(true);
-    setAgentId(value.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 32));
-    resetSubmission();
+  async function importAgentPackage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 64 * 1024) {
+      setSubmitError("The package is larger than the 64 KB protocol limit.");
+      event.target.value = "";
+      return;
+    }
+    updateAgentPackage(await file.text());
+    event.target.value = "";
+  }
+
+  async function copyAgentGuide() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/AGENT.md`);
+      setGuideCopyState("copied");
+    } catch {
+      setGuideCopyState("error");
+    }
   }
 
   async function enterArena(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedSeason || !selectedSeasonJoinable || sessionState !== "authenticated") return;
-    const normalizedName = displayName.trim();
-    if (!normalizedName || !/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(agentId)) {
-      setSubmitError("Add an agent name and a unique handle with at least three characters.");
+    if (packageReview.status !== "ready") {
+      setSubmitError(packageReview.status === "invalid" ? packageReview.message : "Import the package created by your coding agent first.");
       return;
     }
+    const { agentPackage } = packageReview;
     const requestKey = idempotencyKey.current ?? `arena-entry-${crypto.randomUUID()}`;
     idempotencyKey.current = requestKey;
     setSubmitting(true);
@@ -312,16 +350,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
             "Idempotency-Key": requestKey,
           },
           body: JSON.stringify({
-            agentId,
-            policy: {
-              schemaVersion: 1,
-              displayName: normalizedName,
-              rules: [
-                { minHoleRankTotal: rangeThreshold[openingRange], action: strongAction },
-                { maxToCallMinor: 10, action: defaultAction },
-              ],
-              fallbackAction: defaultAction,
-            },
+            agentId: agentPackage.agentId,
+            policy: agentPackage,
           }),
         },
       );
@@ -351,8 +381,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
         : seasons.length === 0
           ? "No public season has been created yet."
             : joinableSeasons.length === 0
-              ? "No funded public season is accepting agents right now."
-              : "Choose a funded season and build your agent. No code is required.";
+              ? "No public season is accepting agents right now."
+              : "Choose an open season, give AGENT.md to any coding agent, then approve the returned package.";
   const currentEntry = entry?.seasonId === selectedSeasonId ? entry : null;
 
   return (
@@ -367,13 +397,13 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
       <main>
         <section className="play-hero" aria-labelledby="play-title">
-          <span className="play-kicker">NO CODE NEEDED / PRIVATE STRATEGY</span>
-          <h1 id="play-title">Build your agent. Keep its playbook private. Win rewards.</h1>
-          <p>Answer three simple poker questions. Veil Arena turns your choices into a deterministic agent, runs every agent under the same fixed rules, and publishes results without publishing anyone&apos;s strategy.</p>
+          <span className="play-kicker">OPEN AGENT COMPETITION / PRIVATE STRATEGY</span>
+          <h1 id="play-title">Your coding agent builds it. You approve the entry.</h1>
+          <p>Copy the Veil Arena guide into any coding agent. It creates and validates your private poker package. You review the exact package commitment, sign from this interface, and send the agent into competition.</p>
           <ol className="play-steps" aria-label="How to enter">
-            <li><span>01</span><strong>Choose an open arena with a verified reward plan</strong></li>
-            <li><span>02</span><strong>Answer three questions to build your agent</strong></li>
-            <li><span>03</span><strong>Sign in, seal the strategy, and enter</strong></li>
+            <li><span>01</span><strong>Copy AGENT.md into the coding agent you already use</strong></li>
+            <li><span>02</span><strong>Let it engineer and validate your private strategy package</strong></li>
+            <li><span>03</span><strong>Review the commitment and approve entry with your wallet</strong></li>
           </ol>
         </section>
 
@@ -406,7 +436,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                     <span className="play-season-index">{String(seasons.indexOf(season) + 1).padStart(2, "0")}</span>
                     <span className="play-season-name"><strong>{season.name}</strong><small>{season.rulesetVersion}</small></span>
                     <span><strong>{season.entryCount} / {season.maxEntries}</strong><small>AGENTS</small></span>
-                    <span><strong>{seasonStateLabel(season, now)}</strong><small>{season.prizeStatus === "funded" ? "PRIVATE REWARD READY" : "REWARD NOT READY"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
+                    <span><strong>{seasonStateLabel(season, now)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "EXHIBITION"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
                   </button>
                 );
               })}
@@ -415,7 +445,7 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
           <section className="play-builder" aria-labelledby="builder-title">
             <header>
-              <div><span>02 / AGENT BUILDER</span><h2 id="builder-title">Choose how your agent plays</h2></div>
+              <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">Bring your agent package</h2></div>
               <strong>{selectedSeasonJoinable ? "OPEN FOR ENTRY" : selectedSeason ? "VIEW ONLY" : "WAITING FOR SEASON"}</strong>
             </header>
 
@@ -437,83 +467,70 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
             ) : (
               <form className="play-form" onSubmit={enterArena}>
                 <fieldset disabled={!selectedSeasonJoinable || submitting}>
-                  <legend className="sr-only">Build a deterministic poker agent</legend>
+                  <legend className="sr-only">Import a Veil Agent Protocol package</legend>
 
-                  <div className="play-identity-grid">
-                    <label>
-                      <span>AGENT NAME</span>
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(event) => updateDisplayName(event.target.value)}
-                        placeholder="Nightjar"
-                        minLength={1}
-                        maxLength={80}
-                        autoComplete="off"
-                        required
-                      />
-                      <small>This is the public name on match results.</small>
-                    </label>
-                    <label>
-                      <span>UNIQUE HANDLE</span>
-                      <input
-                        type="text"
-                        value={agentId}
-                        onChange={(event) => updateAgentId(event.target.value)}
-                        placeholder="NIGHTJAR_01"
-                        minLength={3}
-                        maxLength={32}
-                        pattern="[A-Z0-9][A-Z0-9_-]{2,31}"
-                        autoComplete="off"
-                        required
-                      />
-                      <small>Letters, numbers, underscores, and hyphens.</small>
-                    </label>
-                  </div>
-
-                  <div className="play-question">
-                    <div><span>01</span><h3>Which hands should your agent contest?</h3></div>
-                    <div className="play-choices play-choices-three">
-                      <FieldChoice name="range" value="tight" label="Tight" description="Wait for premium starting cards." checked={openingRange === "tight"} onChange={() => { setOpeningRange("tight"); resetSubmission(); }} />
-                      <FieldChoice name="range" value="balanced" label="Balanced" description="Contest a measured range of cards." checked={openingRange === "balanced"} onChange={() => { setOpeningRange("balanced"); resetSubmission(); }} />
-                      <FieldChoice name="range" value="wide" label="Wide" description="Apply pressure with more starting cards." checked={openingRange === "wide"} onChange={() => { setOpeningRange("wide"); resetSubmission(); }} />
+                  <section className="play-agent-guide" aria-labelledby="agent-guide-title">
+                    <div>
+                      <span>GIVE THIS GUIDE TO ANY CODING AGENT</span>
+                      <h3 id="agent-guide-title">No special builder account is required.</h3>
+                      <p>The guide contains the complete protocol, legal strategy inputs, package schema and validation rules. Your coding agent should return one <code>.veil-agent.json</code> file.</p>
                     </div>
-                  </div>
-
-                  <div className="play-question">
-                    <div><span>02</span><h3>What should it do with a strong hand?</h3></div>
-                    <div className="play-choices">
-                      <FieldChoice name="strong-action" value="raise" label="Raise" description="Push the action when its cards qualify." checked={strongAction === "raise"} onChange={() => { setStrongAction("raise"); resetSubmission(); }} />
-                      <FieldChoice name="strong-action" value="call" label="Call" description="Stay controlled even with strong cards." checked={strongAction === "call"} onChange={() => { setStrongAction("call"); resetSubmission(); }} />
+                    <div className="play-agent-guide-actions">
+                      <button type="button" onClick={copyAgentGuide}>[{guideCopyState === "copied" ? " GUIDE LINK COPIED " : " COPY AGENT.MD LINK "}]</button>
+                      <a href="/AGENT.md" download>[ DOWNLOAD GUIDE ]</a>
                     </div>
-                  </div>
+                    {guideCopyState === "error" && <p className="play-inline-error" role="alert">Copy was blocked. Download the guide instead.</p>}
+                  </section>
 
-                  <div className="play-question">
-                    <div><span>03</span><h3>What should it do otherwise?</h3></div>
-                    <div className="play-choices">
-                      <FieldChoice name="default-action" value="call" label="Call" description="Stay in the hand at the fixed table cost." checked={defaultAction === "call"} onChange={() => { setDefaultAction("call"); resetSubmission(); }} />
-                      <FieldChoice name="default-action" value="fold" label="Fold" description="Protect the score and wait for strength." checked={defaultAction === "fold"} onChange={() => { setDefaultAction("fold"); resetSubmission(); }} />
+                  <section className="play-package-import" aria-labelledby="package-import-title">
+                    <div className="play-package-import-head">
+                      <div><span>PRIVATE PACKAGE</span><h3 id="package-import-title">Import what your coding agent created</h3></div>
+                      <label className="play-file-button">
+                        <input type="file" accept="application/json,.json,.veil-agent.json" onChange={importAgentPackage} />
+                        [ CHOOSE PACKAGE ]
+                      </label>
                     </div>
-                  </div>
+                    <textarea
+                      value={agentPackageText}
+                      onChange={(event) => updateAgentPackage(event.target.value)}
+                      placeholder="Paste the complete .veil-agent.json package here"
+                      spellCheck={false}
+                      aria-describedby="package-help"
+                    />
+                    <p id="package-help">Veil Arena validates the package locally before it can be submitted. Executable code, unknown fields and packages above 64 KB are rejected.</p>
+                    {claimState !== "idle" && <p className={`play-claim-status${claimState === "error" ? " is-error" : ""}`} role="status">{claimState === "loading" ? "Opening the private package prepared by your coding agent..." : claimMessage}</p>}
+                    {packageReview.status === "invalid" && <p className="play-package-invalid" role="alert">{packageReview.message}</p>}
+                  </section>
                 </fieldset>
 
                 <section className="play-review" aria-labelledby="review-title">
-                  <div><span>STRATEGY SUMMARY</span><h3 id="review-title">{openingRange.toUpperCase()} RANGE / {strongAction.toUpperCase()} STRONG / {defaultAction.toUpperCase()} OTHERWISE</h3></div>
+                  <div>
+                    <span>PACKAGE REVIEW</span>
+                    <h3 id="review-title">{packageReview.status === "ready" ? `${packageReview.agentPackage.displayName} / ${packageReview.agentPackage.agentId}` : "WAITING FOR A VALID AGENT PACKAGE"}</h3>
+                  </div>
+                  {packageReview.status === "ready" && (
+                    <dl className="play-package-facts">
+                      <div><dt>PROTOCOL</dt><dd>{packageReview.agentPackage.protocolVersion}</dd></div>
+                      <div><dt>ENGINE</dt><dd>{packageReview.agentPackage.engineVersion}</dd></div>
+                      <div><dt>RULES</dt><dd>{packageReview.agentPackage.policy.rules.length}</dd></div>
+                      <div><dt>COMMITMENT</dt><dd><code>{shortCommitment(packageReview.commitment)}</code></dd></div>
+                    </dl>
+                  )}
                   <div className="play-privacy-grid">
                     <p><span>EVERYONE CAN SEE</span> Agent name, entry proof, match score, and rank.</p>
-                    <p><span>KEPT PRIVATE</span> Exact strategy rules and the wallet that receives a win.</p>
+                    <p><span>KEPT PRIVATE</span> Every strategy rule, package contents, and the wallet that receives a win.</p>
                   </div>
                   <details>
                     <summary>How privacy works</summary>
-                    <p>Your strategy reaches Veil Arena over HTTPS and is encrypted before storage with a project key protected by AWS KMS. The trusted match runner decrypts it only to execute fixed game rules. Veil Arena does not claim zero-knowledge execution.</p>
+                    <p>Your validated package reaches Veil Arena over HTTPS and is encrypted before storage with a project key protected by AWS KMS. The trusted match runner decrypts it only to execute fixed game rules. Veil Arena does not claim zero-knowledge execution.</p>
                   </details>
                 </section>
 
                 {sessionState === "authenticated" ? (
-                  <div className="play-wallet-state"><span>WALLET SESSION VERIFIED</span><strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong><small>Sign-in proves control. It does not authorize a transfer.</small></div>
+                  <div className="play-wallet-state"><span>WALLET SIGNATURE VERIFIED</span><strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong><small>Your signed session authorizes this wallet to approve an entry. It never authorizes a transfer.</small></div>
                 ) : (
                   <div className="play-sign-in-callout">
-                    <div><span>{sessionState === "checking" ? "CHECKING WALLET SESSION" : "WALLET SIGN-IN REQUIRED"}</span><p>A signed session binds one agent and any winning reward to your wallet.</p></div>
+                    <div><span>{sessionState === "checking" ? "CHECKING WALLET SESSION" : "WALLET SIGNATURE REQUIRED"}</span><p>Only you can approve the package and bind any winning reward to your wallet.</p></div>
                     {sessionState !== "checking" && <Link href="/sign-in">[ SIGN IN SECURELY ]</Link>}
                   </div>
                 )}
@@ -524,9 +541,9 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
                 <button
                   className="play-submit"
                   type="submit"
-                  disabled={!selectedSeasonJoinable || sessionState !== "authenticated" || submitting || entryState !== "ready"}
+                  disabled={!selectedSeasonJoinable || sessionState !== "authenticated" || submitting || entryState !== "ready" || packageReview.status !== "ready"}
                 >
-                  <span>{submitting ? "SEALING AGENT..." : !selectedSeasonJoinable && selectedSeason ? "THIS ARENA IS NOT ACCEPTING ENTRIES" : entryState !== "ready" && sessionState === "authenticated" && selectedSeason ? "CHECKING ENTRY..." : "SEAL AGENT AND ENTER"}</span>
+                  <span>{submitting ? "SEALING APPROVED PACKAGE..." : !selectedSeasonJoinable && selectedSeason ? "THIS ARENA IS NOT ACCEPTING ENTRIES" : entryState !== "ready" && sessionState === "authenticated" && selectedSeason ? "CHECKING ENTRY..." : packageReview.status !== "ready" ? "IMPORT A VALID AGENT PACKAGE" : "APPROVE, SEAL AND ENTER"}</span>
                   <strong aria-hidden="true">↓</strong>
                 </button>
               </form>
@@ -537,8 +554,8 @@ export function VeilArenaPlay({ defaultProjectId }: { defaultProjectId: string }
 
       <footer className="play-footer">
         <VeilLogo />
-        <span>FIXED RULES / SEALED STRATEGIES</span>
-        <span>REAL SEASONS / REAL REWARD STATUS</span>
+        <span>OPEN BUILDERS / SEALED STRATEGIES</span>
+        <span>REAL COMPETITIONS / HONEST REWARD STATUS</span>
       </footer>
     </div>
   );
