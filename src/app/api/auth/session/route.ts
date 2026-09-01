@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { serviceResponse } from "@/server/http/service-response";
 import { readRequestActor } from "@/server/auth/request-actor";
+import { hasXOAuthConfig } from "@/server/env";
+import { getXIdentityRepository, walletFingerprint } from "@/server/identity/runtime";
 
 export const runtime = "nodejs";
 
@@ -14,8 +16,19 @@ export async function GET() {
     });
   }
   if (!actor.ok) return serviceResponse(actor);
+  const xIdentity = await getXIdentityRepository().getByWalletFingerprint(walletFingerprint(actor.walletAddress));
   return serviceResponse({
     ok: true,
-    value: { walletAddress: actor.walletAddress },
+    value: {
+      walletAddress: actor.walletAddress,
+      xVerification: {
+        configured: hasXOAuthConfig(),
+        identity: xIdentity ? {
+          username: xIdentity.username,
+          connectedAt: xIdentity.connectedAt.toISOString(),
+          lastVerifiedAt: xIdentity.lastVerifiedAt.toISOString(),
+        } : null,
+      },
+    },
   });
 }

@@ -12,6 +12,9 @@ export interface VeilapServerConfig {
   receiptSigningPublicKey?: string;
   arenaWorkerSecret?: string;
   arenaWorkerWalletAddress?: string;
+  xOAuthClientId?: string;
+  xOAuthClientSecret?: string;
+  xOAuthRedirectUri?: string;
   missing: string[];
 }
 
@@ -67,8 +70,27 @@ export function readServerConfig(
     receiptSigningPublicKey: env.VEILAP_RECEIPT_SIGNING_PUBLIC_KEY,
     arenaWorkerSecret: env.VEILAP_ARENA_WORKER_SECRET,
     arenaWorkerWalletAddress: env.VEILAP_ARENA_WORKER_WALLET_ADDRESS,
+    xOAuthClientId: env.X_OAUTH_CLIENT_ID,
+    xOAuthClientSecret: env.X_OAUTH_CLIENT_SECRET,
+    xOAuthRedirectUri: env.X_OAUTH_REDIRECT_URI,
     missing,
   };
+}
+
+export function hasXOAuthConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  const clientId = env.X_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = env.X_OAUTH_CLIENT_SECRET?.trim();
+  const redirectUri = env.X_OAUTH_REDIRECT_URI?.trim();
+  if (!clientId || !clientSecret || !redirectUri) return false;
+  try {
+    const parsed = new URL(redirectUri);
+    if (parsed.toString() !== redirectUri) return false;
+    return parsed.protocol === "https:" || (env.NODE_ENV !== "production" && isLoopbackOrigin(parsed.origin));
+  } catch {
+    return false;
+  }
 }
 
 export function requirePersistedConfig(

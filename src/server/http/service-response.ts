@@ -48,6 +48,8 @@ const conflictCodes = new Set([
   "ARENA_PRIZE_POOL_STATE_CHANGED",
   "TRANSFER_PLAN_MISMATCH",
   "TRANSFER_AUTHORIZATION_EXPIRED",
+  "X_ACCOUNT_ALREADY_LINKED",
+  "X_WALLET_ALREADY_LINKED",
 ]);
 const forbiddenCodes = new Set([
   "PROJECT_ACCESS_REQUIRED",
@@ -66,8 +68,9 @@ export function serviceResponse(result: { ok: true; value: unknown } | { ok: fal
   else if (conflictCodes.has(result.code)) status = 409;
   else if (forbiddenCodes.has(result.code)) status = 403;
   else if (result.code === "AUTH_REQUIRED") status = 401;
+  else if (result.code === "X_VERIFICATION_REQUIRED") status = 403;
   else if (result.code === "NO_LOSING_AGENT") status = 409;
-  else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING" || result.code === "SIGNING_UNAVAILABLE" || result.code === "SIGNATURE_UNAVAILABLE") status = 503;
+  else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING" || result.code === "SIGNING_UNAVAILABLE" || result.code === "SIGNATURE_UNAVAILABLE" || result.code === "X_VERIFICATION_UNAVAILABLE") status = 503;
   return NextResponse.json(result, {
     status,
     headers: { "Cache-Control": "no-store" },

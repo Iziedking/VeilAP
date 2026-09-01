@@ -43,9 +43,9 @@ curl --fail-with-body --silent --show-error http://127.0.0.1/api/internal/arena/
   -H "x-veil-arena-worker-secret: $VEILAP_ARENA_WORKER_SECRET"
 ```
 
-Do not run a season if readiness reports a blocker for persisted mode, database, arena schema, KMS, receipt signing, STRK20 pool, or worker configuration.
+Do not run a season if readiness reports a blocker for persisted mode, database, arena schema, KMS, receipt signing, STRK20 pool, worker configuration, or X verification.
 
-The readiness gate performs live checks. It verifies database connectivity, all arena tables and critical enrollment and reward columns, an enabled encrypt-and-decrypt KMS key that the EC2 role can describe, a matching Ed25519 receipt key pair, a valid STRK20 pool address, and a strong worker secret with a valid worker wallet. It does not send a Starknet transaction or execute a paid KMS encrypt/decrypt probe.
+The readiness gate performs live checks. It verifies database connectivity, all arena and participant-identity tables and critical columns, an enabled encrypt-and-decrypt KMS key that the EC2 role can describe, a matching Ed25519 receipt key pair, a valid STRK20 pool address, a strong worker secret with a valid worker wallet, and the exact production X OAuth callback configuration. It does not call X, send a Starknet transaction, or execute a paid KMS encrypt/decrypt probe.
 
 ## PostgreSQL backup
 

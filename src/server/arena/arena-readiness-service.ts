@@ -11,6 +11,7 @@ export type ArenaReadinessReport = {
     receiptSigning: boolean;
     pool: boolean;
     worker: boolean;
+    xVerification: boolean;
   };
   blockers: string[];
 };
@@ -61,6 +62,11 @@ export class ArenaReadinessService {
         && this.config.arenaWorkerWalletAddress
         && normalizeFeltAddress(this.config.arenaWorkerWalletAddress)
       ),
+      xVerification: Boolean(
+        this.config.xOAuthClientId?.trim()
+        && this.config.xOAuthClientSecret?.trim()
+        && this.config.xOAuthRedirectUri === "https://api.veilap.xyz/api/auth/x/callback"
+      ),
     };
     const blockers: string[] = [];
     if (this.config.mode !== "persisted") blockers.push("PERSISTED_MODE_REQUIRED");
@@ -70,6 +76,7 @@ export class ArenaReadinessService {
     if (!checks.receiptSigning) blockers.push("RECEIPT_SIGNING_NOT_READY");
     if (!checks.pool) blockers.push("STRK20_POOL_NOT_CONFIGURED");
     if (!checks.worker) blockers.push("ARENA_WORKER_NOT_CONFIGURED");
+    if (!checks.xVerification) blockers.push("X_VERIFICATION_NOT_CONFIGURED");
     return { ready: blockers.length === 0, mode: this.config.mode, checks, blockers };
   }
 }

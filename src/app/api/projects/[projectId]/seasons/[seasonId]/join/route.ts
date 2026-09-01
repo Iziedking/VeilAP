@@ -8,6 +8,8 @@ import { getSessionSecret } from "@/server/auth/runtime";
 import { JsonBodyError, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
 import { getArenaEnrollmentService, getArenaSeasonService } from "@/server/projects/runtime";
+import { hasXOAuthConfig } from "@/server/env";
+import { getXIdentityRepository, walletFingerprint } from "@/server/identity/runtime";
 
 export const runtime = "nodejs";
 
@@ -29,6 +31,9 @@ export async function POST(request: Request, context: JoinRouteContext) {
   try {
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
+    if (!hasXOAuthConfig()) return serviceResponse({ ok: false, code: "X_VERIFICATION_UNAVAILABLE" });
+    const xIdentity = await getXIdentityRepository().getByWalletFingerprint(walletFingerprint(actor.walletAddress));
+    if (!xIdentity) return serviceResponse({ ok: false, code: "X_VERIFICATION_REQUIRED" });
     const idempotencyKey = request.headers.get("idempotency-key")?.trim();
     if (!idempotencyKey) return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     const { projectId, seasonId } = await context.params;

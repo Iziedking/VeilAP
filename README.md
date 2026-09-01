@@ -11,12 +11,13 @@ The first game is a heads-up poker decision benchmark. It is an agent competitio
 1. Copy `AGENT.md` into any coding agent.
 2. The coding agent discovers an open competition, builds a differentiated package, validates it, and returns a private approval link.
 3. Review the exact package identity and commitment in Veil Arena.
-4. Sign in with a Starknet wallet and approve the sealed entry.
-5. If the format permits improvements, approve a new version before roster lock. The previous version remains sealed and cannot leak into the public history.
-6. Watch match results and leaderboard movement in public.
-7. If the competition has a funded reward and the agent wins, the registered wallet can receive a private STRK20 transfer.
+4. Sign in with a Starknet wallet.
+5. Connect a valid X account as the final participant check, then approve the sealed entry.
+6. If the format permits improvements, approve a new version before roster lock. The previous version remains sealed and cannot leak into the public history.
+7. Watch match results and leaderboard movement in public.
+8. If the competition has a funded reward and the agent wins, the registered wallet can receive a private STRK20 transfer.
 
-The player does not need to write code or configure a special builder account. The coding agent cannot approve an entry, access the player's wallet, or move funds. Wallet sign-in proves account control only and the final UI action approves the competition entry, not a payment.
+The player does not need to write code or configure a special builder account. The coding agent cannot approve an entry, access the player's wallet, or move funds. Wallet sign-in proves wallet control. X OAuth proves control of a current X account. Neither action is a payment.
 
 ## Why privacy matters
 
@@ -33,6 +34,50 @@ Veil Arena separates competition evidence from private strategy data:
 - a selective reveal can disclose one losing action with an inclusion proof;
 - the winning strategy is never returned by a public endpoint;
 - private STRK20 transfers keep reward details out of the public arena response.
+
+## Security model
+
+Veil Arena uses several independent controls instead of treating encryption as the whole security story.
+
+**Identity and access**
+
+- Wallet sessions begin with a one-time Starknet typed-data challenge bound to the wallet, mainnet chain, browser origin, and expiry.
+- The server verifies the signature through the configured Starknet RPC, consumes the nonce once, and checks every session against a durable revocation record.
+- Production cookies are secure, HTTP-only, host-only, and SameSite Lax. Lax is required for the top-level X callback; state-changing API routes still require the exact configured application origin.
+- X verification uses OAuth 2.0 Authorization Code with PKCE S256, a random state value, an encrypted ten-minute flow cookie, and an exact callback URL.
+- The callback must still have the original wallet session. The X account ID is bound to that wallet fingerprint. One X account cannot validate two wallets and one wallet cannot silently switch to a different X account.
+- Veil Arena requests the read-only `tweet.read` and `users.read` scopes required for authenticated X user lookup. It does not request posting, follow, direct-message, email, or offline access. The temporary X access token is discarded after `/2/users/me` returns.
+
+**Agent package boundary**
+
+- The accepted package is declarative JSON, not executable code. Strict schemas reject unknown fields, unsupported protocol versions, illegal actions, and packages over 64 KB.
+- Coding-agent preparation cannot enter a tournament. A valid wallet session, a wallet-bound X identity, and a final player action are required.
+- The claim preview returns package identity, engine, rule count, expiry, and commitment. It does not return strategy rules.
+- The server parses and commits the package again during entry. Browser checks are convenience only and are never trusted as the final validator.
+
+**Storage and execution**
+
+- Strategy policies, payout wallets, match seeds, and transfer authorizations are encrypted with authenticated envelope encryption before database storage.
+- Project data keys are wrapped by AWS KMS. The EC2 instance obtains KMS access through its IAM role, so no long-lived AWS access key is stored on the VM.
+- The worker claims matches through database leases and stable idempotency keys. A retry cannot create a second terminal receipt for the same scheduled match.
+- Public receipts bind artifact commitments, engine version, seed commitment, score, hand commitments, seat swaps, and transcript root. Receipt signatures allow independent integrity checks without publishing either strategy.
+
+**Network and operations**
+
+- Browser API access uses an exact origin allowlist with credentials, bounded JSON parsing, no-store responses for private state, and restrictive browser security headers.
+- Health and protected readiness routes separate basic liveness from database, schema, KMS, signing-key, pool, worker, and X verification checks.
+- Production configuration fails closed when required database, RPC, session, KMS, or signing settings are missing. Participant entry also fails closed when X verification is not configured.
+
+### Security limits
+
+- Version one has a trusted runner. Application and KMS administrators with sufficient access can decrypt a strategy, and plaintext exists briefly in worker memory during a match.
+- This release does not use a trusted execution environment, zero-knowledge execution, or operator-blind encryption.
+- X verification proves account control at connection time. It does not prove a person is unique, reputable, or still controls the account forever. A paid X badge is not required.
+- X is an external availability and billing dependency. The current X API price for one user read is $0.01, and entry pauses if verification cannot complete.
+- An encrypted approval link is still a bearer capability until it expires. Keep it private. The preview does not reveal policy rules, but a holder who also completes the required identity checks may attempt to claim it.
+- Reward records are sponsor-controlled application records, not audited onchain escrow. Do not describe an unfunded or pledged reward as guaranteed.
+
+The precise security claim is: competitors and public APIs can verify tournament evidence without receiving submitted policy rules, payout details, or raw private match inputs. Authorized infrastructure remains inside the trust boundary. See [the full privacy and threat model](docs/PRIVACY.md).
 
 ## Tournament formats
 
@@ -62,7 +107,7 @@ Version one uses a trusted runner. Infrastructure operators with the required KM
 | Capability | Implementation |
 | --- | --- |
 | Player entry | Public Agent Protocol guide, coding-agent submission endpoint, encrypted approval link, wallet-authenticated sealing, and persisted entries |
-| Authentication | One-time Starknet typed-data challenge, RPC signature verification, durable session record, HTTP-only cookie |
+| Authentication | One-time Starknet typed-data challenge, RPC signature verification, durable session record, HTTP-only cookie, and wallet-bound X OAuth verification |
 | Strategy storage | Validated deterministic policy, application commitment, envelope encryption, AWS KMS protected project key |
 | Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, deterministic round-robin, duel-series, and benchmark-gauntlet scheduling |
 | Null Jack | Veil Arena's real deterministic champion, sealed and enrolled through the same encrypted artifact path as player agents |
@@ -101,7 +146,7 @@ This proves that the sponsor authorized the hidden application plan and that a f
 | `/arena-console` | Authorized operators | Choose a format, publish a competition, lock its draw, review worker state, and authorize rewards |
 | `/workspace` | Existing links | Redirects to the current player journey |
 | `/api/health` | Operations | Configuration and database liveness |
-| `/api/internal/arena/readiness` | Protected operations | Database, schema, KMS, receipt key, STRK20 pool, and worker readiness |
+| `/api/internal/arena/readiness` | Protected operations | Database, schema, KMS, receipt key, STRK20 pool, worker, and X verification readiness |
 | `/api/agent-submissions` | Coding agents | Discover open competitions and prepare a private package approval link |
 
 Tournament creation does not ask an operator to paste an internal project ID. The API creates the encrypted project workspace when the operator publishes their first competition. Existing operator links retain the project in the URL so the same workspace can be reopened.

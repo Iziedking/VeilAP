@@ -127,6 +127,13 @@
       "when": 1788164400000,
       "tag": "0017_public_match_replay",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788168000000,
+      "tag": "0018_participant_x_identity",
+      "breakpoints": true
     }
   ]
 }

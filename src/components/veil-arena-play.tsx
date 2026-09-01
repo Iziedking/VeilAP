@@ -60,6 +60,27 @@ type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SessionState = "checking" | "authenticated" | "signed-out" | "unavailable";
 type ClaimState = "idle" | "loading" | "loaded" | "error";
+type XIdentity = {
+  username: string;
+  displayName: string;
+  connectedAt: string;
+  lastVerifiedAt: string;
+};
+
+function xVerificationMessage(result: string | null): string {
+  if (!result) return "";
+  const messages: Record<string, string> = {
+    verified: "X account verified. You can now approve the agent entry.",
+    cancelled: "X verification was cancelled. Your agent was not submitted.",
+    expired: "The X verification request expired. Start it again when you are ready.",
+    rate_limited: "X is temporarily limiting verification requests. Wait a moment, then try again.",
+    wallet_mismatch: "The wallet changed during X verification. Sign in with the original wallet and try again.",
+    x_account_already_linked: "That X account is already connected to another Veil Arena wallet.",
+    x_wallet_already_linked: "This wallet is already connected to a different X account.",
+    failed: "X could not verify this account. Nothing was submitted. Try again.",
+  };
+  return messages[result] ?? messages.failed;
+}
 
 function isJoinable(season: ArenaSeason, now: number, invitedSeasonId = ""): boolean {
   const entryAllowed = season.entryMode === "open"
@@ -138,6 +159,8 @@ function enrollmentMessage(code: string): string {
     CONFIGURATION_MISSING: "Private strategy encryption is not configured on the server yet.",
     INVALID_INPUT: "The agent package is invalid or no longer matches this entry. Validate it and try again.",
     AGENT_ENGINE_MISMATCH: "This package targets a different game engine. Rebuild it using the engine shown for this competition.",
+    X_VERIFICATION_REQUIRED: "Connect your X account before approving this agent entry.",
+    X_VERIFICATION_UNAVAILABLE: "X verification is unavailable right now. Nothing was submitted. Try again when the service is restored.",
   };
   return messages[code] ?? "The agent could not be entered. Nothing was submitted. Try again.";
 }
@@ -197,6 +220,10 @@ export function VeilArenaPlay({
   const [selectedSeasonId, setSelectedSeasonId] = useState(defaultSeasonId);
   const [sessionState, setSessionState] = useState<SessionState>("checking");
   const [walletAddress, setWalletAddress] = useState("");
+  const [xConfigured, setXConfigured] = useState(false);
+  const [xIdentity, setXIdentity] = useState<XIdentity | null>(null);
+  const [xConnecting, setXConnecting] = useState(false);
+  const [xMessage, setXMessage] = useState("");
   const [entryState, setEntryState] = useState<LoadState>("idle");
   const [entry, setEntry] = useState<Enrollment | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -271,10 +298,15 @@ export function VeilArenaPlay({
     let active = true;
     void apiFetch("/api/auth/session")
       .then(async (response) => {
-        const body = await response.json() as ApiEnvelope<{ walletAddress: string } | null>;
+        const body = await response.json() as ApiEnvelope<{
+          walletAddress: string;
+          xVerification: { configured: boolean; identity: XIdentity | null };
+        } | null>;
         if (!active) return;
         if (response.ok && body.ok && body.value) {
           setWalletAddress(body.value.walletAddress);
+          setXConfigured(body.value.xVerification.configured);
+          setXIdentity(body.value.xVerification.identity);
           setSessionState("authenticated");
         } else {
           setSessionState("signed-out");
@@ -286,6 +318,15 @@ export function VeilArenaPlay({
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get("xVerification");
+    if (!result) return;
+    queueMicrotask(() => setXMessage(xVerificationMessage(result)));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("xVerification");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
   useEffect(() => {
@@ -412,9 +453,36 @@ export function VeilArenaPlay({
     }
   }
 
+  async function connectXAccount() {
+    if (sessionState !== "authenticated" || xConnecting) return;
+    setXConnecting(true);
+    setXMessage("");
+    try {
+      const response = await apiFetch("/api/auth/x/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnTo: `${window.location.pathname}${window.location.search}` }),
+      });
+      const body = await response.json() as ApiEnvelope<{ authorizationUrl: string }>;
+      if (!response.ok || !body.ok) {
+        setXMessage(body.ok ? "X verification could not start." : enrollmentMessage(body.code));
+        return;
+      }
+      window.location.assign(body.value.authorizationUrl);
+    } catch {
+      setXMessage("X verification could not start. Your agent was not submitted.");
+    } finally {
+      setXConnecting(false);
+    }
+  }
+
   async function enterArena(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedSeason || !canSubmitToSelectedSeason || sessionState !== "authenticated") return;
+    if (!xIdentity) {
+      setSubmitError("Connect your X account before approving this agent entry.");
+      return;
+    }
     if (packageReview.status !== "ready") {
       setSubmitError(packageReview.status === "invalid" ? packageReview.message : "Import the package created by your coding agent first.");
       return;
@@ -486,6 +554,8 @@ export function VeilArenaPlay({
       : "NO OPEN ARENA AVAILABLE";
   } else if (entryState !== "ready" && sessionState === "authenticated") {
     submitLabel = "CHECKING ENTRY...";
+  } else if (!xIdentity) {
+    submitLabel = "VERIFY X ACCOUNT TO ENTER";
   } else if (packageReview.status !== "ready") {
     submitLabel = "IMPORT A VALID AGENT PACKAGE";
   } else if (currentEntry && !replacementConfirmed) {
@@ -508,11 +578,12 @@ export function VeilArenaPlay({
         <section className="play-hero" aria-labelledby="play-title">
           <span className="play-kicker">NO CODING EXPERIENCE REQUIRED</span>
           <h1 id="play-title">Give the guide to a coding agent. Bring back a contender.</h1>
-          <p>Copy AGENT.md into the coding agent you already use. It builds and checks the poker package. You review the result and approve the competition entry with your wallet.</p>
+          <p>Copy AGENT.md into the coding agent you already use. It builds and checks the poker package. You review the result, prove control of your wallet and X account, then approve entry.</p>
           <ol className="play-steps" aria-label="How to enter">
             <li><span>01</span><strong>Copy AGENT.md into your coding agent</strong></li>
             <li><span>02</span><strong>Ask it to build and validate your poker agent</strong></li>
-            <li><span>03</span><strong>Review the package and approve entry with your wallet</strong></li>
+            <li><span>03</span><strong>Review the package and sign in with your wallet</strong></li>
+            <li><span>04</span><strong>Verify your X account and approve entry</strong></li>
           </ol>
         </section>
 
@@ -691,13 +762,27 @@ export function VeilArenaPlay({
                   </div>
                 )}
 
+                {sessionState === "authenticated" && (
+                  xIdentity ? (
+                    <div className="play-wallet-state"><span>X ACCOUNT VERIFIED</span><strong>@{xIdentity.username}</strong><small>This proves account control for entry. Veil Arena cannot post, follow, or read private messages.</small></div>
+                  ) : (
+                    <div className="play-sign-in-callout">
+                      <div><span>FINAL ENTRY CHECK</span><p>Connect a valid X account. Veil Arena records the account ID and handle, then discards the temporary access token.</p></div>
+                      {xConfigured
+                        ? <button type="button" onClick={connectXAccount} disabled={xConnecting}>[ {xConnecting ? "OPENING X" : "VERIFY WITH X"} ]</button>
+                        : <strong>X VERIFICATION UNAVAILABLE</strong>}
+                    </div>
+                  )
+                )}
+                {xMessage && <p className="play-claim-status" role="status">{xMessage}</p>}
+
                 {submitError && <p className="play-error" role="alert">{submitError}</p>}
                 {entryState === "error" && <div className="play-error play-entry-error" role="alert"><span>Your existing entry could not be checked. Nothing new was submitted.</span><button type="button" onClick={() => { setEntryState("loading"); setEntryRefresh((current) => current + 1); }}>CHECK AGAIN</button></div>}
 
                 <button
                   className="play-submit"
                   type="submit"
-                  disabled={!canSubmitToSelectedSeason || sessionState !== "authenticated" || submitting || entryState !== "ready" || packageReview.status !== "ready" || Boolean(currentEntry && !replacementConfirmed)}
+                  disabled={!canSubmitToSelectedSeason || sessionState !== "authenticated" || !xIdentity || submitting || entryState !== "ready" || packageReview.status !== "ready" || Boolean(currentEntry && !replacementConfirmed)}
                 >
                   <span>{submitLabel}</span>
                   <strong aria-hidden="true">↓</strong>

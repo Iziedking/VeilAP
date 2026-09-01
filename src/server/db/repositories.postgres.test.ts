@@ -10,6 +10,7 @@ import { checkArenaDatabaseReadiness } from "@/server/arena/arena-readiness-data
 import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
 import { getDatabase } from "./client";
 import { createPostgresRepositories, pingDatabase } from "./repositories";
+import { createPostgresXIdentityRepository } from "@/server/identity/x-identity-repository";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const address = (value: string) => `0x${value.padStart(64, "0")}`;
@@ -58,6 +59,33 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
       ).resolves.toBe("REPLAYED");
     } finally {
       await db.execute(sql`delete from auth_nonces where nonce = ${nonce}`);
+    }
+  });
+
+  it("binds one X account to one wallet fingerprint", async () => {
+    const db = getDatabase(databaseUrl);
+    const repository = createPostgresXIdentityRepository(db);
+    const suffix = randomBytes(8).toString("hex");
+    const xUserId = `x-${suffix}`;
+    const walletFingerprint = `wallet-${suffix}`;
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    try {
+      await expect(repository.linkIdentity({
+        xUserId,
+        walletFingerprint,
+        username: `player_${suffix}`,
+        connectedAt: now,
+        lastVerifiedAt: now,
+      })).resolves.toMatchObject({ xUserId, walletFingerprint });
+      await expect(repository.linkIdentity({
+        xUserId,
+        walletFingerprint: `other-${suffix}`,
+        username: `player_${suffix}`,
+        connectedAt: now,
+        lastVerifiedAt: now,
+      })).rejects.toThrow("X_ACCOUNT_ALREADY_LINKED");
+    } finally {
+      await db.execute(sql`delete from participant_x_identities where x_user_id = ${xUserId}`);
     }
   });
 

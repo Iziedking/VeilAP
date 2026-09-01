@@ -94,7 +94,9 @@ export async function POST(request: Request) {
     cookieStore.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      // Lax is required for the top-level X OAuth callback. State-changing API
+      // routes still enforce the exact application Origin.
+      sameSite: "lax",
       path: "/",
       maxAge: SESSION_TTL_MS / 1000,
     });

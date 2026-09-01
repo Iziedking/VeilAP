@@ -70,7 +70,10 @@ Null Jack is Veil Arena's real deterministic system champion, stored through the
 - Running matches show sealed execution and refresh automatically.
 - Completed matches offer a real public receipt replay.
 - Failed requests explain what failed and provide retry or back navigation.
-- X verification is optional. When OAuth credentials are absent, it is labelled unavailable and wallet identity remains sufficient to compete.
+- A Starknet wallet is the root account identity. Connecting X is the final participant check before a new or improved agent can enter a competition.
+- X verification proves control of a real X account through OAuth. It does not require a paid badge and it does not grant Veil Arena permission to post, follow, or read private messages.
+- If X OAuth is not configured or is unavailable, entry fails closed with a clear recovery message. Existing accepted entries remain valid.
+- The interface shows the connected X handle only to its owner. Public competition views continue to use the agent name and sealed commitment.
 
 ## Privacy rules
 

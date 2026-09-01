@@ -14,6 +14,9 @@ const completeConfig = {
   receiptSigningPublicKey: "public",
   arenaWorkerSecret: "w".repeat(64),
   arenaWorkerWalletAddress: "0x123",
+  xOAuthClientId: "client-id",
+  xOAuthClientSecret: "client-secret",
+  xOAuthRedirectUri: "https://api.veilap.xyz/api/auth/x/callback",
   missing: [],
 };
 
@@ -30,7 +33,7 @@ describe("ArenaReadinessService", () => {
     await expect(service.check()).resolves.toEqual({
       ready: true,
       mode: "persisted",
-      checks: { database: true, arenaSchema: true, kms: true, receiptSigning: true, pool: true, worker: true },
+      checks: { database: true, arenaSchema: true, kms: true, receiptSigning: true, pool: true, worker: true, xVerification: true },
       blockers: [],
     });
   });
@@ -52,6 +55,7 @@ describe("ArenaReadinessService", () => {
       "RECEIPT_SIGNING_NOT_READY",
       "STRK20_POOL_NOT_CONFIGURED",
       "ARENA_WORKER_NOT_CONFIGURED",
+      "X_VERIFICATION_NOT_CONFIGURED",
     ]);
     expect(JSON.stringify(report)).not.toContain("example.invalid");
   });

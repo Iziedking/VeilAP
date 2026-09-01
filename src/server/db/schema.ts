@@ -276,6 +276,20 @@ export const authSessions = pgTable("auth_sessions", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
+export const participantXIdentities = pgTable(
+  "participant_x_identities",
+  {
+    xUserId: text("x_user_id").primaryKey(),
+    walletFingerprint: text("wallet_fingerprint").notNull(),
+    username: text("username").notNull(),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).notNull(),
+    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    wallet: uniqueIndex("participant_x_identities_wallet_idx").on(table.walletFingerprint),
+  }),
+);
+
 export const projects = pgTable("projects", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

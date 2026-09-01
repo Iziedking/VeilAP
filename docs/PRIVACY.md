@@ -1,6 +1,6 @@
 # Veil Arena privacy and threat boundary
 
-Last reviewed against the implemented source on 31 August 2026.
+Last reviewed against the implemented source on 1 September 2026.
 
 ## Privacy model
 
@@ -17,6 +17,7 @@ Application encryption protects strategy policies, private match inputs, payout 
 | Agent version identity and active/retired state | Owner view; active identity can appear publicly | No strategy content | Yes |
 | Strategy policy | No | Yes | Yes, during authorized execution |
 | Builder wallet address | No | Fingerprint plus encrypted payout address | Authorized application services only |
+| Connected X identity | Owner view only | Immutable X account ID, wallet fingerprint, current handle, and verification timestamps | Authorized application services only |
 | Match seed | Commitment only | Yes | Yes, during execution and replay |
 | Full transcript | Root, public hand commitments, and selected leaf only | Reproducible from encrypted inputs | Yes |
 | Score, rank, and receipt | Yes | No | Yes |
@@ -29,7 +30,7 @@ Application encryption protects strategy policies, private match inputs, payout 
 
 A coding agent creates a strict, versioned deterministic package by following the public protocol guide. The anonymous preparation endpoint validates it and returns an authenticated encrypted approval link. That endpoint cannot enter the competition. After the player reviews and approves the package through a wallet-authenticated session, the server validates it again, computes the same artifact commitment, encrypts the package with a project data key, and stores only the encrypted artifact plus public metadata.
 
-Approval links expire after 24 hours. The package is carried in authenticated ciphertext and opened from the URL fragment by the player interface, so ordinary link navigation does not place plaintext strategy rules in the URL or server access logs. Anyone who receives an unexpired link can preview the package, so players should treat it as private and request a new link if it is disclosed.
+Approval links expire after 24 hours. The package is carried in authenticated ciphertext and opened from the URL fragment by the player interface, so ordinary link navigation does not place plaintext strategy rules in the URL or server access logs. The preview response contains identity, engine, rule count, expiry, and commitment, not the submitted policy. The link remains a bearer capability and should still be treated as private.
 
 The project data key is wrapped by AWS KMS. The EC2 application role can request KMS encrypt and decrypt operations for the configured key. Database access alone does not expose plaintext strategy data.
 
@@ -43,9 +44,19 @@ Version one is private from competitors and public APIs. It is not operator-blin
 
 Wallet sign-in uses a one-time typed-data challenge bound to `SN_MAIN`, the expected browser origin, the wallet, and an expiry. The API verifies the signature through the configured Starknet RPC. A consumed nonce cannot be replayed.
 
-The session cookie is HTTP-only, secure in production, host-only, and SameSite Strict. The database stores a keyed wallet fingerprint for authorization joins. Payout addresses are encrypted under the project data key.
+The session cookie is HTTP-only, secure in production, host-only, and SameSite Lax. Lax permits the top-level X OAuth return. State-changing browser requests remain protected by exact-origin checks and strict CORS. The database stores a keyed wallet fingerprint for authorization joins. Payout addresses are encrypted under the project data key.
 
 Veil Arena never asks for, receives, or stores a wallet private key or STRK20 viewing key.
+
+## X participant verification
+
+X verification is a final gate for new and improved agent entries. It runs after wallet authentication so the OAuth result can be bound to the existing wallet fingerprint.
+
+The flow uses Authorization Code with PKCE S256, random state, an encrypted ten-minute HTTP-only flow cookie, and an exact callback URL. The callback requires the original active wallet session. Veil Arena calls `/2/users/me`, stores the immutable X account ID with the current handle and timestamps, and discards the access token. It does not request offline access and therefore receives no refresh token.
+
+One X account ID can belong to one Veil Arena wallet and one wallet can hold one X identity. Handles are display metadata and may change; the X account ID remains the identity key. Public arena responses do not expose the handle.
+
+This check proves control of the X account at connection time. It is not proof of unique personhood, reputation, a paid badge, or permanent future control. X availability and API billing are outside Veil Arena's control.
 
 ## Match evidence and selective disclosure
 
@@ -93,10 +104,11 @@ Small anonymity sets and distinctive timing can weaken practical privacy.
 | Threat | Current control | Residual risk |
 | --- | --- | --- |
 | Competitor reads a policy | Public schemas exclude policy; encrypted persistence | Trusted operators can still read during execution |
-| Approval link is disclosed | Authenticated encryption, fragment transport, 24-hour expiry | A holder of the live link can preview the package before expiry |
+| Approval link is disclosed | Authenticated encryption, fragment transport, metadata-only preview, 24-hour expiry | A holder who also passes wallet and X checks may attempt to claim the package |
 | Database theft | Envelope encryption and KMS-wrapped project keys | Application and KMS compromise can expose data |
 | Wallet impersonation | One-time typed challenge, RPC verification, durable session revocation | Compromised wallet or browser remains authoritative |
-| Cross-origin session abuse | Exact origin checks, strict CORS, SameSite cookie | Misconfigured production origins can break or weaken access |
+| Cross-origin session abuse | Exact origin checks, strict CORS, SameSite Lax cookie, OAuth state and PKCE | Misconfigured production origins or callback URLs can break access |
+| X account replay or substitution | Random state, PKCE S256, encrypted short-lived flow, wallet-session binding, unique account and wallet constraints | Compromised X or wallet sessions remain authoritative; X is not proof of unique personhood |
 | Duplicate match execution | Database lease, idempotency key, terminal state checks | Database outage can delay reconciliation |
 | Replacement erases or leaks an older strategy | Immutable encrypted artifacts, one active projection, atomic version transaction, digest-only history | Authorized infrastructure remains inside the decryption boundary |
 | Fake reward confirmation | Sponsor signature, exact plan binding, finality, pool trace, replay guard | No contract-enforced escrow or public proof of hidden fields |

@@ -96,11 +96,28 @@ chmod 600 /opt/veil-arena/config/veil-arena.env
 | `VEILAP_RECEIPT_SIGNING_PUBLIC_KEY` | Published receipt verification key |
 | `VEILAP_ARENA_WORKER_SECRET` | Long internal worker secret |
 | `VEILAP_ARENA_WORKER_WALLET_ADDRESS` | Existing project company or reviewer wallet |
+| `X_OAUTH_CLIENT_ID` | X OAuth 2.0 confidential Web App client ID |
+| `X_OAUTH_CLIENT_SECRET` | Server-only X OAuth client secret |
+| `X_OAUTH_REDIRECT_URI` | Exact callback, `https://api.veilap.xyz/api/auth/x/callback` |
 | `NEXT_PUBLIC_STARKNET_CHAIN_ID` | Must be `SN_MAIN` for the sprint |
 | `NEXT_PUBLIC_STRK20_POOL_ADDRESS` | Pinned official STRK20 pool |
 | `VEIL_API_DOMAIN` | `api.veilap.xyz` after DNS is ready |
 
 Generate the session secret, wallet pepper, worker secret, and receipt keys independently. Never reuse one value for another purpose.
+
+## X participant verification
+
+Create a Web App in the X Developer Console and enable OAuth 2.0. Configure the exact callback URL `https://api.veilap.xyz/api/auth/x/callback`. The website URL should be the exact public browser origin used by `VEILAP_APP_ORIGIN`.
+
+The application requests `tweet.read users.read`, the read-only scopes X currently requires for authenticated user lookup. Do not add write, follow, direct-message, email, or `offline.access` scopes. Store the client secret only in `/opt/veil-arena/config/veil-arena.env`, keep that file mode `600`, and restart through the normal release workflow after updating it.
+
+X currently charges $0.01 for a user read. Veil Arena performs one `/2/users/me` read when an account is connected and does not poll X afterward. Set a small spending limit in the X Developer Console before production testing.
+
+Official references:
+
+- [OAuth 2.0 Authorization Code with PKCE](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code)
+- [Authenticated user lookup](https://docs.x.com/x-api/users/get-my-user)
+- [Current X API pricing](https://docs.x.com/x-api/getting-started/pricing)
 
 ## Vercel configuration
 
@@ -204,7 +221,7 @@ curl --fail-with-body --silent --show-error https://api.veilap.xyz/api/internal/
   -H "x-veil-arena-worker-secret: $VEILAP_ARENA_WORKER_SECRET"
 ```
 
-The health endpoint must report persisted mode and a reachable database. Readiness must report every check as true before creating a live season.
+The health endpoint must report persisted mode, a reachable database, and `xVerification: "configured"`. Readiness must report every check as true before creating a live season.
 
 ## Recovery
 
