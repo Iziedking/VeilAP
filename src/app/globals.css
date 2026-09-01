@@ -55,37 +55,12 @@ html.is-loading body { overflow: hidden; }
 
 @keyframes veil-mark-build { to { clip-path: inset(0 0 0 0); } }
 
-/* Keep the pixel identity for labels and marks, while using a calmer display face for reading. */
+/* Keep every compact surface pixel-led; use the calmer face only for oversized page titles. */
 .hub-heading h1,
-.hub-card-body h2,
-.hub-card-score strong,
 .room-hero h1,
-.room-match-players strong,
-.room-empty strong,
-.room-leader-row span b,
-.room-rules article > strong,
-.spectator-seat > strong,
-.spectator-seat > b,
-.spectator-hand-result > strong,
 .champion-copy h1,
-.champion-seat strong,
 .play-hero h1,
-.play-seasons h2,
-.play-builder h2,
-.play-agent-guide h3,
-.play-package-import h3,
-.play-review h3,
-.play-success h3,
-.operator-intro h1,
-.operator-panel-head h2,
-.operator-template-card strong,
-.operator-rule-preview strong,
-.operator-season-row strong,
-.operator-strategy strong,
-.operator-match-row strong,
-.operator-result h2,
-.operator-chain-step strong,
-.operator-chain-complete strong {
+.operator-intro h1 {
   font-family: var(--arena-readable-display);
   font-weight: 700;
   letter-spacing: -.035em;
