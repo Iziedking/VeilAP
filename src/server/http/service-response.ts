@@ -61,7 +61,10 @@ const forbiddenCodes = new Set([
   "ARENA_SPONSOR_WALLET_REQUIRED",
 ]);
 
-export function serviceResponse(result: { ok: true; value: unknown } | { ok: false; code: string }) {
+export function serviceResponse(
+  result: { ok: true; value: unknown } | { ok: false; code: string },
+  metadata?: Record<string, string>,
+) {
   if (result.ok) return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   let status = 400;
   if (notFoundCodes.has(result.code)) status = 404;
@@ -71,7 +74,7 @@ export function serviceResponse(result: { ok: true; value: unknown } | { ok: fal
   else if (result.code === "X_VERIFICATION_REQUIRED") status = 403;
   else if (result.code === "NO_LOSING_AGENT") status = 409;
   else if (result.code === "PERSISTENCE_FAILED" || result.code === "ENCRYPTION_FAILED" || result.code === "CONFIGURATION_MISSING" || result.code === "SIGNING_UNAVAILABLE" || result.code === "SIGNATURE_UNAVAILABLE" || result.code === "X_VERIFICATION_UNAVAILABLE") status = 503;
-  return NextResponse.json(result, {
+  return NextResponse.json(metadata ? { ...result, ...metadata } : result, {
     status,
     headers: { "Cache-Control": "no-store" },
   });

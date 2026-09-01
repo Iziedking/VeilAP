@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ArenaNav } from "@/components/arena/arena-nav";
 import type { ApiEnvelope } from "@/components/arena/arena-types";
 import { apiFetch } from "@/lib/api/client";
+import { championChallengeErrorMessage, type ChampionChallengeFailure } from "@/lib/arena/champion-challenge-error";
 
 type ChampionChallengeResponse = {
   joinUrl: string;
@@ -24,16 +25,25 @@ export function ChampionChallenge() {
     setError("");
     try {
       const response = await apiFetch("/api/champion/challenges", { method: "POST" });
-      const body = await response.json() as ApiEnvelope<ChampionChallengeResponse>;
+      const body = await response.json() as ApiEnvelope<ChampionChallengeResponse> & ChampionChallengeFailure;
       if (response.status === 401 || (!body.ok && body.code === "AUTH_REQUIRED")) {
         router.push("/sign-in?returnTo=%2Fchampion");
         return;
       }
-      if (!response.ok || !body.ok) throw new Error(body.ok ? "CHALLENGE_FAILED" : body.code);
+      if (!response.ok || !body.ok) {
+        throw new Error(championChallengeErrorMessage({
+          code: body.ok ? `HTTP_${response.status}` : body.code,
+          requestId: body.requestId,
+          stage: body.stage,
+        }));
+      }
       const destination = new URL(body.value.joinUrl, window.location.origin);
       router.push(`${destination.pathname}${destination.search}`);
-    } catch {
-      setError("The challenge could not be prepared. Try again in a moment.");
+    } catch (error) {
+      setError(error instanceof Error
+        ? error.message
+        : "The arena API could not be reached. Check your connection and try again.");
+    } finally {
       setBusy(false);
     }
   }

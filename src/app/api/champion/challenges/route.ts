@@ -14,19 +14,19 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
     const actor = await readRequestActor();
-    if (!actor.ok) return serviceResponse(actor);
+    if (!actor.ok) return serviceResponse(actor, { requestId, stage: "authentication" });
 
     const now = new Date();
     const locksAt = new Date(now.getTime() + 24 * 60 * 60_000);
     const endsAt = new Date(now.getTime() + 48 * 60 * 60_000);
-    const requestId = crypto.randomUUID();
     const project = await getProjectService().createProject({
       name: "Null Jack challenge",
       walletAddress: actor.walletAddress,
     });
-    if (!project.ok) return serviceResponse(project);
+    if (!project.ok) return serviceResponse(project, { requestId, stage: "project" });
 
     const season = await getArenaSeasonService().createSeason({
       projectId: project.value.id,
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       endsAt: endsAt.toISOString(),
       templateId: "champion_challenge",
     });
-    if (!season.ok) return serviceResponse(season);
+    if (!season.ok) return serviceResponse(season, { requestId, stage: "competition" });
 
     const champion = await getArenaEnrollmentService().enrollSystem({
       projectId: project.value.id,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       policy: VEIL_ARENA_CHAMPION,
       idempotencyKey: `champion-entry-${requestId}`,
     });
-    if (!champion.ok) return serviceResponse(champion);
+    if (!champion.ok) return serviceResponse(champion, { requestId, stage: "champion" });
 
     const invitation = sealArenaInvitation({
       projectId: project.value.id,
@@ -77,8 +77,13 @@ export async function POST(request: Request) {
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof Error && error.message.endsWith("_REQUIRED")) {
-      return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });
+      console.error("[champion-challenge] configuration failure", { requestId });
+      return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" }, { requestId, stage: "configuration" });
     }
-    return serviceResponse({ ok: false, code: "PERSISTENCE_FAILED" });
+    console.error("[champion-challenge] unexpected failure", {
+      requestId,
+      error: error instanceof Error ? error.name : "unknown",
+    });
+    return serviceResponse({ ok: false, code: "PERSISTENCE_FAILED" }, { requestId, stage: "unknown" });
   }
 }
