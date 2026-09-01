@@ -19,6 +19,7 @@
   --mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
   --arena-display: var(--font-arena-display), "Silkscreen", ui-monospace, monospace;
   --arena-mono: var(--font-arena-mono), "Departure Mono", ui-monospace, monospace;
+  --arena-readable-display: "Cascadia Mono", "IBM Plex Mono", Consolas, ui-monospace, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -53,6 +54,42 @@ html.is-loading body { overflow: hidden; }
 .veil-entry-loader-index { position: absolute; right: 24px; bottom: 22px; font-family: var(--arena-mono); font-size: 11px; letter-spacing: .04em; }
 
 @keyframes veil-mark-build { to { clip-path: inset(0 0 0 0); } }
+
+/* Keep the pixel identity for labels and marks, while using a calmer display face for reading. */
+.hub-heading h1,
+.hub-card-body h2,
+.hub-card-score strong,
+.room-hero h1,
+.room-match-players strong,
+.room-empty strong,
+.room-leader-row span b,
+.room-rules article > strong,
+.spectator-seat > strong,
+.spectator-seat > b,
+.spectator-hand-result > strong,
+.champion-copy h1,
+.champion-seat strong,
+.play-hero h1,
+.play-seasons h2,
+.play-builder h2,
+.play-agent-guide h3,
+.play-package-import h3,
+.play-review h3,
+.play-success h3,
+.operator-intro h1,
+.operator-panel-head h2,
+.operator-template-card strong,
+.operator-rule-preview strong,
+.operator-season-row strong,
+.operator-strategy strong,
+.operator-match-row strong,
+.operator-result h2,
+.operator-chain-step strong,
+.operator-chain-complete strong {
+  font-family: var(--arena-readable-display);
+  font-weight: 700;
+  letter-spacing: -.035em;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

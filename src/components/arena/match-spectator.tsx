@@ -87,10 +87,10 @@ export function MatchSpectator({
   }, [activeIndex, handReceipts.length, playing]);
 
   if (state === "loading") {
-    return <div className="hub-page"><ArenaNav /><main className="room-loading"><i /><strong>Opening the sealed table</strong></main></div>;
+    return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-loading"><i /><strong>Opening the sealed table</strong></main></div>;
   }
   if (state === "error" || !schedule || !scheduledMatch) {
-    return <div className="hub-page"><ArenaNav /><main className="room-error"><strong>This match could not be opened.</strong><Link href={`/arena/${projectId}/${seasonId}`}>Back to the competition</Link></main></div>;
+    return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-error"><strong>This match could not be opened.</strong><Link href={`/arena/${projectId}/${seasonId}`}>Back to the competition</Link></main></div>;
   }
 
   const leftName = displayName(schedule, scheduledMatch.leftAgentId);
@@ -113,7 +113,7 @@ export function MatchSpectator({
 
   return (
     <div className="hub-page spectator-page">
-      <ArenaNav />
+      <ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" />
       <main>
         <header className="spectator-header">
           <div>

@@ -30,6 +30,8 @@
 }
 
 .play-brand { min-width: 44px; display: inline-flex; align-items: center; }
+.play-back { min-height: 44px; display: inline-flex; align-items: center; align-self: center; padding: 10px 0; border-bottom: 1px solid var(--play-ink); color: var(--play-dim); font-size: 10px; text-transform: uppercase; white-space: nowrap; }
+.play-back:hover { color: var(--play-ink); }
 .play-brand .veil-logo-mark { width: 34px; height: 34px; }
 .play-brand .veil-logo-wordmark { font-family: var(--arena-display); font-size: 15px; letter-spacing: 0; }
 .play-nav nav { display: flex; align-items: stretch; border-left: 1px solid var(--play-ink); }
@@ -96,6 +98,7 @@
 .play-package-import textarea { width: 100%; min-height: 230px; margin-top: 22px; padding: 16px; resize: vertical; border: 2px solid var(--play-ink); border-radius: 0; background: var(--play-paper); color: var(--play-ink); font-family: var(--arena-mono); font-size: 11px; line-height: 1.55; tab-size: 2; }
 .play-package-import textarea::placeholder { color: #77736c; opacity: 1; }
 .play-package-import > p { margin: 11px 0 0; color: var(--play-dim); font-size: 9px; line-height: 1.5; }
+.play-package-import > .play-package-intro { max-width: 780px; margin: 15px 0 0; color: var(--play-ink); font-size: 11px; line-height: 1.55; }
 .play-package-import .play-claim-status { padding: 11px 12px; border-left: 4px solid var(--play-signal-dark); background: #e8ded2; color: var(--play-ink); }
 .play-package-import .play-claim-status.is-error { border-left-color: #742b24; color: #742b24; }
 .play-package-import .play-package-invalid { color: #742b24; font-weight: 700; }
@@ -121,6 +124,8 @@
 .play-wallet-state span { color: var(--play-signal-dark); font-size: 9px; }
 .play-wallet-state strong { font-size: 11px; }
 .play-wallet-state small { color: var(--play-dim); font-size: 9px; }
+.play-x-label { display: inline-flex !important; align-items: center; gap: 8px; }
+.play-x-label svg { width: 14px; height: 14px; flex: 0 0 auto; fill: currentColor; }
 .play-sign-in-callout { background: #e8ded2; }
 .play-sign-in-callout span { color: var(--play-signal-dark); font-size: 9px; }
 .play-sign-in-callout p { margin: 7px 0 0; color: var(--play-dim); font-size: 10px; }
@@ -133,7 +138,7 @@
 .play-submit { width: 100%; min-height: 74px; padding: 0 26px; display: flex; align-items: center; justify-content: space-between; border: 0; background: var(--play-signal); color: var(--play-ink); cursor: pointer; font-family: var(--arena-display); font-size: 14px; text-align: left; }
 .play-submit strong { font-size: 22px; }
 .play-submit:hover:not(:disabled) { background: #ffb27e; }
-.play-submit:disabled { cursor: not-allowed; filter: grayscale(.85); opacity: .52; }
+.play-submit:disabled { cursor: not-allowed; filter: none; opacity: 1; background: #d8d3ca; color: #625e58; }
 
 .play-success { padding: 40px; }
 .play-success > span { color: var(--play-signal-dark); font-size: 10px; letter-spacing: .04em; }
@@ -179,11 +184,12 @@
 }
 
 @media (max-width: 700px) {
-  .play-nav { min-height: 76px; padding-inline: 14px; }
+  .play-nav { min-height: 76px; padding-inline: 14px; gap: 14px; }
   .play-brand .veil-logo-mark { width: 29px; height: 29px; }
   .play-brand .veil-logo-wordmark { font-size: 10px; }
   .play-nav nav a { min-width: 0; min-height: 74px; padding-inline: 12px; font-size: 9px; }
   .play-nav nav a:first-child { display: none; }
+  .play-back { font-size: 8px; }
   .play-hero, .play-seasons, .play-builder { width: calc(100% - 28px); }
   .play-hero { padding: 48px 0 52px; }
   .play-hero h1 { margin-top: 24px; font-size: clamp(36px, 12vw, 58px); }

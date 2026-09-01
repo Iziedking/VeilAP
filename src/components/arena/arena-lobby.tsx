@@ -61,7 +61,7 @@ export function ArenaLobby() {
 
   return (
     <div className="hub-page">
-      <ArenaNav />
+      <ArenaNav backHref="/" backLabel="Home" />
       <main className="hub-main">
         <section className="hub-heading">
           <div>

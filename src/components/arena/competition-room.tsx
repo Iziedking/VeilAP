@@ -92,10 +92,10 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
     ?? schedule?.matches[0];
 
   if (state === "loading") {
-    return <div className="hub-page"><ArenaNav /><main className="room-loading"><i /><strong>Opening the competition room</strong></main></div>;
+    return <div className="hub-page"><ArenaNav backHref="/arena" backLabel="Arena" /><main className="room-loading"><i /><strong>Opening the competition room</strong></main></div>;
   }
   if (state === "error" || !schedule) {
-    return <div className="hub-page"><ArenaNav /><main className="room-error"><strong>This competition could not be opened.</strong><Link href="/arena">Back to the arena</Link></main></div>;
+    return <div className="hub-page"><ArenaNav backHref="/arena" backLabel="Arena" /><main className="room-error"><strong>This competition could not be opened.</strong><Link href="/arena">Back to the arena</Link></main></div>;
   }
 
   const season = schedule.season;
@@ -105,7 +105,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
 
   return (
     <div className="hub-page competition-room">
-      <ArenaNav />
+      <ArenaNav backHref="/arena" backLabel="Arena" />
       <main>
         <section className="room-hero">
           <div className="room-back"><Link href="/arena">← Competition floor</Link><span>{(season.templateId ?? "custom").replaceAll("_", " ")}</span></div>

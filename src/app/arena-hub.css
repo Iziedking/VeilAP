@@ -1,10 +1,13 @@
 .hub-page { min-height: 100vh; background: var(--paper); color: var(--ink); }
-.hub-nav { min-height: 88px; padding: 0 clamp(18px, 4vw, 68px); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; border-bottom: 2px solid var(--ink); background: var(--paper-light); }
+.hub-nav { min-height: 88px; padding: 0 clamp(18px, 4vw, 68px); display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 24px; border-bottom: 2px solid var(--ink); background: var(--paper-light); }
 .hub-nav nav { height: 100%; display: flex; align-items: stretch; }
 .hub-nav nav a { min-width: 104px; padding: 0 20px; display: grid; place-items: center; border-left: 1px solid var(--rule); font-family: var(--arena-mono); font-size: 10px; text-transform: uppercase; }
 .hub-nav nav a:last-child { border-right: 1px solid var(--rule); }
 .hub-nav nav a:hover { background: var(--signal); }
 .hub-brand { justify-self: start; }
+.hub-back-link { min-height: 44px; display: inline-flex; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--ink); color: var(--ink-soft); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; white-space: nowrap; }
+.hub-back-link:hover { color: var(--ink); border-bottom-color: var(--signal-dark); }
+.hub-nav nav { justify-self: center; }
 .hub-sign-in { justify-self: end; padding-bottom: 5px; border-bottom: 1px solid var(--ink); font-size: 10px; font-weight: 760; }
 .hub-main { width: min(1500px, calc(100% - 36px)); margin: 0 auto; padding: clamp(54px, 8vw, 112px) 0 100px; }
 .hub-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 48px; align-items: end; }
@@ -58,9 +61,10 @@
 }
 
 @media (max-width: 760px) {
-  .hub-nav { min-height: 72px; padding: 0 16px; grid-template-columns: 1fr auto; }
+  .hub-nav { min-height: 72px; padding: 0 16px; grid-template-columns: 1fr auto auto; gap: 14px; }
   .hub-nav nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; height: 58px; justify-content: stretch; border-top: 2px solid var(--ink); background: var(--paper-light); }
   .hub-nav nav a { min-width: 0; flex: 1; }
+  .hub-back-link { font-size: 8px; }
   .hub-sign-in { font-size: 8px; }
   .hub-brand .veil-logo-wordmark { display: none; }
   .hub-main { width: min(100% - 28px, 1500px); padding-top: 58px; padding-bottom: 120px; }

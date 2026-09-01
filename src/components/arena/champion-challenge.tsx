@@ -50,7 +50,7 @@ export function ChampionChallenge() {
 
   return (
     <div className="hub-page champion-page">
-      <ArenaNav />
+      <ArenaNav backHref="/" backLabel="Home" />
       <main className="champion-main">
         <section className="champion-copy">
           <span className="hub-kicker"><i /> FREE PRIVATE BENCHMARK</span>

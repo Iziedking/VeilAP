@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { VeilLogo } from "@/components/veil-logo";
+import { XMark } from "@/components/brand/x-mark";
 import {
   agentPackageCommitment,
   parseAgentPackage,
@@ -568,6 +569,7 @@ export function VeilArenaPlay({
     <div className="play-page">
       <header className="play-nav">
         <Link className="play-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
+        <Link className="play-back" href={invitationToken ? "/arena" : "/"}>← {invitationToken ? "Back to arena" : "Back to home"}</Link>
         <nav aria-label="Player navigation">
           <Link href="/arena">Watch arena</Link>
           <Link href="/sign-in">Wallet access</Link>
@@ -701,6 +703,7 @@ export function VeilArenaPlay({
                         [ CHOOSE PACKAGE ]
                       </label>
                     </div>
+                    <p className="play-package-intro">Registering an agent means adding this sealed package to the selected competition. The arena checks the package, then shows the operator only its name and commitment.</p>
                     <textarea
                       value={agentPackageText}
                       onChange={(event) => updateAgentPackage(event.target.value)}
@@ -764,10 +767,10 @@ export function VeilArenaPlay({
 
                 {sessionState === "authenticated" && (
                   xIdentity ? (
-                    <div className="play-wallet-state"><span>X ACCOUNT VERIFIED</span><strong>@{xIdentity.username}</strong><small>This proves account control for entry. Veil Arena cannot post, follow, or read private messages.</small></div>
+                    <div className="play-wallet-state"><span className="play-x-label"><XMark /> X ACCOUNT VERIFIED</span><strong>@{xIdentity.username}</strong><small>This proves account control for entry. Veil Arena cannot post, follow, or read private messages.</small></div>
                   ) : (
                     <div className="play-sign-in-callout">
-                      <div><span>FINAL ENTRY CHECK</span><p>Connect a valid X account. Veil Arena records the account ID and handle, then discards the temporary access token.</p></div>
+                      <div><span className="play-x-label"><XMark /> FINAL ENTRY CHECK</span><p>Connect a valid X account. Veil Arena records the account ID and handle, then discards the temporary access token.</p></div>
                       {xConfigured
                         ? <button type="button" onClick={connectXAccount} disabled={xConnecting}>[ {xConnecting ? "OPENING X" : "VERIFY WITH X"} ]</button>
                         : <strong>X VERIFICATION UNAVAILABLE</strong>}

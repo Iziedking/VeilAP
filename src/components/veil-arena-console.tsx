@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { TypedData } from "starknet";
 
@@ -214,7 +215,9 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   return await response.json() as ApiEnvelope<T>;
 }
 
-export function VeilArenaConsole() {
+export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { managedProjectId?: string; managedSeasonId?: string } = {}) {
+  const router = useRouter();
+  const manageMode = Boolean(managedProjectId && managedSeasonId);
   const wallets = useDiscoveredWallets();
   const [projectId, setProjectId] = useState("");
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -322,11 +325,20 @@ export function VeilArenaConsole() {
   }, []);
 
   useEffect(() => {
-    const linkedProjectId = new URLSearchParams(window.location.search).get("project")?.trim();
+    const linkedProjectId = managedProjectId?.trim() || new URLSearchParams(window.location.search).get("project")?.trim();
     if (!linkedProjectId) return;
     const timer = window.setTimeout(() => void loadProject(linkedProjectId), 0);
     return () => window.clearTimeout(timer);
-  }, [loadProject]);
+  }, [loadProject, managedProjectId]);
+
+  useEffect(() => {
+    if (!manageMode || !managedSeasonId || projectId !== managedProjectId) return;
+    const timer = window.setTimeout(() => void loadSchedule(managedSeasonId), 0);
+    return () => window.clearTimeout(timer);
+    // loadSchedule is a local command that reads the current mutable project state.
+    // It is intentionally invoked only after the managed route has resolved its project.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manageMode, managedProjectId, managedSeasonId, projectId]);
 
   async function loadSchedule(seasonId: string) {
     setBusy("schedule");
@@ -442,7 +454,7 @@ export function VeilArenaConsole() {
       setSeasons((current) => [body.value, ...current.filter((season) => season.id !== body.value.id)]);
       setSeasonName("");
       setSchedule({ season: body.value, entries: [], matches: [] });
-      window.history.replaceState({}, "", `/arena-console?project=${encodeURIComponent(targetProjectId)}&season=${encodeURIComponent(body.value.id)}`);
+      router.push(`/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`);
       setPrivateInvitation("");
       setNotice(body.value.entryMode === "invite_only"
         ? `${body.value.name} is ready. Copy its private join link next.`
@@ -882,6 +894,7 @@ export function VeilArenaConsole() {
     <div className="operator-page">
       <header className="operator-nav">
         <Link className="operator-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
+        <Link className="operator-back" href={manageMode && managedProjectId && managedSeasonId ? `/arena/${encodeURIComponent(managedProjectId)}/${encodeURIComponent(managedSeasonId)}` : "/"}>← {manageMode ? "Public room" : "Home"}</Link>
         <div className="operator-nav-meta"><span>OPERATOR DESK</span><strong>LIVE COMPETITION CONTROL</strong></div>
         <Link className="operator-nav-link" href="/sign-in">Wallet sign in</Link>
       </header>
@@ -889,14 +902,15 @@ export function VeilArenaConsole() {
       <main className="operator-main">
         <section className="operator-intro" aria-labelledby="operator-title">
           <div className="operator-kicker"><i /> COMPETITION CONTROL / STARKNET</div>
-          <h1 id="operator-title">Host a competition.</h1>
-          <p>Choose a format, name the competition, and set the entry window. Veil Arena creates the private workspace when you publish.</p>
+          <h1 id="operator-title">{manageMode ? "Run a competition." : "Host a competition."}</h1>
+          <p>{manageMode ? "Manage the sealed roster, run the matches, and settle the reward from one competition workspace." : "Choose a format, name the competition, and set the entry window. Veil Arena creates the private workspace when you publish."}</p>
+          {manageMode && managedProjectId && managedSeasonId ? <div className="operator-live-links"><Link href={`/arena/${encodeURIComponent(managedProjectId)}/${encodeURIComponent(managedSeasonId)}`}>Watch public competition →</Link><Link href="/arena">Browse all competitions</Link></div> : null}
         </section>
 
         {(error || notice) ? <div className={`operator-feedback ${error ? "is-error" : "is-notice"}`} role={error ? "alert" : "status"}>{error || notice}</div> : null}
 
         <div className="operator-grid">
-            <section className="operator-panel operator-panel-wide" aria-labelledby="season-create-title">
+            {!manageMode ? <section className="operator-panel operator-panel-wide" aria-labelledby="season-create-title">
               <header className="operator-panel-head"><div><span>01 / FORMAT AND ENTRY</span><h2 id="season-create-title">Create a competition</h2></div><strong>{seasons.length} SAVED</strong></header>
               <form className="operator-form" onSubmit={(event) => void createSeason(event)}>
                 <fieldset className="operator-template-fieldset">
@@ -974,16 +988,16 @@ export function VeilArenaConsole() {
                 {seasons.map((season) => <button type="button" key={season.id} className={`operator-season-row ${schedule?.season.id === season.id ? "is-selected" : ""}`} onClick={() => void loadSchedule(season.id)}><span>{season.status.toUpperCase()}</span><strong>{season.name}</strong><small>{season.entryCount}/{season.maxEntries} ENTRIES / {(season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</small></button>)}
                 {!seasons.length ? <p className="operator-muted">No seasons are recorded for this project.</p> : null}
               </div> : <p className="operator-create-note">Sign in with the operator wallet. Your private competition workspace is created when you publish.</p>}
-            </section>
+            </section> : null}
 
             {projectId ? <section className="operator-panel" aria-labelledby="strategy-title">
               <header className="operator-panel-head"><div><span>02 / SEALED ROSTER</span><h2 id="strategy-title">Choose agents</h2></div><strong>{strategies.length} SEALED</strong></header>
-              <p className="operator-panel-copy">You can see each agent name and commitment. Its strategy remains sealed.</p>
+              <p className="operator-panel-copy">Registering an agent adds its sealed package to this competition&apos;s roster. The operator sees the name and commitment, never the strategy. After the draw locks, only registered agents can play.</p>
               <div className="operator-strategy-list">
                 {strategies.map((strategy) => { const active = selectedAgents.includes(strategy.agentId); const alreadyInSeason = schedule?.entries.some((entry) => entry.agentId === strategy.agentId); return <label className={`operator-strategy ${active ? "is-selected" : ""} ${alreadyInSeason ? "is-registered" : ""}`} key={strategy.agentId}><input type="checkbox" checked={active} disabled={alreadyInSeason || schedule?.season.status !== "open"} onChange={() => setSelectedAgents((current) => current.includes(strategy.agentId) ? current.filter((id) => id !== strategy.agentId) : [...current, strategy.agentId])} /><span className="operator-check">{active ? "✓" : ""}</span><span><strong>{strategy.displayName}</strong><small>{strategy.agentId} / {shortCommitment(strategy.artifactCommitment)}</small></span><em>{alreadyInSeason ? "IN" : "SEALED"}</em></label>; })}
                 {!strategies.length ? <p className="operator-muted">No sealed strategies are available for this project.</p> : null}
               </div>
-              <button type="button" className="operator-button operator-button-signal operator-full-button" disabled={!schedule || schedule.season.status !== "open" || !selectedAgents.length || busy !== ""} onClick={() => void registerSelectedAgents()}>{busy === "register" ? "REGISTERING" : `REGISTER ${selectedAgents.length || "SELECTED"} AGENTS`}<span>↓</span></button>
+              <button type="button" className="operator-button operator-button-signal operator-full-button" disabled={!schedule || schedule.season.status !== "open" || !selectedAgents.length || busy !== ""} onClick={() => void registerSelectedAgents()}>{busy === "register" ? "ADDING TO ROSTER" : `ADD ${selectedAgents.length || "SELECTED"} AGENTS TO ROSTER`}<span>↓</span></button>
             </section> : null}
 
             {schedule ? <section className="operator-panel operator-panel-wide" aria-labelledby="schedule-title">
