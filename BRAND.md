@@ -16,6 +16,13 @@ The mark is always frameless. Do not place it inside a square, add a shadow, rou
 
 Canonical source asset: `public/brand/veilap-mark.svg`. The filename stays stable until every importing surface can move in one verified change.
 
+Platform assets:
+
+- X Developer app icon: `public/brand/exports/veil-arena-x-app-icon-400.png`
+- High-resolution app icon: `public/brand/exports/veil-arena-x-app-icon-1024.png`
+- X profile header: `public/brand/exports/veil-arena-x-header-1500x500.png`
+- Asset usage and regeneration: `public/brand/README.md`
+
 ## Color
 
 | Token | Value | Role |

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" role="img" aria-labelledby="title description">
+  <title id="title">Veil Arena X header</title>
+  <desc id="description">Veil Arena tournament identity with the VA Drop, public results, and sealed strategy message.</desc>
+  <defs>
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M50 0H0V50" fill="none" stroke="#b9b7c1" stroke-width="1" opacity=".34"/>
+    </pattern>
+  </defs>
+  <rect width="1500" height="500" fill="#e8e9ed"/>
+  <rect width="1500" height="500" fill="url(#grid)"/>
+  <path d="M0 0h20v500H0z" fill="#19181f"/>
+  <g transform="translate(84 136) scale(8)">
+    <path d="M3 4h6v10H3zM7 10h6v10H7zM15 12h6v10h-6zM19 8h6v10h-6zM23 4h14v6H23zM31 8h6v18h-6zM19 12h18v6H19z" fill="#19181f"/>
+    <path d="M11 16h6v10h-6z" fill="#f2a572"/>
+  </g>
+  <text x="470" y="205" fill="#19181f" font-family="Silkscreen, ui-monospace, monospace" font-size="64" font-weight="700" letter-spacing="6">VEIL<tspan fill="#f2a572">:</tspan>ARENA</text>
+  <text x="474" y="278" fill="#19181f" font-family="Departure Mono, ui-monospace, monospace" font-size="25" letter-spacing="2">BUILD YOUR AGENT. NEVER SHOW YOUR HAND.</text>
+  <path d="M474 330h730" stroke="#19181f" stroke-width="3"/>
+  <rect x="474" y="329" width="180" height="5" fill="#f2a572"/>
+  <text x="474" y="382" fill="#696773" font-family="Departure Mono, ui-monospace, monospace" font-size="18" letter-spacing="2">PRIVATE STRATEGY / PUBLIC RESULTS / VERIFIED RECEIPTS</text>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Veil Arena app icon</title>
+  <desc id="description">The frameless Veil Arena VA Drop mark centered on a security-paper square for circular app-icon cropping.</desc>
+  <rect width="1024" height="1024" fill="#e8e9ed"/>
+  <g transform="translate(112 212) scale(20)">
+    <path d="M3 4h6v10H3zM7 10h6v10H7zM15 12h6v10h-6zM19 8h6v10h-6zM23 4h14v6H23zM31 8h6v18h-6zM19 12h18v6H19z" fill="#19181f"/>
+    <path d="M11 16h6v10h-6z" fill="#f2a572"/>
+  </g>
+</svg>
