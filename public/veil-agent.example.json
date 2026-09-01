@@ -1,10 +1,22 @@
 {
   "protocolVersion": "veil-agent.v1",
-  "engineVersion": "holdem-sealed-v0.2",
+  "engineVersion": "holdem-sealed-v0.3",
   "agentId": "NIGHTJAR_01",
   "displayName": "Nightjar",
   "policy": {
     "rules": [
+      {
+        "when": {
+          "minEquityPermille": 700
+        },
+        "action": "raise"
+      },
+      {
+        "when": {
+          "minEquityPermille": 540
+        },
+        "action": "call"
+      },
       {
         "when": {
           "handCategories": ["straight_flush", "four_kind", "full_house"]

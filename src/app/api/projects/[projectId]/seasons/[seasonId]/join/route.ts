@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { openArenaInvitation } from "@/server/arena/arena-invitation-token";
+import { openAgentSubmission } from "@/server/arena/agent-submission-token";
 import { readRequestActor } from "@/server/auth/request-actor";
 import { getSessionSecret } from "@/server/auth/runtime";
 import { JsonBodyError, readJsonBody } from "@/server/http/json-body";
@@ -12,10 +13,13 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   agentId: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9][A-Za-z0-9_-]+$/),
-  policy: z.unknown(),
+  policy: z.unknown().optional(),
+  submissionToken: z.string().trim().min(32).max(96 * 1024).optional(),
   replaceExisting: z.boolean().optional().default(false),
   invitationToken: z.string().trim().min(32).max(4_096).optional(),
-}).strict();
+}).strict().refine((input) => (input.policy !== undefined) !== (input.submissionToken !== undefined), {
+  message: "JOIN_REQUIRES_ONE_STRATEGY_SOURCE",
+});
 
 type JoinRouteContext = {
   params: Promise<{ projectId: string; seasonId: string }>;
@@ -29,6 +33,16 @@ export async function POST(request: Request, context: JoinRouteContext) {
     if (!idempotencyKey) return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     const { projectId, seasonId } = await context.params;
     const input = requestSchema.parse(await readJsonBody(request));
+    let policy = input.policy;
+    if (input.submissionToken) {
+      const submission = openAgentSubmission({ token: input.submissionToken, secret: getSessionSecret() });
+      if (
+        submission.projectId !== projectId
+        || submission.seasonId !== seasonId
+        || submission.agentPackage.agentId !== input.agentId.trim().toUpperCase()
+      ) return serviceResponse({ ok: false, code: "INVALID_INPUT" });
+      policy = submission.agentPackage;
+    }
     let admission: "public" | "invite" = "public";
     if (input.invitationToken) {
       const invitation = openArenaInvitation({ token: input.invitationToken, secret: getSessionSecret() });
@@ -42,7 +56,7 @@ export async function POST(request: Request, context: JoinRouteContext) {
       seasonId,
       actorWalletAddress: actor.walletAddress,
       agentId: input.agentId,
-      policy: input.policy,
+      policy,
       idempotencyKey,
       replaceExisting: input.replaceExisting,
       admission,
@@ -80,6 +94,12 @@ export async function POST(request: Request, context: JoinRouteContext) {
     }
     if (error instanceof Error && error.message === "ARENA_INVITATION_TOKEN_INVALID") {
       return serviceResponse({ ok: false, code: "ARENA_INVITATION_INVALID" });
+    }
+    if (error instanceof Error && error.message === "AGENT_SUBMISSION_TOKEN_EXPIRED") {
+      return serviceResponse({ ok: false, code: "INVALID_INPUT" });
+    }
+    if (error instanceof Error && error.message === "AGENT_SUBMISSION_TOKEN_INVALID") {
+      return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     }
     return serviceResponse({ ok: false, code: "INVALID_INPUT" });
   }

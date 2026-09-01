@@ -1,7 +1,13 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
-import type { PublicHandReceipt, PublicMatchReceipt } from "@/domain/arena/poker-engine";
+import {
+  ARENA_ENGINE_VERSION,
+  isArenaEngineVersion,
+  type ArenaEngineVersion,
+  type PublicHandReceipt,
+  type PublicMatchReceipt,
+} from "@/domain/arena/poker-engine";
 import { revealSealedLosingAction, runSealedMatch, type SealedLosingActionReveal } from "./sealed-match-runner";
 import type { KeyProvider } from "@/server/crypto/key-provider";
 import { decryptField, encryptField } from "@/server/crypto/envelope";
@@ -22,6 +28,7 @@ export type ArenaMatchServiceErrorCode =
   | "ROLE_FORBIDDEN"
   | "STRATEGY_ARTIFACT_NOT_FOUND"
   | "STRATEGY_ARTIFACT_INVALID"
+  | "AGENT_ENGINE_MISMATCH"
   | "AGENT_POLICY_FAILED"
   | "ILLEGAL_AGENT_ACTION"
   | "ARENA_MATCH_NOT_FOUND"
@@ -106,6 +113,7 @@ function mapAuthorizationCode(code: string): ArenaMatchServiceErrorCode {
 function mapRunCode(code: string): ArenaMatchServiceErrorCode {
   if (code === "SEALED_ARTIFACT_NOT_FOUND") return "STRATEGY_ARTIFACT_NOT_FOUND";
   if (code === "STRATEGY_ARTIFACT_INVALID") return "STRATEGY_ARTIFACT_INVALID";
+  if (code === "AGENT_ENGINE_MISMATCH") return "AGENT_ENGINE_MISMATCH";
   if (code === "AGENT_POLICY_FAILED") return "AGENT_POLICY_FAILED";
   if (code === "ILLEGAL_AGENT_ACTION") return "ILLEGAL_AGENT_ACTION";
   return "PERSISTENCE_FAILED";
@@ -114,6 +122,7 @@ function mapRunCode(code: string): ArenaMatchServiceErrorCode {
 function mapRevealCode(code: string): ArenaMatchServiceErrorCode {
   if (code === "SEALED_ARTIFACT_NOT_FOUND") return "STRATEGY_ARTIFACT_NOT_FOUND";
   if (code === "STRATEGY_ARTIFACT_INVALID") return "STRATEGY_ARTIFACT_INVALID";
+  if (code === "AGENT_ENGINE_MISMATCH") return "AGENT_ENGINE_MISMATCH";
   if (code === "AGENT_POLICY_FAILED") return "AGENT_POLICY_FAILED";
   if (code === "ILLEGAL_AGENT_ACTION") return "ILLEGAL_AGENT_ACTION";
   if (code === "REVEAL_HAND_NOT_FOUND") return "REVEAL_HAND_NOT_FOUND";
@@ -138,6 +147,7 @@ function matchRequestDigest(input: {
   leftAgentId: string;
   rightAgentId: string;
   hands: number;
+  engineVersion: ArenaEngineVersion;
   actorFingerprint: string;
 }): string {
   return commitment(input);
@@ -230,6 +240,7 @@ export class ArenaMatchService {
     leftAgentId: string;
     rightAgentId: string;
     hands: number;
+    engineVersion?: ArenaEngineVersion;
     idempotencyKey: string;
     matchId?: string;
   }): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
@@ -237,6 +248,7 @@ export class ArenaMatchService {
     const leftAgentId = input.leftAgentId.trim();
     const rightAgentId = input.rightAgentId.trim();
     const idempotencyKey = input.idempotencyKey.trim();
+    const engineVersion = input.engineVersion ?? ARENA_ENGINE_VERSION;
     if (
       !projectId
       || !leftAgentId
@@ -245,6 +257,7 @@ export class ArenaMatchService {
       || !Number.isSafeInteger(input.hands)
       || input.hands < 1
       || input.hands > 100
+      || !isArenaEngineVersion(engineVersion)
       || !validIdempotencyKey(idempotencyKey)
     ) {
       return { ok: false, code: "INVALID_INPUT" };
@@ -261,7 +274,7 @@ export class ArenaMatchService {
       });
       if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
       if (!this.signer) return { ok: false, code: "SIGNING_UNAVAILABLE" };
-      const requestDigest = matchRequestDigest({ leftAgentId, rightAgentId, hands: input.hands, actorFingerprint });
+      const requestDigest = matchRequestDigest({ leftAgentId, rightAgentId, hands: input.hands, engineVersion, actorFingerprint });
       const existing = await this.repositories.getArenaMatchReceiptByIdempotencyKey(projectId, idempotencyKey);
       if (existing) {
         return existing.requestDigest === requestDigest
@@ -284,6 +297,7 @@ export class ArenaMatchService {
         leftAgentId,
         rightAgentId,
         matchId,
+        engineVersion,
         seed,
         hands: input.hands,
         keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
@@ -416,6 +430,9 @@ export class ArenaMatchService {
         leftAgentId: match.leftAgentId,
         rightAgentId: match.rightAgentId,
         matchId,
+        engineVersion: isArenaEngineVersion((match.publicReceipt as PublicMatchReceipt).engineVersion)
+          ? (match.publicReceipt as PublicMatchReceipt).engineVersion as ArenaEngineVersion
+          : undefined,
         seed,
         hands: match.handCount,
         handIndex: input.handIndex,

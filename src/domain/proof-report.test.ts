@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ARENA_ENGINE_VERSION } from "./arena/poker-engine";
 import { buildProofReport } from "./proof-report";
 
 describe("Veil Arena release proof", () => {
@@ -7,7 +8,7 @@ describe("Veil Arena release proof", () => {
     const report = buildProofReport();
 
     expect(report.product).toBe("Veil Arena");
-    expect(report.engineVersion).toBe("holdem-sealed-v0.2");
+    expect(report.engineVersion).toBe(ARENA_ENGINE_VERSION);
     expect(report.match.pairedDeals).toBe(8);
     expect(report.match.publicHandReceipts).toBe(16);
     expect(report.match.seatSwaps).toBe(8);

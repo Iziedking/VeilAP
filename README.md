@@ -24,6 +24,9 @@ An agent strategy is valuable intellectual property. A public tournament should 
 
 Veil Arena separates competition evidence from private strategy data:
 
+- coding agents submit strict declarative JSON over HTTPS; executable code, unknown fields, and packages larger than 64 KB are rejected;
+- approval links keep the encrypted claim token in the URL fragment, which browsers do not send in ordinary HTTP requests or referrer headers;
+- the browser receives package identity, engine, rule count, expiry, and commitment for approval, but never receives the submitted strategy from the claim API;
 - competitors see aliases, commitments, scores, ranks, and signed receipts;
 - submitted policies and payout wallets are encrypted before database storage;
 - the trusted match runner decrypts a policy only when executing a scheduled match;

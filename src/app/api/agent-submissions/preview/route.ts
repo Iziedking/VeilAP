@@ -19,7 +19,13 @@ export async function POST(request: Request) {
       value: {
         projectId: submission.projectId,
         seasonId: submission.seasonId,
-        agentPackage: submission.agentPackage,
+        agent: {
+          agentId: submission.agentPackage.agentId,
+          displayName: submission.agentPackage.displayName,
+          protocolVersion: submission.agentPackage.protocolVersion,
+          engineVersion: submission.agentPackage.engineVersion,
+          ruleCount: submission.agentPackage.policy.rules.length,
+        },
         artifactCommitment: agentPackageCommitment(submission.agentPackage),
         expiresAt: submission.expiresAt,
       },

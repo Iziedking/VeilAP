@@ -1,7 +1,11 @@
 // No framework, storage, clock, or network imports belong here. The operator UI
 // previews this module and the server uses the same functions to lock a roster.
 import { commitment } from "@/domain/canonical";
-import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
+import {
+  ARENA_ENGINE_VERSION,
+  SUPPORTED_ARENA_ENGINE_VERSIONS,
+  type ArenaEngineVersion,
+} from "@/domain/arena/poker-engine";
 import { z } from "zod";
 
 export const TOURNAMENT_RULES_SCHEMA_VERSION = 1 as const;
@@ -27,7 +31,7 @@ export interface TournamentRules {
   schemaVersion: typeof TOURNAMENT_RULES_SCHEMA_VERSION;
   templateId: TournamentTemplateId;
   templateVersion: typeof TOURNAMENT_TEMPLATE_VERSION;
-  engineVersion: typeof ARENA_ENGINE_VERSION;
+  engineVersion: ArenaEngineVersion;
   pairingMode: TournamentPairingMode;
   entryMode: TournamentEntryMode;
   minEntries: number;
@@ -89,7 +93,7 @@ const tournamentRulesSchema = z.object({
   schemaVersion: z.literal(TOURNAMENT_RULES_SCHEMA_VERSION),
   templateId: z.enum(["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship", "custom"]),
   templateVersion: z.literal(TOURNAMENT_TEMPLATE_VERSION),
-  engineVersion: z.literal(ARENA_ENGINE_VERSION),
+  engineVersion: z.enum(SUPPORTED_ARENA_ENGINE_VERSIONS),
   pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
   entryMode: z.enum(["open", "invite_only"]),
   minEntries: z.number().int(),

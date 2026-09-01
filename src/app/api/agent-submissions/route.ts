@@ -97,6 +97,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, code: "ARENA_SEASON_NOT_OPEN" }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
     const agentPackage = parseAgentPackage(input.agentPackage);
+    const requiredEngine = season.rules?.engineVersion ?? season.rulesetVersion;
+    if (agentPackage.engineVersion !== requiredEngine) {
+      return NextResponse.json({ ok: false, code: "AGENT_ENGINE_MISMATCH" }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    }
     const token = sealAgentSubmission({
       projectId: input.projectId,
       seasonId: input.seasonId,

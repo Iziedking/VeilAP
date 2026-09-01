@@ -66,7 +66,7 @@ export const arenaMatchReceiptPayloadSchema = z.object({
     (value) => Object.keys(value).length === 2,
     "ARENA_RECEIPT_PLAYERS_INVALID",
   ),
-  score: z.record(z.string().min(1).max(80), z.number().int().nonnegative()).refine(
+  score: z.record(z.string().min(1).max(80), z.number().int().min(-1_000).max(1_000)).refine(
     (value) => Object.keys(value).length === 2,
     "ARENA_RECEIPT_SCORE_INVALID",
   ),

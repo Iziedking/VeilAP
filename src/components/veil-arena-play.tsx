@@ -137,6 +137,7 @@ function enrollmentMessage(code: string): string {
     AUTH_REQUIRED: "Your secure session expired. Sign in again before entering.",
     CONFIGURATION_MISSING: "Private strategy encryption is not configured on the server yet.",
     INVALID_INPUT: "The agent package is invalid or no longer matches this entry. Validate it and try again.",
+    AGENT_ENGINE_MISMATCH: "This package targets a different game engine. Rebuild it using the engine shown for this competition.",
   };
   return messages[code] ?? "The agent could not be entered. Nothing was submitted. Try again.";
 }
@@ -144,7 +145,13 @@ function enrollmentMessage(code: string): string {
 type PackageReview =
   | { status: "empty" }
   | { status: "invalid"; message: string }
-  | { status: "ready"; agentPackage: AgentPackage; commitment: string };
+  | {
+      status: "ready";
+      agent: Pick<AgentPackage, "agentId" | "displayName" | "protocolVersion" | "engineVersion"> & { ruleCount: number };
+      commitment: string;
+      agentPackage?: AgentPackage;
+      submissionToken?: string;
+    };
 
 function reviewAgentPackage(value: string): PackageReview {
   if (!value.trim()) return { status: "empty" };
@@ -155,6 +162,13 @@ function reviewAgentPackage(value: string): PackageReview {
     const agentPackage = parseAgentPackage(JSON.parse(value));
     return {
       status: "ready",
+      agent: {
+        agentId: agentPackage.agentId,
+        displayName: agentPackage.displayName,
+        protocolVersion: agentPackage.protocolVersion,
+        engineVersion: agentPackage.engineVersion,
+        ruleCount: agentPackage.policy.rules.length,
+      },
       agentPackage,
       commitment: agentPackageCommitment(agentPackage),
     };
@@ -190,6 +204,7 @@ export function VeilArenaPlay({
   const [guideCopyState, setGuideCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [claimState, setClaimState] = useState<ClaimState>("idle");
   const [claimMessage, setClaimMessage] = useState("");
+  const [claimedPackage, setClaimedPackage] = useState<Extract<PackageReview, { status: "ready" }> | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [replacementMode, setReplacementMode] = useState(false);
@@ -220,7 +235,7 @@ export function VeilArenaPlay({
         const body = await response.json() as ApiEnvelope<{
           projectId: string;
           seasonId: string;
-          agentPackage: AgentPackage;
+          agent: Pick<AgentPackage, "agentId" | "displayName" | "protocolVersion" | "engineVersion"> & { ruleCount: number };
           artifactCommitment: string;
           expiresAt: string;
         }>;
@@ -231,10 +246,15 @@ export function VeilArenaPlay({
           return;
         }
         setSelectedSeasonId(body.value.seasonId);
-        setAgentPackageText(JSON.stringify(body.value.agentPackage, null, 2));
+        setClaimedPackage({
+          status: "ready",
+          agent: body.value.agent,
+          commitment: body.value.artifactCommitment,
+          submissionToken: token,
+        });
         setReplacementMode(true);
         setClaimState("loaded");
-        setClaimMessage(`Package received. Check commitment ${shortCommitment(body.value.artifactCommitment)}, then approve the entry.`);
+        setClaimMessage(`Secure package received. Its strategy remains server-side. Check commitment ${shortCommitment(body.value.artifactCommitment)}, then approve the entry.`);
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       } catch {
         if (!active) return;
@@ -322,7 +342,8 @@ export function VeilArenaPlay({
     : seasons;
   const selectedSeason = seasons.find((season) => season.id === selectedSeasonId);
   const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now, invitedSeasonId) : false;
-  const packageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
+  const localPackageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
+  const packageReview = claimedPackage ?? localPackageReview;
 
   useEffect(() => {
     if (sessionState !== "authenticated" || !projectId || !selectedSeasonId) {
@@ -365,6 +386,7 @@ export function VeilArenaPlay({
   }
 
   function updateAgentPackage(value: string) {
+    setClaimedPackage(null);
     setAgentPackageText(value);
     resetSubmission();
   }
@@ -397,7 +419,7 @@ export function VeilArenaPlay({
       setSubmitError(packageReview.status === "invalid" ? packageReview.message : "Import the package created by your coding agent first.");
       return;
     }
-    const { agentPackage } = packageReview;
+    const { agent, agentPackage, submissionToken } = packageReview;
     if (currentEntry && !replacementConfirmed) {
       setSubmitError("Confirm that this package should replace your active agent.");
       return;
@@ -416,8 +438,8 @@ export function VeilArenaPlay({
             "Idempotency-Key": requestKey,
           },
           body: JSON.stringify({
-            agentId: agentPackage.agentId,
-            policy: agentPackage,
+            agentId: agent.agentId,
+            ...(submissionToken ? { submissionToken } : { policy: agentPackage }),
             replaceExisting: Boolean(currentEntry),
             ...(invitationToken && selectedSeason.id === invitedSeasonId ? { invitationToken } : {}),
           }),
@@ -434,6 +456,7 @@ export function VeilArenaPlay({
       setEntry(body.value);
       setEntryState("ready");
       setAgentPackageText("");
+      setClaimedPackage(null);
       setReplacementMode(false);
       setReplacementConfirmed(false);
     } catch {
@@ -610,7 +633,8 @@ export function VeilArenaPlay({
                     <textarea
                       value={agentPackageText}
                       onChange={(event) => updateAgentPackage(event.target.value)}
-                      placeholder="Paste the complete .veil-agent.json package here"
+                      placeholder={claimedPackage ? "Secure HTTP submission loaded. The strategy remains server-side." : "Paste the complete .veil-agent.json package here"}
+                      disabled={Boolean(claimedPackage)}
                       spellCheck={false}
                       aria-describedby="package-help"
                     />
@@ -623,13 +647,13 @@ export function VeilArenaPlay({
                 <section className="play-review" aria-labelledby="review-title">
                   <div>
                     <span>PACKAGE REVIEW</span>
-                    <h3 id="review-title">{packageReview.status === "ready" ? `${packageReview.agentPackage.displayName} / ${packageReview.agentPackage.agentId}` : "WAITING FOR A VALID AGENT PACKAGE"}</h3>
+                    <h3 id="review-title">{packageReview.status === "ready" ? `${packageReview.agent.displayName} / ${packageReview.agent.agentId}` : "WAITING FOR A VALID AGENT PACKAGE"}</h3>
                   </div>
                   {packageReview.status === "ready" && (
                     <dl className="play-package-facts">
-                      <div><dt>PROTOCOL</dt><dd>{packageReview.agentPackage.protocolVersion}</dd></div>
-                      <div><dt>ENGINE</dt><dd>{packageReview.agentPackage.engineVersion}</dd></div>
-                      <div><dt>RULES</dt><dd>{packageReview.agentPackage.policy.rules.length}</dd></div>
+                      <div><dt>PROTOCOL</dt><dd>{packageReview.agent.protocolVersion}</dd></div>
+                      <div><dt>ENGINE</dt><dd>{packageReview.agent.engineVersion}</dd></div>
+                      <div><dt>RULES</dt><dd>{packageReview.agent.ruleCount}</dd></div>
                       <div><dt>COMMITMENT</dt><dd><code>{shortCommitment(packageReview.commitment)}</code></dd></div>
                     </dl>
                   )}

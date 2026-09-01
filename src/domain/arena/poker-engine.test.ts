@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { commitment } from "@/domain/canonical";
 import {
+  ARENA_ENGINE_VERSION,
+  LEGACY_ARENA_ENGINE_VERSION,
   createDeal,
+  estimateShowdownEquityPermille,
   evaluateHand,
   legalActions,
   runMatch,
@@ -148,5 +151,55 @@ describe("poker engine", () => {
   it("makes the call boundary explicit", () => {
     expect(legalActions(0)).toEqual(["check", "raise", "fold"]);
     expect(legalActions(10)).toEqual(["call", "raise", "fold"]);
+  });
+
+  it("keeps archived v0.2 win-count scoring reproducible", () => {
+    const result = runMatch({
+      agents: [
+        { artifactCommitment: commitment("agent-a"), id: "A", policy: raisePolicy },
+        { artifactCommitment: commitment("agent-b"), id: "B", policy: callPolicy },
+      ],
+      engineVersion: LEGACY_ARENA_ENGINE_VERSION,
+      hands: 1,
+      matchId: "M-LEGACY",
+      seed: "fixed-seed",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected match to run.");
+    expect(result.value.score).toEqual({ A: 1, B: 1 });
+    expect(result.value.publicHandReceipts.every((receipt) => receipt.scoreDelta === undefined)).toBe(true);
+  });
+
+  it("makes uncalibrated v0.3 raising lose more than a safe call", () => {
+    const result = runMatch({
+      agents: [
+        { artifactCommitment: commitment("agent-a"), id: "A", policy: raisePolicy },
+        { artifactCommitment: commitment("agent-b"), id: "B", policy: callPolicy },
+      ],
+      engineVersion: ARENA_ENGINE_VERSION,
+      hands: 1,
+      matchId: "M-CONVICTION",
+      seed: "fixed-seed",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected match to run.");
+    expect(result.value.score.B).toBeGreaterThan(result.value.score.A);
+    expect(result.value.publicHandReceipts.every((receipt) => receipt.scoreDelta !== undefined)).toBe(true);
+  });
+
+  it("computes deterministic showdown equity without opponent cards or the match seed", () => {
+    const equity = estimateShowdownEquityPermille({
+      board: [
+        card(14, "hearts"), card(13, "hearts"), card(12, "hearts"), card(11, "hearts"), card(2, "clubs"),
+      ],
+      holeCards: [card(10, "hearts"), card(3, "diamonds")],
+    });
+    expect(equity).toBe(1_000);
+    expect(estimateShowdownEquityPermille({
+      board: [
+        card(14, "hearts"), card(13, "hearts"), card(12, "hearts"), card(11, "hearts"), card(2, "clubs"),
+      ],
+      holeCards: [card(10, "hearts"), card(3, "diamonds")],
+    })).toBe(equity);
   });
 });

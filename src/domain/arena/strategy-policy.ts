@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 import {
-  ARENA_ENGINE_VERSION,
+  LEGACY_ARENA_ENGINE_VERSION,
+  SUPPORTED_ARENA_ENGINE_VERSIONS,
+  estimateShowdownEquityPermille,
   evaluateHand,
   type AgentDefinition,
   type AgentPolicy,
@@ -65,6 +67,8 @@ const agentConditionSchema = z.object({
   boardPaired: z.boolean().optional(),
   minBoardSuitCount: z.number().int().min(1).max(5).optional(),
   maxToCallMinor: z.number().int().min(0).max(1_000_000_000).optional(),
+  minEquityPermille: z.number().int().min(0).max(1_000).optional(),
+  maxEquityPermille: z.number().int().min(0).max(1_000).optional(),
   handNumberModulo: cadenceSchema.optional(),
 }).strict().refine((condition) => Object.values(condition).some((value) => value !== undefined), {
   message: "AGENT_RULE_NEEDS_CONDITION",
@@ -80,7 +84,11 @@ const agentConditionSchema = z.object({
   condition.minHighCardRank === undefined
   || condition.maxHighCardRank === undefined
   || condition.minHighCardRank <= condition.maxHighCardRank
-), { message: "AGENT_HIGH_CARD_RANGE_INVALID" });
+), { message: "AGENT_HIGH_CARD_RANGE_INVALID" }).refine((condition) => (
+  condition.minEquityPermille === undefined
+  || condition.maxEquityPermille === undefined
+  || condition.minEquityPermille <= condition.maxEquityPermille
+), { message: "AGENT_EQUITY_RANGE_INVALID" });
 
 const agentRuleSchema = z.object({
   when: agentConditionSchema,
@@ -89,7 +97,7 @@ const agentRuleSchema = z.object({
 
 export const agentPackageSchema = z.object({
   protocolVersion: z.literal(AGENT_PACKAGE_PROTOCOL_VERSION),
-  engineVersion: z.literal(ARENA_ENGINE_VERSION),
+  engineVersion: z.enum(SUPPORTED_ARENA_ENGINE_VERSIONS),
   agentId: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{2,31}$/),
   displayName: z.string().trim().min(1).max(80),
   policy: z.object({
@@ -182,6 +190,7 @@ function conditionMatches(
   condition: AgentPackage["policy"]["rules"][number]["when"],
   state: Parameters<AgentPolicy>[0],
   category: HandCategory,
+  equityPermille: number | undefined,
 ): boolean {
   const [first, second] = state.holeCards;
   const holeRankTotal = first.rank + second.rank;
@@ -201,6 +210,8 @@ function conditionMatches(
     && (condition.boardPaired === undefined || boardIsPaired(state.board) === condition.boardPaired)
     && (condition.minBoardSuitCount === undefined || maxSuitCount(state.board) >= condition.minBoardSuitCount)
     && (condition.maxToCallMinor === undefined || state.toCallMinor <= condition.maxToCallMinor)
+    && (condition.minEquityPermille === undefined || (equityPermille !== undefined && equityPermille >= condition.minEquityPermille))
+    && (condition.maxEquityPermille === undefined || (equityPermille !== undefined && equityPermille <= condition.maxEquityPermille))
     && (condition.handNumberModulo === undefined
       || state.handNumber % condition.handNumberModulo.divisor === condition.handNumberModulo.remainder)
   );
@@ -213,10 +224,27 @@ export function compileAgentPackage(agentPackage: AgentPackage): AgentDefinition
     artifactCommitment: agentPackageCommitment(parsed),
     policy: (state) => {
       const category = evaluateHand([...state.holeCards, ...state.board]);
-      const matchedRule = parsed.policy.rules.find((rule) => conditionMatches(rule.when, state, category));
+      const needsEquity = parsed.policy.rules.some((rule) => (
+        rule.when.minEquityPermille !== undefined || rule.when.maxEquityPermille !== undefined
+      ));
+      const equityPermille = needsEquity
+        ? estimateShowdownEquityPermille({ board: state.board, holeCards: state.holeCards })
+        : undefined;
+      const matchedRule = parsed.policy.rules.find((rule) => conditionMatches(rule.when, state, category, equityPermille));
       return legalFallback(state.legalActions, matchedRule?.action ?? parsed.policy.fallbackAction);
     },
   };
+}
+
+export function strategyPayloadEngineVersion(payload: StrategyArtifactPayload): typeof SUPPORTED_ARENA_ENGINE_VERSIONS[number] {
+  return "protocolVersion" in payload ? payload.engineVersion : LEGACY_ARENA_ENGINE_VERSION;
+}
+
+export function strategyPayloadSupportsEngine(
+  payload: StrategyArtifactPayload,
+  engineVersion: typeof SUPPORTED_ARENA_ENGINE_VERSIONS[number],
+): boolean {
+  return !("protocolVersion" in payload) || payload.engineVersion === engineVersion;
 }
 
 export function compileStrategyArtifactPayload(

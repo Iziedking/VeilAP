@@ -8,7 +8,7 @@ import {
   parseStrategyPolicy,
   strategyArtifactCommitment,
 } from "@/domain/arena/strategy-policy";
-import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
+import { ARENA_ENGINE_VERSION, LEGACY_ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
 
 const policy = {
   schemaVersion: 1 as const,
@@ -37,7 +37,6 @@ describe("strategy policy boundary", () => {
       handNumber: 1,
       holeCards: [{ rank: 14, suit: "spades" }, { rank: 12, suit: "hearts" }],
       legalActions: ["fold", "call"],
-      matchSeed: "test",
       opponentId: "CINDER",
       potMinor: 20,
       position: "button",
@@ -85,7 +84,6 @@ describe("strategy policy boundary", () => {
       handNumber: 3,
       holeCards: [{ rank: 14, suit: "spades" }, { rank: 12, suit: "spades" }],
       legalActions: ["fold", "call", "raise"],
-      matchSeed: "never-exposed-to-package-rules",
       opponentId: "CINDER",
       potMinor: 100,
       position: "button",
@@ -112,5 +110,47 @@ describe("strategy policy boundary", () => {
         rules: [{ when: { handNumberModulo: { divisor: 3, remainder: 3 } }, action: "call" }],
       },
     })).toThrow("AGENT_PACKAGE_INVALID");
+  });
+
+  it("keeps v0.2 packages readable while equity bands drive new v0.3 agents", () => {
+    const legacy = parseAgentPackage({
+      protocolVersion: "veil-agent.v1",
+      engineVersion: LEGACY_ARENA_ENGINE_VERSION,
+      agentId: "ARCHIVE_01",
+      displayName: "Archive",
+      policy: { rules: [{ when: { pocketPair: true }, action: "raise" }], fallbackAction: "call" },
+    });
+    expect(legacy.engineVersion).toBe(LEGACY_ARENA_ENGINE_VERSION);
+
+    const equityAgent = compileAgentPackage(parseAgentPackage({
+      protocolVersion: "veil-agent.v1",
+      engineVersion: ARENA_ENGINE_VERSION,
+      agentId: "EQUITY_01",
+      displayName: "Equity",
+      policy: {
+        rules: [
+          { when: { minEquityPermille: 640 }, action: "raise" },
+          { when: { minEquityPermille: 505 }, action: "call" },
+        ],
+        fallbackAction: "fold",
+      },
+    }));
+    expect(equityAgent.policy({
+      agentId: "EQUITY_01",
+      board: [
+        { rank: 14, suit: "hearts" },
+        { rank: 13, suit: "hearts" },
+        { rank: 12, suit: "hearts" },
+        { rank: 11, suit: "hearts" },
+        { rank: 2, suit: "clubs" },
+      ],
+      handNumber: 1,
+      holeCards: [{ rank: 10, suit: "hearts" }, { rank: 3, suit: "diamonds" }],
+      legalActions: ["fold", "call", "raise"],
+      opponentId: "CINDER",
+      potMinor: 100,
+      position: "button",
+      toCallMinor: 10,
+    })).toBe("raise");
   });
 });

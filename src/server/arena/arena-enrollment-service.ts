@@ -4,6 +4,7 @@ import { commitment } from "@/domain/canonical";
 import {
   parseStrategyArtifactPayload,
   strategyPayloadCommitment,
+  strategyPayloadSupportsEngine,
 } from "@/domain/arena/strategy-policy";
 import { normalizeFeltAddress } from "@/lib/strk20/address";
 import { encryptField } from "@/server/crypto/envelope";
@@ -186,6 +187,9 @@ export class ArenaEnrollmentService {
       const now = this.now();
       actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
       const parsedPolicy = parseStrategyArtifactPayload(input.policy);
+      if (season.rulesSnapshot && !strategyPayloadSupportsEngine(parsedPolicy, season.rulesSnapshot.engineVersion)) {
+        return { ok: false, code: "INVALID_INPUT" };
+      }
       if ("protocolVersion" in parsedPolicy && parsedPolicy.agentId !== agentId) {
         return { ok: false, code: "INVALID_INPUT" };
       }
@@ -413,6 +417,9 @@ export class ArenaEnrollmentService {
       const season = await this.repositories.getArenaSeason(projectId, seasonId);
       if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
       const parsedPolicy = parseStrategyArtifactPayload(input.policy);
+      if (season.rulesSnapshot && !strategyPayloadSupportsEngine(parsedPolicy, season.rulesSnapshot.engineVersion)) {
+        return { ok: false, code: "INVALID_INPUT" };
+      }
       if (!("protocolVersion" in parsedPolicy) || parsedPolicy.agentId !== agentId) {
         return { ok: false, code: "INVALID_INPUT" };
       }

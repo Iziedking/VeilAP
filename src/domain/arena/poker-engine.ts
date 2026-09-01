@@ -1,6 +1,13 @@
 import { commitment } from "@/domain/canonical";
 
-export const ARENA_ENGINE_VERSION = "holdem-sealed-v0.2";
+export const LEGACY_ARENA_ENGINE_VERSION = "holdem-sealed-v0.2" as const;
+export const ARENA_ENGINE_VERSION = "holdem-sealed-v0.3" as const;
+export const SUPPORTED_ARENA_ENGINE_VERSIONS = [LEGACY_ARENA_ENGINE_VERSION, ARENA_ENGINE_VERSION] as const;
+export type ArenaEngineVersion = typeof SUPPORTED_ARENA_ENGINE_VERSIONS[number];
+
+export function isArenaEngineVersion(value: string): value is ArenaEngineVersion {
+  return (SUPPORTED_ARENA_ENGINE_VERSIONS as readonly string[]).includes(value);
+}
 
 export type Suit = "clubs" | "diamonds" | "hearts" | "spades";
 export type Rank = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
@@ -19,7 +26,6 @@ export type DecisionState = Readonly<{
   handNumber: number;
   holeCards: readonly [Card, Card];
   legalActions: readonly DecisionAction[];
-  matchSeed: string;
   opponentId: AgentId;
   potMinor: number;
   position: "button" | "big_blind";
@@ -50,6 +56,7 @@ export type HandResult = Readonly<{
     right: HandCategory;
   }>;
   outcomes: readonly HandOutcome[];
+  scoreDelta: Readonly<Record<AgentId, number>>;
   seatSwapped: boolean;
   winner: AgentId | "tie";
 }>;
@@ -61,6 +68,7 @@ export type PublicHandReceipt = Readonly<{
   handNumber: number;
   handCommitment: string;
   seatSwapped: boolean;
+  scoreDelta?: Readonly<Record<AgentId, number>>;
   winner: AgentId | "tie";
 }>;
 
@@ -162,7 +170,7 @@ function straightHigh(cardRanks: readonly number[]): number | null {
   return null;
 }
 
-function compareCategory(left: HandCategory, right: HandCategory): number {
+export function compareHandCategories(left: HandCategory, right: HandCategory): number {
   if (left.rank !== right.rank) return left.rank - right.rank;
   const size = Math.max(left.tiebreak.length, right.tiebreak.length);
   for (let index = 0; index < size; index += 1) {
@@ -204,7 +212,7 @@ export function evaluateHand(cards: readonly Card[]): HandCategory {
   if (cards.length < 5) throw new Error("POKER_HAND_REQUIRES_FIVE_CARDS");
   return chooseFive(cards).reduce((best, current) => {
     const candidate = evaluateFive(current);
-    return compareCategory(candidate, best) > 0 ? candidate : best;
+    return compareHandCategories(candidate, best) > 0 ? candidate : best;
   }, evaluateFive(cards.slice(0, 5)));
 }
 
@@ -225,6 +233,30 @@ export function createDeal(matchSeed: string, handNumber: number): Readonly<{
     rightHole: [deck[2], deck[3]],
     board: deck.slice(4, 9),
   };
+}
+
+export function estimateShowdownEquityPermille(input: Readonly<{
+  board: readonly Card[];
+  holeCards: readonly [Card, Card];
+}>): number {
+  if (input.board.length !== 5) throw new Error("POKER_EQUITY_REQUIRES_COMPLETE_BOARD");
+  const visible = new Set([...input.board, ...input.holeCards].map(({ rank, suit }) => `${rank}:${suit}`));
+  if (visible.size !== 7) throw new Error("POKER_EQUITY_DUPLICATE_CARD");
+  const remaining = createDeck().filter(({ rank, suit }) => !visible.has(`${rank}:${suit}`));
+  const ownCategory = evaluateHand([...input.holeCards, ...input.board]);
+  let wins = 0;
+  let ties = 0;
+  let total = 0;
+  for (let first = 0; first < remaining.length - 1; first += 1) {
+    for (let second = first + 1; second < remaining.length; second += 1) {
+      const opponentCategory = evaluateHand([remaining[first]!, remaining[second]!, ...input.board]);
+      const comparison = compareHandCategories(ownCategory, opponentCategory);
+      if (comparison > 0) wins += 1;
+      else if (comparison === 0) ties += 1;
+      total += 1;
+    }
+  }
+  return Math.round(((wins * 1_000) + (ties * 500)) / total);
 }
 
 export function transcriptRoot(receipts: readonly PublicHandReceipt[]): string {
@@ -249,6 +281,7 @@ export function publicHandReceiptCommitment(
     boardCommitment: receipt.boardCommitment,
     handNumber: receipt.handNumber,
     seatSwapped: receipt.seatSwapped,
+    ...(receipt.scoreDelta ? { scoreDelta: receipt.scoreDelta } : {}),
     winner: receipt.winner,
   });
 }
@@ -298,6 +331,7 @@ function runHand(
   matchSeed: string,
   handNumber: number,
   seatSwapped: boolean,
+  engineVersion: ArenaEngineVersion,
 ): { ok: true; value: HandResult } | { ok: false; code: "AGENT_POLICY_FAILED" | "ILLEGAL_AGENT_ACTION"; agentId: AgentId } {
   const deal = createDeal(matchSeed, handNumber);
   const leftHole = seatSwapped ? deal.rightHole : deal.leftHole;
@@ -310,7 +344,6 @@ function runHand(
     handNumber,
     holeCards: leftHole,
     legalActions: legalActions(10),
-    matchSeed,
     opponentId: rightAgent.id,
     potMinor: 100,
     position: leftPosition,
@@ -322,7 +355,6 @@ function runHand(
     handNumber,
     holeCards: rightHole,
     legalActions: legalActions(10),
-    matchSeed,
     opponentId: leftAgent.id,
     potMinor: 100,
     position: rightPosition,
@@ -340,9 +372,11 @@ function runHand(
 
   const leftCategory = evaluateHand([...leftHole, ...deal.board]);
   const rightCategory = evaluateHand([...rightHole, ...deal.board]);
-  const showdown = compareCategory(leftCategory, rightCategory);
+  const showdown = compareHandCategories(leftCategory, rightCategory);
   let winner: AgentId | "tie";
-  if (leftAction === "fold" && rightAction !== "fold") {
+  if (leftAction === "fold" && rightAction === "fold") {
+    winner = "tie";
+  } else if (leftAction === "fold" && rightAction !== "fold") {
     winner = rightAgent.id;
   } else if (rightAction === "fold" && leftAction !== "fold") {
     winner = leftAgent.id;
@@ -352,6 +386,21 @@ function runHand(
     winner = rightAgent.id;
   } else {
     winner = "tie";
+  }
+
+  const scoreDelta: Record<AgentId, number> = { [leftAgent.id]: 0, [rightAgent.id]: 0 };
+  if (engineVersion === LEGACY_ARENA_ENGINE_VERSION) {
+    if (winner !== "tie") scoreDelta[winner] = 1;
+  } else if (winner !== "tie") {
+    const loser = winner === leftAgent.id ? rightAgent.id : leftAgent.id;
+    const winnerAction = winner === leftAgent.id ? leftAction : rightAction;
+    const loserAction = loser === leftAgent.id ? leftAction : rightAction;
+    if (loserAction === "fold") {
+      scoreDelta[winner] = 1;
+    } else {
+      scoreDelta[winner] = winnerAction === "raise" ? 3 : 1;
+      scoreDelta[loser] = loserAction === "raise" ? -5 : -1;
+    }
   }
 
   return {
@@ -364,6 +413,7 @@ function runHand(
         { action: leftAction, agentId: leftAgent.id, handNumber, position: leftPosition, seatSwapped },
         { action: rightAction, agentId: rightAgent.id, handNumber, position: rightPosition, seatSwapped },
       ],
+      scoreDelta,
       seatSwapped,
       winner,
     },
@@ -372,11 +422,13 @@ function runHand(
 
 export function runMatch(input: Readonly<{
   agents: readonly [AgentDefinition, AgentDefinition];
+  engineVersion?: ArenaEngineVersion;
   hands: number;
   matchId: string;
   seed: string;
 }>): MatchRunResult {
   const [firstAgent, secondAgent] = input.agents;
+  const engineVersion = input.engineVersion ?? ARENA_ENGINE_VERSION;
   if (!input.matchId || !input.seed || !Number.isSafeInteger(input.hands) || input.hands < 1 || firstAgent.id === secondAgent.id) {
     throw new Error("POKER_MATCH_INPUT_INVALID");
   }
@@ -385,10 +437,10 @@ export function runMatch(input: Readonly<{
   const score: Record<AgentId, number> = { [firstAgent.id]: 0, [secondAgent.id]: 0 };
   for (let handNumber = 1; handNumber <= input.hands; handNumber += 1) {
     for (const seatSwapped of [false, true]) {
-      const result = runHand(firstAgent, secondAgent, input.seed, handNumber, seatSwapped);
+      const result = runHand(firstAgent, secondAgent, input.seed, handNumber, seatSwapped, engineVersion);
       if (!result.ok) return { ok: false, code: result.code, agentId: result.agentId, handNumber };
       handResults.push(result.value);
-      if (result.value.winner !== "tie") score[result.value.winner] += 1;
+      for (const agent of input.agents) score[agent.id] += result.value.scoreDelta[agent.id] ?? 0;
       const actionCommitment = commitment(result.value.outcomes.map((outcome) => ({ agentId: outcome.agentId, action: outcome.action })));
       const actionCommitments: Record<AgentId, string> = {};
       for (const outcome of result.value.outcomes) {
@@ -401,6 +453,7 @@ export function runMatch(input: Readonly<{
         boardCommitment,
         handNumber,
         seatSwapped,
+        ...(engineVersion === ARENA_ENGINE_VERSION ? { scoreDelta: result.value.scoreDelta } : {}),
         winner: result.value.winner,
       } satisfies PublicHandReceiptCommitmentInput;
       const publicHand = {
@@ -410,17 +463,17 @@ export function runMatch(input: Readonly<{
       receiptLeaves.push(publicHand);
     }
   }
-  const seedCommitment = commitment({ engineVersion: ARENA_ENGINE_VERSION, matchId: input.matchId, seed: input.seed });
+  const seedCommitment = commitment({ engineVersion, matchId: input.matchId, seed: input.seed });
   return {
     ok: true,
     value: {
-      engineVersion: ARENA_ENGINE_VERSION,
+      engineVersion,
       hands: handResults,
       matchId: input.matchId,
       publicHandReceipts: receiptLeaves,
       publicReceipt: {
         artifactCommitments: { [firstAgent.id]: firstAgent.artifactCommitment, [secondAgent.id]: secondAgent.artifactCommitment },
-        engineVersion: ARENA_ENGINE_VERSION,
+        engineVersion,
         matchId: input.matchId,
         score,
         seedCommitment,

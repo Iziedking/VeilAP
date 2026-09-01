@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
+import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
 import {
   buildTournamentSchedule,
   estimateTournamentWorkload,
@@ -225,7 +226,7 @@ export class ArenaSeasonService {
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonView>> {
     const projectId = input.projectId.trim();
     const name = input.name.trim();
-    const rulesetVersion = input.rulesetVersion?.trim() || "holdem-sealed-v0.2";
+    const rulesetVersion = input.rulesetVersion?.trim() || ARENA_ENGINE_VERSION;
     const startsAt = parseDate(input.startsAt);
     const locksAt = parseDate(input.locksAt);
     const endsAt = parseDate(input.endsAt);
@@ -611,6 +612,7 @@ export class ArenaSeasonService {
         leftAgentId: claimed.leftAgentId,
         rightAgentId: claimed.rightAgentId,
         hands: claimed.hands,
+        engineVersion: season.rulesSnapshot?.engineVersion,
         matchId: claimed.matchId,
         idempotencyKey: executionKey,
       });
