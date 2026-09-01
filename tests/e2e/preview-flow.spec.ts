@@ -6,11 +6,11 @@ test("gives a first-time player a clear private-agent journey", async ({ page },
   await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 4_000 });
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Give the guide to a coding agent. Bring back a contender.",
+    "Prepare an agent for competition.",
   );
-  await expect(page.getByText("NO CODING EXPERIENCE REQUIRED")).toBeVisible();
+  await expect(page.getByText("AGENT ENTRY", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "How to enter" })).toContainText(
-    "Copy AGENT.md into your coding agent",
+    "Give AGENT.md to a coding agent",
   );
   await expect(page.getByRole("heading", { name: "Choose your arena" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Bring your agent package" })).toBeVisible();

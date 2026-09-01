@@ -578,12 +578,12 @@ export function VeilArenaPlay({
 
       <main>
         <section className="play-hero" aria-labelledby="play-title">
-          <span className="play-kicker">NO CODING EXPERIENCE REQUIRED</span>
-          <h1 id="play-title">Give the guide to a coding agent. Bring back a contender.</h1>
-          <p>Copy AGENT.md into the coding agent you already use. It builds and checks the poker package. You review the result, prove control of your wallet and X account, then approve entry.</p>
+          <span className="play-kicker">AGENT ENTRY</span>
+          <h1 id="play-title">Prepare an agent for competition.</h1>
+          <p>Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it, then verify your wallet and X account before you enter.</p>
           <ol className="play-steps" aria-label="How to enter">
-            <li><span>01</span><strong>Copy AGENT.md into your coding agent</strong></li>
-            <li><span>02</span><strong>Ask it to build and validate your poker agent</strong></li>
+            <li><span>01</span><strong>Give AGENT.md to a coding agent</strong></li>
+            <li><span>02</span><strong>Have it build and validate the package</strong></li>
             <li><span>03</span><strong>Review the package and sign in with your wallet</strong></li>
             <li><span>04</span><strong>Verify your X account and approve entry</strong></li>
           </ol>
@@ -638,7 +638,7 @@ export function VeilArenaPlay({
               <div className="play-success">
                 <span>ACTIVE ENTRY / VERSION {currentEntry.version}</span>
                 <h3>{currentEntry.displayName} is sealed.</h3>
-                <p>Your active strategy is encrypted. Earlier accepted versions remain sealed for audit, but only this version enters the locked roster.</p>
+                <p>Your active strategy is encrypted. Earlier accepted versions remain sealed for audit, but only this version enters the locked roster. Open the private challenge room below to follow match history, receipts, and the leaderboard.</p>
                 <dl>
                   <div><dt>ACTIVE AGENT</dt><dd>{currentEntry.agentId} / V{currentEntry.version}</dd></div>
                   <div><dt>ENTRY PROOF</dt><dd><code>{shortCommitment(currentEntry.artifactCommitment)}</code></dd></div>
@@ -659,7 +659,7 @@ export function VeilArenaPlay({
                   </section>
                 )}
                 <div className="play-success-actions">
-                  <Link className="play-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(selectedSeasonId)}`}>[ WATCH YOUR AGENT ]</Link>
+                  <Link className="play-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(selectedSeasonId)}`}>[ OPEN CHALLENGE ROOM ]</Link>
                   {selectedSeasonAcceptsReplacement && (
                     <button
                       className="play-secondary"
@@ -685,8 +685,8 @@ export function VeilArenaPlay({
                   <section className="play-agent-guide" aria-labelledby="agent-guide-title">
                     <div>
                       <span>START HERE</span>
-                      <h3 id="agent-guide-title">Copy the guide. Your coding agent handles the rest.</h3>
-                      <p>AGENT.md explains the game inputs, package format, and validation rules. The coding agent should return one <code>.veil-agent.json</code> file.</p>
+                      <h3 id="agent-guide-title">Start with AGENT.md.</h3>
+                      <p>Give the guide to a coding agent and ask for one <code>.veil-agent.json</code> package. The package contains the strategy Veil Arena checks before entry.</p>
                     </div>
                     <div className="play-agent-guide-actions">
                       <button type="button" onClick={copyAgentGuide}>[{guideCopyState === "copied" ? " GUIDE LINK COPIED " : " COPY AGENT.MD LINK "}]</button>
@@ -697,13 +697,13 @@ export function VeilArenaPlay({
 
                   <section className="play-package-import" aria-labelledby="package-import-title">
                     <div className="play-package-import-head">
-                      <div><span>PRIVATE PACKAGE</span><h3 id="package-import-title">Import what your coding agent created</h3></div>
+                      <div><span>PRIVATE PACKAGE</span><h3 id="package-import-title">Import the package from your coding agent</h3></div>
                       <label className="play-file-button">
                         <input type="file" accept="application/json,.json,.veil-agent.json" onChange={importAgentPackage} />
                         [ CHOOSE PACKAGE ]
                       </label>
                     </div>
-                    <p className="play-package-intro">Registering an agent means adding this sealed package to the selected competition. The arena checks the package, then shows the operator only its name and commitment.</p>
+                    <p className="play-package-intro">Submitting an agent adds this sealed package to the selected competition. Veil Arena checks it before entry and shows the operator its name and commitment, not its strategy.</p>
                     <textarea
                       value={agentPackageText}
                       onChange={(event) => updateAgentPackage(event.target.value)}
