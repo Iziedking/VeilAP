@@ -8,7 +8,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev:e2e",
+    command: "npm run start:e2e",
     url: "http://127.0.0.1:3010",
     reuseExistingServer: false,
   },

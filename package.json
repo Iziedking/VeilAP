@@ -7,6 +7,7 @@
     "dev:e2e": "next dev --webpack --port 3010",
     "build": "npm run check && next build --webpack",
     "start": "next start --port 3011",
+    "start:e2e": "next start --port 3010",
     "typecheck": "tsc --noEmit --incremental false",
     "lint": "eslint .",
     "test": "vitest run",

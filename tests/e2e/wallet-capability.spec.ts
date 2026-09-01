@@ -82,11 +82,11 @@ test("stops before signing when the Starknet account is not activated", async ({
 
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await expect(page.getByText(
-    "This Starknet account is not active yet. Make its first outgoing Starknet transaction in Xverse, then try again.",
+    "This Starknet account is not active yet. Deploy it in Argent X, then try again.",
   )).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open Xverse activation steps" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Open Argent X activation steps" })).toHaveAttribute(
     "href",
-    "https://support.xverse.app/hc/en-us/articles/37797696568077-How-to-Activate-Your-Starknet-Account-in-Xverse",
+    "https://support.argent.xyz/hc/en-us/articles/8802319054237-How-to-activate-deploy-my-Argent-Starknet-wallet",
   );
   expect(verifyCalled).toBe(false);
 });
