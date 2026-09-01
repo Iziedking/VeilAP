@@ -6,6 +6,10 @@ import { MINIMUM_STRK20_WALLET_API, supportsStrk20 } from "./capability";
 
 export type WalletStandardWallet = WalletWithStarknetFeatures;
 
+export async function disconnectSessionWallet(wallet: WalletStandardWallet): Promise<void> {
+  await wallet.features["standard:disconnect"].disconnect();
+}
+
 export interface WalletConnectionPort<Wallet, Account> {
   supportedWalletApi(wallet: Wallet): Promise<readonly string[]>;
   connect(wallet: Wallet): Promise<Account>;

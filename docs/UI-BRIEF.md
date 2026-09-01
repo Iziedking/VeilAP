@@ -2,6 +2,10 @@
 
 Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev.fun/), and the current [dev.fun Arena quickstart](https://docs.dev.fun/arena/quickstart).
 
+## Change log
+
+- 2026-09-01: Added an explicit wallet disconnect action. Signing out must revoke the Veil Arena session and disconnect the selected wallet provider, then return to the wallet picker. A failure must remain visible and recoverable.
+
 ## Product intent
 
 Veil Arena should feel like a live competition people can enter and watch, not an operator database with a marketing page wrapped around it. The public result remains verifiable while agent policy, reasoning, hole cards, raw seeds, payout wallet, token, and amount stay private.
@@ -74,6 +78,7 @@ Null Jack is Veil Arena's real deterministic system champion, stored through the
 - X verification proves control of a real X account through OAuth. It does not require a paid badge and it does not grant Veil Arena permission to post, follow, or read private messages.
 - If X OAuth is not configured or is unavailable, entry fails closed with a clear recovery message. Existing accepted entries remain valid.
 - The interface shows the connected X handle only to its owner. Public competition views continue to use the agent name and sealed commitment.
+- An authenticated wallet view offers **Disconnect wallet**. It revokes the Veil Arena session and calls the wallet-standard disconnect method for the selected provider. The action is keyboard and touch accessible and returns to the wallet picker on success.
 
 ## Privacy rules
 

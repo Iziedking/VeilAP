@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api/client";
-import { connectSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
+import {
+  connectSessionWallet,
+  disconnectSessionWallet,
+  type WalletStandardWallet,
+} from "@/lib/wallet/account";
 import { useDiscoveredWallets } from "@/lib/wallet/wallet-store";
 import type { AuthChallenge } from "@/server/auth/challenge";
 
@@ -40,7 +44,7 @@ function messageFor(code: string): string {
     return "Mainnet verification is not configured on the server yet.";
   }
   if (code === "WALLET_ACCOUNT_NOT_DEPLOYED") {
-    return "This Starknet account is not active yet. Make its first outgoing Starknet transaction in Xverse, then try again.";
+    return "This Starknet account is not active yet. Deploy it in Argent X, then try again.";
   }
   if (code === "RPC_UNAVAILABLE" || code === "SIGNATURE_UNAVAILABLE") {
     return "Starknet could not verify this account. Check that it is active on Mainnet, then try again.";
@@ -60,6 +64,7 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
   const [message, setMessage] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
+  const [connectedWallet, setConnectedWallet] = useState<WalletStandardWallet>();
 
   useEffect(() => {
     let active = true;
@@ -72,6 +77,11 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
         if (!active) return;
         if (response.ok && body.ok && body.value?.walletAddress) {
           setWalletAddress(body.value.walletAddress);
+          setConnectedWallet(
+            wallets.find((candidate) =>
+              candidate.accounts.some((account) => account.address === body.value?.walletAddress),
+            ),
+          );
           setFlow("authenticated");
           return;
         }
@@ -83,7 +93,7 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
     return () => {
       active = false;
     };
-  }, []);
+  }, [wallets]);
 
   async function authenticate(wallet: WalletStandardWallet) {
     setMessage("");
@@ -141,6 +151,7 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
         throw new Error(verified.code ?? "VERIFY_FAILED");
       }
       setWalletAddress(verified.walletAddress);
+      setConnectedWallet(wallet);
       setFlow("authenticated");
     } catch (error) {
       const code = error instanceof Error ? error.message : "AUTH_FAILED";
@@ -156,12 +167,17 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
     try {
       const response = await apiFetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error("LOGOUT_FAILED");
+      const walletToDisconnect = connectedWallet ?? wallets.find((candidate) =>
+        candidate.accounts.some((account) => account.address === walletAddress),
+      );
+      if (walletToDisconnect) await disconnectSessionWallet(walletToDisconnect);
       setWalletAddress("");
+      setConnectedWallet(undefined);
       setMessage("");
       setErrorCode("");
       setFlow("idle");
     } catch {
-      setMessage("The session could not be cleared. Refresh and try again.");
+      setMessage("The wallet could not be disconnected. Try again or disconnect it in the wallet.");
       setFlow("error");
     }
   }
@@ -173,7 +189,7 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
         <strong>{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</strong>
         <p>You proved control of this wallet. No payment permission was requested.</p>
         <Link className="sign-in-preview" href={returnTo}>Continue to the arena</Link>
-        <button className="wallet-logout" type="button" onClick={logout}>Sign out</button>
+        <button className="wallet-logout" type="button" onClick={logout}>Disconnect wallet</button>
       </div>
     );
   }
@@ -198,11 +214,11 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
           {errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED" && (
             <a
               className="wallet-activation-help"
-              href="https://support.xverse.app/hc/en-us/articles/37797696568077-How-to-Activate-Your-Starknet-Account-in-Xverse"
+              href="https://support.argent.xyz/hc/en-us/articles/8802319054237-How-to-activate-deploy-my-Argent-Starknet-wallet"
               target="_blank"
               rel="noreferrer"
             >
-              Open Xverse activation steps
+              Open Argent X activation steps
             </a>
           )}
           {(flow === "error" || flow === "unsupported" || flow === "wrong-network") && (
