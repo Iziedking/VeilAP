@@ -1,3 +1,5 @@
+import { parseWorkerTickResult } from "./arena-worker-response.mjs";
+
 const apiUrl = (process.env.VEILAP_ARENA_WORKER_API_URL || "http://app:3000").replace(/\/$/, "");
 const workerSecret = process.env.VEILAP_ARENA_WORKER_SECRET || "";
 const pollMs = boundedInteger(process.env.VEILAP_ARENA_WORKER_POLL_MS, 1000, 250, 10000);
@@ -66,7 +68,7 @@ async function tick() {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(`HTTP_${response.status}_${body.code || "WORKER_TICK_FAILED"}`);
-    return body;
+    return parseWorkerTickResult(body);
   } finally {
     activeRequest = undefined;
   }
