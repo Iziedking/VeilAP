@@ -96,7 +96,7 @@ test("shows a recoverable message when a wallet rejects connection", async ({ pa
   await page.goto("/sign-in");
 
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
-  await expect(page.getByText("We could not verify this wallet session. No payment or transfer was approved.")).toBeVisible();
+  await expect(page.getByText("The sign-in request was rejected in the wallet.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try another wallet" })).toBeVisible();
 });
 
@@ -106,6 +106,6 @@ test("shows a recoverable message when a wallet rejects signing", async ({ page 
   await page.goto("/sign-in");
 
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
-  await expect(page.getByText("We could not verify this wallet session. No payment or transfer was approved.")).toBeVisible();
+  await expect(page.getByText("The sign-in request was rejected in the wallet.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try another wallet" })).toBeVisible();
 });
