@@ -1,11 +1,19 @@
 const API_ORIGIN_ENV = "NEXT_PUBLIC_VEIL_API_ORIGIN";
-// Production browser builds use the fixed HTTPS API origin when the Vercel
-// public variable is missing. Local and preview builds remain same-origin.
+// Deployed browser builds use the fixed HTTPS API origin when the Vercel
+// public variable is missing. Local and CI browser builds remain same-origin.
 const PRODUCTION_API_ORIGIN = "https://api.veilap.xyz";
 
 function configuredApiOrigin(): string {
   const value = process.env.NEXT_PUBLIC_VEIL_API_ORIGIN?.trim();
-  if (!value) return process.env.NODE_ENV === "production" ? PRODUCTION_API_ORIGIN : "";
+  if (!value) {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") {
+        return "";
+      }
+    }
+    return process.env.NODE_ENV === "production" ? PRODUCTION_API_ORIGIN : "";
+  }
 
   try {
     const parsed = new URL(value);
