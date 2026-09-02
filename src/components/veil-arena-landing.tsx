@@ -78,8 +78,10 @@ export function VeilArenaLanding() {
           <Link className="arena-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
           <nav aria-label="Main navigation">
             <Link href="/arena">Arena</Link>
+            <Link href="/champion">Champion</Link>
             <a href="#how-to-play">How to play</a>
             <Link href="/arena-console">Host</Link>
+            <Link href="/profile">Profile</Link>
           </nav>
           <Link className="arena-nav-cta" href="/play">Build your agent</Link>
         </div>

@@ -210,12 +210,13 @@ export function VeilArenaPlay({
   defaultSeasonId: string;
   invitationToken: string;
 }) {
-  const projectId = defaultProjectId;
+  const [discoveredProjectId, setDiscoveredProjectId] = useState(defaultProjectId);
+  const projectId = discoveredProjectId;
   const invitedSeasonId = invitationToken ? defaultSeasonId : "";
   const signInReturnTo = invitationToken
     ? `/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(defaultSeasonId)}&invite=${encodeURIComponent(invitationToken)}`
     : `/play?project=${encodeURIComponent(projectId)}`;
-  const [loadState, setLoadState] = useState<LoadState>(defaultProjectId ? "loading" : "idle");
+  const [loadState, setLoadState] = useState<LoadState>("loading");
   const [seasons, setSeasons] = useState<ArenaSeason[]>([]);
   const [seasonError, setSeasonError] = useState("");
   const [selectedSeasonId, setSelectedSeasonId] = useState(defaultSeasonId);
@@ -244,6 +245,30 @@ export function VeilArenaPlay({
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (projectId) return;
+    let active = true;
+    void apiFetch("/api/competitions")
+      .then(async (response) => {
+        const body = await response.json() as ApiEnvelope<Array<{ projectId: string }>>;
+        if (!active) return;
+        if (!response.ok || !body.ok) {
+          setLoadState("error");
+          setSeasonError("The public arena could not be discovered on this deployment.");
+          return;
+        }
+        const firstProjectId = body.value[0]?.projectId;
+        if (firstProjectId) setDiscoveredProjectId(firstProjectId);
+        else setLoadState("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadState("error");
+        setSeasonError("The public arena could not be discovered on this deployment.");
+      });
+    return () => { active = false; };
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId || claimState !== "idle") return;
@@ -434,6 +459,21 @@ export function VeilArenaPlay({
     }
   }, [currentEntry, projectId, selectedSeason]);
 
+  useEffect(() => {
+    if (!currentEntry || !selectedSeason) return;
+    try {
+      window.localStorage.setItem("veil-arena-last-entry", JSON.stringify({
+        projectId,
+        seasonId: selectedSeason.id,
+        seasonName: selectedSeason.name,
+        agentId: currentEntry.agentId,
+        displayName: currentEntry.displayName,
+      }));
+    } catch {
+      // The profile still reads persisted entries from the API when storage is blocked.
+    }
+  }, [currentEntry, projectId, selectedSeason]);
+
   function resetSubmission() {
     idempotencyKey.current = null;
     setSubmitError("");
@@ -586,6 +626,7 @@ export function VeilArenaPlay({
         <nav aria-label="Player navigation">
           <Link href="/arena">Watch arena</Link>
           <Link href="/sign-in">Wallet access</Link>
+          <Link href="/profile">Profile</Link>
         </nav>
       </header>
 
@@ -716,7 +757,7 @@ export function VeilArenaPlay({
                         [ CHOOSE PACKAGE ]
                       </label>
                     </div>
-                    <p className="play-package-intro">Submitting an agent adds this sealed package to the selected competition. Veil Arena checks it before entry and shows the operator its name and commitment, not its strategy.</p>
+                    <p className="play-package-intro">Importing lets you review the package. It is saved to your Veil Arena account only after the wallet approval succeeds. The operator sees its name and commitment, not its strategy.</p>
                     <textarea
                       value={agentPackageText}
                       onChange={(event) => updateAgentPackage(event.target.value)}

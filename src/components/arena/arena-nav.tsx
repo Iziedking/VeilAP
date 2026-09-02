@@ -12,8 +12,9 @@ export function ArenaNav({ backHref = "/", backLabel = "Home" }: { backHref?: st
         <Link href="/champion">Champion</Link>
         <Link href="/play">Enter</Link>
         <Link href="/arena-console">Host</Link>
+        <Link href="/profile">Profile</Link>
       </nav>
-      <Link className="hub-sign-in" href="/sign-in">Wallet sign in</Link>
+      <Link className="hub-sign-in" href="/profile">Your account</Link>
     </header>
   );
 }
