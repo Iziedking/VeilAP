@@ -54,6 +54,8 @@ type PrivateMatch = {
   }>;
 };
 
+type TableSound = "deal" | "check" | "call" | "raise" | "fold" | "showdown" | "win" | "tie" | "complete";
+
 function formatCard(card: PrivateCard): string {
   const rank = card.rank <= 10 ? String(card.rank) : ({ 11: "J", 12: "Q", 13: "K", 14: "A" }[card.rank] ?? "?");
   const suit = { clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠" }[card.suit];
@@ -126,23 +128,100 @@ export function MatchSpectator({
     try { return window.localStorage.getItem("veil-arena-sound") === "on"; } catch { return false; }
   });
   const lastMatchStatus = useRef<string | null>(null);
+  const lastPlayedHand = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  const playUiTone = useCallback((frequency: number) => {
-    if (!soundEnabled || typeof window === "undefined") return;
+  const playTableSound = useCallback((sound: TableSound, enabled = soundEnabled) => {
+    if (!enabled || typeof window === "undefined") return;
     const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextConstructor) return;
-    const audioContext = new AudioContextConstructor();
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.frequency.value = frequency;
-    oscillator.type = "square";
-    gain.gain.setValueAtTime(0.035, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.12);
-    oscillator.connect(gain).connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.12);
-    window.setTimeout(() => void audioContext.close(), 180);
+    const audioContext = audioContextRef.current?.state === "closed"
+      ? new AudioContextConstructor()
+      : audioContextRef.current ?? new AudioContextConstructor();
+    audioContextRef.current = audioContext;
+    const scheduleTone = () => {
+      const start = audioContext.currentTime + 0.01;
+      const tone = (frequency: number, offset: number, duration: number, volume: number, type: OscillatorType = "triangle") => {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        const toneStart = start + offset;
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, toneStart);
+        gain.gain.setValueAtTime(0.001, toneStart);
+        gain.gain.exponentialRampToValueAtTime(volume, toneStart + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, toneStart + duration);
+        oscillator.connect(gain).connect(audioContext.destination);
+        oscillator.start(toneStart);
+        oscillator.stop(toneStart + duration + 0.02);
+      };
+      const click = (offset: number, duration = 0.045, volume = 0.045) => {
+        const buffer = audioContext.createBuffer(1, Math.max(1, Math.floor(audioContext.sampleRate * duration)), audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let index = 0; index < data.length; index += 1) data[index] = (Math.random() * 2 - 1) * (1 - index / data.length);
+        const source = audioContext.createBufferSource();
+        const gain = audioContext.createGain();
+        const clickStart = start + offset;
+        gain.gain.setValueAtTime(volume, clickStart);
+        gain.gain.exponentialRampToValueAtTime(0.001, clickStart + duration);
+        source.buffer = buffer;
+        source.connect(gain).connect(audioContext.destination);
+        source.start(clickStart);
+      };
+
+      switch (sound) {
+        case "deal":
+          click(0, 0.05, 0.04); click(0.12, 0.05, 0.035); click(0.24, 0.05, 0.03); tone(220, 0, 0.22, 0.035, "sine");
+          break;
+        case "check":
+          click(0, 0.06, 0.07); tone(520, 0, 0.1, 0.035, "square");
+          break;
+        case "call":
+          click(0, 0.06, 0.06); tone(330, 0, 0.13, 0.04); tone(440, 0.11, 0.16, 0.04);
+          break;
+        case "raise":
+          click(0, 0.06, 0.07); tone(330, 0, 0.14, 0.045); tone(494, 0.1, 0.18, 0.05); tone(659, 0.22, 0.22, 0.055);
+          break;
+        case "fold":
+          click(0, 0.08, 0.055); tone(330, 0, 0.18, 0.045); tone(220, 0.13, 0.22, 0.035);
+          break;
+        case "showdown":
+          tone(392, 0, 0.2, 0.04); tone(523, 0.14, 0.2, 0.045); tone(659, 0.28, 0.28, 0.05);
+          break;
+        case "win":
+          tone(523, 0, 0.18, 0.045); tone(659, 0.12, 0.18, 0.05); tone(784, 0.24, 0.32, 0.055);
+          break;
+        case "tie":
+          tone(440, 0, 0.2, 0.045); tone(440, 0.2, 0.2, 0.045);
+          break;
+        case "complete":
+          tone(392, 0, 0.18, 0.04); tone(523, 0.14, 0.18, 0.045); tone(784, 0.28, 0.36, 0.055);
+          break;
+      }
+    };
+    if (audioContext.state === "suspended") {
+      void audioContext.resume().then(scheduleTone).catch(() => undefined);
+    } else {
+      scheduleTone();
+    }
   }, [soundEnabled]);
+
+  useEffect(() => {
+    // Future background tracks can opt into this contract with data-veil-arena-music.
+    const music = [...document.querySelectorAll<HTMLAudioElement>("audio[data-veil-arena-music]")];
+    music.filter((audio) => !audio.paused).forEach((audio) => audio.pause());
+    document.documentElement.dataset.arenaSpectator = "true";
+    window.dispatchEvent(new CustomEvent("veil-arena-spectator-audio", { detail: { mode: "table" } }));
+    return () => {
+      delete document.documentElement.dataset.arenaSpectator;
+      window.dispatchEvent(new CustomEvent("veil-arena-spectator-audio", { detail: { mode: "background" } }));
+    };
+  }, []);
+
+  useEffect(() => () => {
+    const audioContext = audioContextRef.current;
+    audioContextRef.current = null;
+    if (audioContext) void audioContext.close();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -223,9 +302,28 @@ export function MatchSpectator({
   useEffect(() => {
     const status = scheduledMatch?.status;
     if (!status) return;
-    if (lastMatchStatus.current && lastMatchStatus.current !== status) playUiTone(status === "completed" ? 660 : 440);
+    if (lastMatchStatus.current && lastMatchStatus.current !== status) {
+      playTableSound(status === "completed" ? "complete" : status === "running" ? "deal" : "fold");
+    }
     lastMatchStatus.current = status;
-  }, [playUiTone, scheduledMatch?.status]);
+  }, [playTableSound, scheduledMatch?.status]);
+
+  useEffect(() => {
+    if (!currentHand) return;
+    const handKey = `${currentHand.handCommitment}:${activeIndex}`;
+    if (lastPlayedHand.current === handKey) return;
+    lastPlayedHand.current = handKey;
+
+    playTableSound("deal");
+    const revealedAction = currentPrivateHand?.action
+      ?? (receipt?.selectiveReveal?.handIndex === activeIndex ? receipt.selectiveReveal.action : undefined);
+    const timers = [
+      revealedAction ? window.setTimeout(() => playTableSound(revealedAction), 260) : undefined,
+      window.setTimeout(() => playTableSound("showdown"), revealedAction ? 520 : 280),
+      window.setTimeout(() => playTableSound(currentHand.winner === "tie" ? "tie" : "win"), revealedAction ? 820 : 580),
+    ];
+    return () => timers.forEach((timer) => { if (timer) window.clearTimeout(timer); });
+  }, [activeIndex, currentHand, currentPrivateHand?.action, playTableSound, receipt?.selectiveReveal]);
 
   useEffect(() => {
     if (!playing || handReceipts.length < 2 || activeIndex >= handReceipts.length - 1) return;
@@ -333,7 +431,7 @@ export function MatchSpectator({
               const next = !soundEnabled;
               setSoundEnabled(next);
               try { window.localStorage.setItem("veil-arena-sound", next ? "on" : "off"); } catch { /* preference is optional */ }
-              if (next) playUiTone(520);
+              if (next) playTableSound("check", next);
             }} aria-label={soundEnabled ? "Mute table sounds" : "Enable table sounds"}>
               {soundEnabled ? "◉ SOUND ON" : "○ SOUND OFF"}
             </button>
