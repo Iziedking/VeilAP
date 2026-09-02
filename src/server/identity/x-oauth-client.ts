@@ -9,6 +9,7 @@ const userSchema = z.object({
   data: z.object({
     id: z.string().min(1).max(64),
     username: z.string().min(1).max(64),
+    profile_image_url: z.string().url().max(2_048).nullable().optional(),
   }),
 }).passthrough();
 
@@ -21,7 +22,18 @@ export type XOAuthConfig = Readonly<{
 export type XAuthenticatedUser = Readonly<{
   id: string;
   username: string;
+  profileImageUrl: string | null;
 }>;
+
+function safeXProfileImageUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "pbs.twimg.com" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
@@ -68,7 +80,7 @@ export async function exchangeXAuthorizationCode(input: XOAuthConfig & { code: s
 
 export async function getAuthenticatedXUser(accessToken: string): Promise<XAuthenticatedUser> {
   // X GET /2/users/me, verified against docs.x.com on 2026-09-01.
-  const response = await fetchWithTimeout("https://api.x.com/2/users/me", {
+  const response = await fetchWithTimeout("https://api.x.com/2/users/me?user.fields=profile_image_url", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) throw new Error(response.status === 429 ? "X_RATE_LIMITED" : "X_PROFILE_LOOKUP_FAILED");
@@ -76,5 +88,6 @@ export async function getAuthenticatedXUser(accessToken: string): Promise<XAuthe
   return {
     id: data.id,
     username: data.username,
+    profileImageUrl: safeXProfileImageUrl(data.profile_image_url),
   };
 }

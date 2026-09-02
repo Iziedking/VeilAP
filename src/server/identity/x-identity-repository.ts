@@ -7,6 +7,7 @@ export type ParticipantXIdentity = Readonly<{
   xUserId: string;
   walletFingerprint: string;
   username: string;
+  profileImageUrl: string | null;
   connectedAt: Date;
   lastVerifiedAt: Date;
 }>;
@@ -21,6 +22,7 @@ function fromRow(row: typeof participantXIdentities.$inferSelect): ParticipantXI
     xUserId: row.xUserId,
     walletFingerprint: row.walletFingerprint,
     username: row.username,
+    profileImageUrl: row.profileImageUrl,
     connectedAt: row.connectedAt,
     lastVerifiedAt: row.lastVerifiedAt,
   };
@@ -50,6 +52,7 @@ export function createPostgresXIdentityRepository(db: VeilapDatabase): XIdentity
         if (walletIdentity) {
           const rows = await tx.update(participantXIdentities).set({
             username: record.username,
+            profileImageUrl: record.profileImageUrl,
             lastVerifiedAt: record.lastVerifiedAt,
           }).where(eq(participantXIdentities.xUserId, record.xUserId)).returning();
           return fromRow(rows[0]!);
@@ -78,6 +81,7 @@ export function createPostgresXIdentityRepository(db: VeilapDatabase): XIdentity
         if (concurrentWalletIdentity && concurrentXIdentity) {
           const updated = await tx.update(participantXIdentities).set({
             username: record.username,
+            profileImageUrl: record.profileImageUrl,
             lastVerifiedAt: record.lastVerifiedAt,
           }).where(eq(participantXIdentities.xUserId, record.xUserId)).returning();
           return fromRow(updated[0]!);

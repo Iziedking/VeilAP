@@ -74,6 +74,7 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
         xUserId,
         walletFingerprint,
         username: `player_${suffix}`,
+        profileImageUrl: null,
         connectedAt: now,
         lastVerifiedAt: now,
       })).resolves.toMatchObject({ xUserId, walletFingerprint });
@@ -81,6 +82,7 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
         xUserId,
         walletFingerprint: `other-${suffix}`,
         username: `player_${suffix}`,
+        profileImageUrl: null,
         connectedAt: now,
         lastVerifiedAt: now,
       })).rejects.toThrow("X_ACCOUNT_ALREADY_LINKED");

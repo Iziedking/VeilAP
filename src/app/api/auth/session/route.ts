@@ -25,6 +25,7 @@ export async function GET() {
         configured: hasXOAuthConfig(),
         identity: xIdentity ? {
           username: xIdentity.username,
+          profileImageUrl: xIdentity.profileImageUrl,
           connectedAt: xIdentity.connectedAt.toISOString(),
           lastVerifiedAt: xIdentity.lastVerifiedAt.toISOString(),
         } : null,

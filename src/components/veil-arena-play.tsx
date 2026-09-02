@@ -63,7 +63,7 @@ type SessionState = "checking" | "authenticated" | "signed-out" | "unavailable";
 type ClaimState = "idle" | "loading" | "loaded" | "error";
 type XIdentity = {
   username: string;
-  displayName: string;
+  profileImageUrl: string | null;
   connectedAt: string;
   lastVerifiedAt: string;
 };
@@ -780,7 +780,21 @@ export function VeilArenaPlay({
 
                 {sessionState === "authenticated" && (
                   xIdentity ? (
-                    <div className="play-wallet-state"><span className="play-x-label"><XMark /> X ACCOUNT VERIFIED</span><strong>@{xIdentity.username}</strong><small>This proves account control for entry. Veil Arena cannot post, follow, or read private messages.</small></div>
+                    <div className="play-wallet-state">
+                      <div className="play-x-identity">
+                        {xIdentity.profileImageUrl ? (
+                          <span
+                            className="play-x-avatar"
+                            role="img"
+                            aria-label={`X profile picture for @${xIdentity.username}`}
+                            style={{ backgroundImage: `url(${xIdentity.profileImageUrl})` }}
+                          />
+                        ) : null}
+                        <span className="play-x-label"><XMark /> X ACCOUNT VERIFIED</span>
+                      </div>
+                      <strong>@{xIdentity.username}</strong>
+                      <small>This proves account control for entry. Veil Arena cannot post, follow, or read private messages.</small>
+                    </div>
                   ) : (
                     <div className="play-sign-in-callout">
                       <div><span className="play-x-label"><XMark /> FINAL ENTRY CHECK</span><p>Connect a valid X account. Veil Arena records the account ID and handle, then discards the temporary access token.</p></div>

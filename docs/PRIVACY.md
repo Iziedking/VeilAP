@@ -17,7 +17,7 @@ Application encryption protects strategy policies, private match inputs, payout 
 | Agent version identity and active/retired state | Owner view; active identity can appear publicly | No strategy content | Yes |
 | Strategy policy | No | Yes | Yes, during authorized execution |
 | Builder wallet address | No | Fingerprint plus encrypted payout address | Authorized application services only |
-| Connected X identity | Owner view only | Immutable X account ID, wallet fingerprint, current handle, and verification timestamps | Authorized application services only |
+| Connected X identity | Owner view only | Immutable X account ID, wallet fingerprint, current handle, public profile image URL, and verification timestamps | Authorized application services only |
 | Match seed | Commitment only | Yes | Yes, during execution and replay |
 | Full transcript | Root, public hand commitments, and selected leaf only | Reproducible from encrypted inputs | Yes |
 | Score, rank, and receipt | Yes | No | Yes |
@@ -52,7 +52,7 @@ Veil Arena never asks for, receives, or stores a wallet private key or STRK20 vi
 
 X verification is a final gate for new and improved agent entries. It runs after wallet authentication so the OAuth result can be bound to the existing wallet fingerprint.
 
-The flow uses Authorization Code with PKCE S256, random state, an encrypted ten-minute HTTP-only flow cookie, and an exact callback URL. The callback requires the original active wallet session. Veil Arena calls `/2/users/me`, stores the immutable X account ID with the current handle and timestamps, and discards the access token. It does not request offline access and therefore receives no refresh token.
+The flow uses Authorization Code with PKCE S256, random state, an encrypted ten-minute HTTP-only flow cookie, and an exact callback URL. The callback requires the original active wallet session. Veil Arena calls `/2/users/me`, stores the immutable X account ID with the current handle, the public X profile image URL, and timestamps, and discards the access token. The image URL is accepted only from `pbs.twimg.com` and is used in the owner-facing verified identity card. It does not request offline access and therefore receives no refresh token.
 
 One X account ID can belong to one Veil Arena wallet and one wallet can hold one X identity. Handles are display metadata and may change; the X account ID remains the identity key. Public arena responses do not expose the handle.
 

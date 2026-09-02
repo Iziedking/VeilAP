@@ -40,6 +40,7 @@ export async function checkArenaDatabaseReadiness(
               ('participant_x_identities', 'x_user_id'),
               ('participant_x_identities', 'wallet_fingerprint'),
               ('participant_x_identities', 'username'),
+              ('participant_x_identities', 'profile_image_url'),
               ('participant_x_identities', 'connected_at'),
               ('participant_x_identities', 'last_verified_at')
             )) as column_count
@@ -48,7 +49,7 @@ export async function checkArenaDatabaseReadiness(
     const row = rows[0] as { table_count?: number; column_count?: number } | undefined;
     return {
       database: true,
-      arenaSchema: Number(row?.table_count ?? 0) === 11 && Number(row?.column_count ?? 0) === 25,
+      arenaSchema: Number(row?.table_count ?? 0) === 11 && Number(row?.column_count ?? 0) === 26,
     };
   } catch {
     return { database: false, arenaSchema: false };

@@ -45,7 +45,7 @@ Veil Arena uses several independent controls instead of treating encryption as t
 - The server verifies the signature through the configured Starknet RPC, consumes the nonce once, and checks every session against a durable revocation record.
 - Production cookies are secure, HTTP-only, host-only, and SameSite Lax. Lax is required for the top-level X callback; state-changing API routes still require the exact configured application origin.
 - X verification uses OAuth 2.0 Authorization Code with PKCE S256, a random state value, an encrypted ten-minute flow cookie, and an exact callback URL.
-- The callback must still have the original wallet session. The X account ID is bound to that wallet fingerprint. One X account cannot validate two wallets and one wallet cannot silently switch to a different X account.
+- The callback must still have the original wallet session. The X account ID is bound to that wallet fingerprint. The current public profile image URL is stored only for the owner-facing verified identity card. One X account cannot validate two wallets and one wallet cannot silently switch to a different X account.
 - Veil Arena requests the read-only `tweet.read` and `users.read` scopes required for authenticated X user lookup. It does not request posting, follow, direct-message, email, or offline access. The temporary X access token is discarded after `/2/users/me` returns.
 
 **Agent package boundary**

@@ -54,6 +54,7 @@ export async function GET(request: Request) {
       xUserId: xUser.id,
       walletFingerprint: flow.walletFingerprint,
       username: xUser.username,
+      profileImageUrl: xUser.profileImageUrl,
       connectedAt: now,
       lastVerifiedAt: now,
     });

@@ -282,6 +282,7 @@ export const participantXIdentities = pgTable(
     xUserId: text("x_user_id").primaryKey(),
     walletFingerprint: text("wallet_fingerprint").notNull(),
     username: text("username").notNull(),
+    profileImageUrl: text("profile_image_url"),
     connectedAt: timestamp("connected_at", { withTimezone: true }).notNull(),
     lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }).notNull(),
   },

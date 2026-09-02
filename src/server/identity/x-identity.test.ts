@@ -73,6 +73,7 @@ describe("participant X identity repository", () => {
     xUserId: "123456789",
     walletFingerprint: "wallet-a",
     username: "veil_player",
+    profileImageUrl: "https://pbs.twimg.com/profile_images/example_normal.jpg",
     connectedAt: new Date(NOW),
     lastVerifiedAt: new Date(NOW),
   };
