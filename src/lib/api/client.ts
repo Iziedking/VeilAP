@@ -6,11 +6,13 @@ const PRODUCTION_API_ORIGIN = "https://api.veilap.xyz";
 function configuredApiOrigin(): string {
   const value = process.env.NEXT_PUBLIC_VEIL_API_ORIGIN?.trim();
   if (!value) {
-    if (typeof window !== "undefined") {
-      const hostname = window.location.hostname;
-      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") {
-        return "";
-      }
+    // Server-side and test calls must remain same-origin unless an explicit
+    // API origin is configured. Deployed browser calls use the fallback below.
+    if (typeof window === "undefined") return "";
+
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") {
+      return "";
     }
     return process.env.NODE_ENV === "production" ? PRODUCTION_API_ORIGIN : "";
   }
