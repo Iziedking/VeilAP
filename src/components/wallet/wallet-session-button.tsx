@@ -55,6 +55,18 @@ function messageFor(code: string): string {
   if (code === "CHALLENGE_EXPIRED") {
     return "The sign-in request expired. Try again to create a fresh request.";
   }
+  if (code === "CHALLENGE_REQUEST_INVALID") {
+    return "The wallet returned an account that the server could not accept. Reconnect the wallet and try again.";
+  }
+  if (code === "AUTH_REQUEST_INVALID") {
+    return "The signed wallet request could not be verified. Refresh the page and try again.";
+  }
+  if (code === "SIGNATURE_FORMAT_UNSUPPORTED") {
+    return "This wallet returned an unsupported signature format. Update the wallet, then try again.";
+  }
+  if (code === "USER_REJECTED") {
+    return "The sign-in request was rejected in the wallet.";
+  }
   return "We could not verify this wallet session. No payment or transfer was approved.";
 }
 
@@ -206,6 +218,11 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
         {!busy && message}
         {flow === "idle" && "Choose a wallet. This signature proves control and cannot move funds."}
       </p>
+      {flow === "error" && errorCode ? (
+        <p className="sign-in-error-code" aria-live="polite">
+          Diagnostic code: <code>{errorCode.slice(0, 80)}</code>
+        </p>
+      ) : null}
       {(errorCode === "WALLET_ACCOUNT_NOT_DEPLOYED"
         || flow === "error"
         || flow === "unsupported"
