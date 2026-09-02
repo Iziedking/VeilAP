@@ -421,6 +421,19 @@ export function VeilArenaPlay({
   const selectedSeasonAcceptsReplacement = selectedSeason ? acceptsReplacement(selectedSeason, now) : false;
   const canSubmitToSelectedSeason = currentEntry ? selectedSeasonAcceptsReplacement : selectedSeasonJoinable;
 
+  useEffect(() => {
+    if (!currentEntry || selectedSeason?.entryMode !== "invite_only") return;
+    try {
+      window.localStorage.setItem("veil-arena-private-room", JSON.stringify({
+        projectId,
+        seasonId: selectedSeason.id,
+        name: selectedSeason.name,
+      }));
+    } catch {
+      // The room link remains available in the confirmation panel if storage is blocked.
+    }
+  }, [currentEntry, projectId, selectedSeason]);
+
   function resetSubmission() {
     idempotencyKey.current = null;
     setSubmitError("");

@@ -125,7 +125,7 @@
 .play-wallet-state strong { font-size: 11px; }
 .play-wallet-state small { color: var(--play-dim); font-size: 9px; }
 .play-x-label { display: inline-flex !important; align-items: center; gap: 8px; }
-.play-x-label svg { width: 14px; height: 14px; flex: 0 0 auto; fill: currentColor; }
+.play-x-label svg { width: 19px; height: 19px; flex: 0 0 auto; padding: 3px; border: 1px solid currentColor; fill: currentColor; }
 .play-sign-in-callout { background: #e8ded2; }
 .play-sign-in-callout span { color: var(--play-signal-dark); font-size: 9px; }
 .play-sign-in-callout p { margin: 7px 0 0; color: var(--play-dim); font-size: 10px; }

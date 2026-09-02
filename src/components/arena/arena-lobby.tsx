@@ -12,6 +12,7 @@ import {
 } from "@/components/arena/arena-types";
 
 type LobbyFilter = "all" | "open" | "live" | "complete";
+type PrivateRoom = { projectId: string; seasonId: string; name: string };
 
 function readableDate(value: string): string {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
@@ -31,6 +32,7 @@ function rewardLabel(competition: CompetitionSummary): string {
 
 export function ArenaLobby() {
   const [competitions, setCompetitions] = useState<CompetitionSummary[]>([]);
+  const [privateRoom, setPrivateRoom] = useState<PrivateRoom | null>(null);
   const [filter, setFilter] = useState<LobbyFilter>("all");
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
@@ -49,6 +51,22 @@ export function ArenaLobby() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadCompetitions(), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const value = window.localStorage.getItem("veil-arena-private-room");
+        if (!value) return;
+        const room = JSON.parse(value) as Partial<PrivateRoom>;
+        if (typeof room.projectId === "string" && typeof room.seasonId === "string" && typeof room.name === "string") {
+          setPrivateRoom({ projectId: room.projectId, seasonId: room.seasonId, name: room.name });
+        }
+      } catch {
+        setPrivateRoom(null);
+      }
+    }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -83,6 +101,17 @@ export function ArenaLobby() {
           </div>
           <Link href="/arena-console">[ HOST A COMPETITION ]</Link>
         </section>
+
+        {privateRoom && (
+          <section className="hub-private-room" aria-label="Your private challenge">
+            <div>
+              <span>YOUR PRIVATE CHALLENGE</span>
+              <strong>{privateRoom.name}</strong>
+              <p>This invite-only room is kept off the public competition floor. Your match results and leaderboard are here.</p>
+            </div>
+            <Link href={`/arena/${encodeURIComponent(privateRoom.projectId)}/${encodeURIComponent(privateRoom.seasonId)}`}>Open challenge room <span>→</span></Link>
+          </section>
+        )}
 
         {state === "loading" ? (
           <div className="hub-card-grid" aria-label="Loading competitions">
