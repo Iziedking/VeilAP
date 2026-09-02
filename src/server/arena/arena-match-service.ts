@@ -5,6 +5,8 @@ import {
   ARENA_ENGINE_VERSION,
   isArenaEngineVersion,
   type ArenaEngineVersion,
+  type Card,
+  type DecisionAction,
   type PublicHandReceipt,
   type PublicMatchReceipt,
 } from "@/domain/arena/poker-engine";
@@ -62,6 +64,25 @@ export interface PublicArenaMatchView {
   signedReceipt?: SignedArenaMatchReceipt;
   selectiveReveal?: PublicArenaRevealView;
   createdAt: string;
+}
+
+export interface PrivateArenaHandView {
+  handNumber: number;
+  seatSwapped: boolean;
+  board: readonly Card[];
+  holeCards: readonly [Card, Card];
+  action: DecisionAction;
+  position: "button" | "big_blind";
+  winner: string | "tie";
+  handCommitment: string;
+}
+
+export interface PrivateArenaMatchView {
+  matchId: string;
+  agentId: string;
+  displayName: string;
+  handCount: number;
+  hands: readonly PrivateArenaHandView[];
 }
 
 export interface PublicArenaRevealView {
@@ -568,6 +589,94 @@ export class ArenaMatchService {
       return { ok: true, value: publicView(record, reveal) };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async getPrivateMatch(input: {
+    projectId: string;
+    seasonId: string;
+    scheduledMatchId: string;
+    actorWalletAddress: string;
+  }): Promise<ArenaMatchServiceResult<PrivateArenaMatchView>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    const scheduledMatchId = input.scheduledMatchId.trim();
+    if (!projectId || !seasonId || !scheduledMatchId) return { ok: false, code: "INVALID_INPUT" };
+
+    try {
+      const scheduled = await this.repositories.getArenaScheduledMatch(projectId, seasonId, scheduledMatchId);
+      if (!scheduled || scheduled.status !== "completed" || !scheduled.matchId) {
+        return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      }
+
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const entry = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(
+        projectId,
+        seasonId,
+        actorFingerprint,
+      );
+      if (!entry || (entry.agentId !== scheduled.leftAgentId && entry.agentId !== scheduled.rightAgentId)) {
+        return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      }
+
+      const project = await this.repositories.getProject(projectId);
+      const match = await this.repositories.getArenaMatchReceipt(projectId, scheduled.matchId);
+      if (!project || !match || !match.handCount) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+
+      const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
+      const seed = decryptField(
+        match.encryptedSeed,
+        { projectId, recordType: "arena_match", recordId: match.id, fieldName: "seed" },
+        { dataKey, wrappedKey: project.wrappedDataKey },
+      );
+      const result = await runSealedMatch({
+        projectId,
+        leftAgentId: match.leftAgentId,
+        rightAgentId: match.rightAgentId,
+        matchId: match.id,
+        engineVersion: isArenaEngineVersion((match.publicReceipt as PublicMatchReceipt).engineVersion)
+          ? (match.publicReceipt as PublicMatchReceipt).engineVersion as ArenaEngineVersion
+          : undefined,
+        seed,
+        hands: match.handCount,
+        keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
+        store: {
+          get: (requestedProjectId, agentId) => this.repositories.getArenaStrategyArtifact(requestedProjectId, agentId),
+          save: async () => {
+            throw new Error("ARENA_MATCH_STORE_READ_ONLY");
+          },
+        },
+      });
+      if (!result.ok) return { ok: false, code: mapRunCode(result.code) };
+
+      const isLeft = entry.agentId === match.leftAgentId;
+      const hands = result.value.hands.map((hand, index) => {
+        const outcome = hand.outcomes.find((candidate) => candidate.agentId === entry.agentId);
+        const publicHand = result.value.publicHandReceipts[index];
+        if (!outcome || !publicHand) throw new Error("PRIVATE_MATCH_HAND_MISSING");
+        return {
+          handNumber: hand.handNumber,
+          seatSwapped: hand.seatSwapped,
+          board: hand.board,
+          holeCards: isLeft ? hand.leftHole : hand.rightHole,
+          action: outcome.action,
+          position: outcome.position,
+          winner: hand.winner,
+          handCommitment: publicHand.handCommitment,
+        } satisfies PrivateArenaHandView;
+      });
+      return {
+        ok: true,
+        value: {
+          matchId: match.id,
+          agentId: entry.agentId,
+          displayName: entry.displayName,
+          handCount: match.handCount,
+          hands,
+        },
+      };
+    } catch (error) {
+      return { ok: false, code: mapError(error) };
     }
   }
 }

@@ -5,6 +5,7 @@ import {
   verifyTranscriptProof,
   type DecisionAction,
   type ArenaEngineVersion,
+  type MatchResult,
   type PublicHandReceipt,
   type PublicMatchReceipt,
   type TranscriptProof,
@@ -19,6 +20,7 @@ export type SealedMatchRunResult =
       value: {
         publicReceipt: PublicMatchReceipt;
         publicHandReceipts: readonly PublicHandReceipt[];
+        hands: MatchResult["hands"];
         decisionCount: number;
       };
     }
@@ -115,6 +117,7 @@ export async function runSealedMatch(input: {
     value: {
       publicReceipt: result.value.publicReceipt,
       publicHandReceipts: result.value.publicHandReceipts,
+      hands: result.value.hands,
       decisionCount: result.value.hands.length,
     },
   };

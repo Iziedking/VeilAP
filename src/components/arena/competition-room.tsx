@@ -102,6 +102,27 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
   const completed = schedule.matches.filter((match) => match.status === "completed").length;
   const running = schedule.matches.some((match) => match.status === "running");
   const phase = season.status === "open" ? "open for agents" : completed === schedule.matches.length && schedule.matches.length > 0 ? "complete" : running ? "live now" : "draw locked";
+  const currentMatches = schedule.matches.filter((match) => match.status !== "completed");
+  const historyMatches = schedule.matches.filter((match) => match.status === "completed");
+
+  const renderMatch = (match: CompetitionSchedule["matches"][number]) => {
+    const receipt = match.matchId ? seasonMatches.find((candidate) => candidate.matchId === match.matchId) : undefined;
+    return (
+      <Link className={`room-match is-${match.status}`} href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(match.id)}`} key={match.id}>
+        <span className="room-match-index">{String(match.sequence).padStart(2, "0")}</span>
+        <div className="room-match-players">
+          <strong>{(names.get(match.leftAgentId) ?? match.leftAgentId).toUpperCase()}</strong>
+          <span>VS</span>
+          <strong>{(names.get(match.rightAgentId) ?? match.rightAgentId).toUpperCase()}</strong>
+        </div>
+        <div className="room-match-result">
+          {receipt ? <b>{receipt.score[match.leftAgentId] ?? 0} : {receipt.score[match.rightAgentId] ?? 0}</b> : <b>{match.status === "scheduled" ? "QUEUED" : match.status === "failed" ? "STOPPED" : "RUNNING"}</b>}
+          <small>{match.status === "completed" ? `${match.hands} duplicate deals · verified replay` : match.status === "failed" ? "Execution stopped · inspect the table" : `${match.hands} duplicate deals · worker queue`}</small>
+        </div>
+        <span className="room-match-open">{match.status === "completed" ? "Watch replay" : match.status === "running" ? "Watch live" : match.status === "failed" ? "View status" : "Open table"} →</span>
+      </Link>
+    );
+  };
 
   return (
     <div className="hub-page competition-room">
@@ -139,24 +160,14 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
 
           {view === "matches" ? (
             <div className="room-match-list">
-              {schedule.matches.map((match) => {
-                const receipt = match.matchId ? seasonMatches.find((candidate) => candidate.matchId === match.matchId) : undefined;
-                return (
-                  <Link className={`room-match is-${match.status}`} href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(match.id)}`} key={match.id}>
-                    <span className="room-match-index">{String(match.sequence).padStart(2, "0")}</span>
-                    <div className="room-match-players">
-                      <strong>{(names.get(match.leftAgentId) ?? match.leftAgentId).toUpperCase()}</strong>
-                      <span>VS</span>
-                      <strong>{(names.get(match.rightAgentId) ?? match.rightAgentId).toUpperCase()}</strong>
-                    </div>
-                    <div className="room-match-result">
-                      {receipt ? <b>{receipt.score[match.leftAgentId] ?? 0} : {receipt.score[match.rightAgentId] ?? 0}</b> : <b>{match.status.toUpperCase()}</b>}
-                      <small>{match.hands} duplicate deals</small>
-                    </div>
-                    <span className="room-match-open">{match.status === "completed" ? "Watch replay" : match.status === "running" ? "Watch live" : "View table"} →</span>
-                  </Link>
-                );
-              })}
+              {currentMatches.length ? <>
+                <div className="room-match-section-heading"><strong>Current tables</strong><span>{currentMatches.length} queued or active</span></div>
+                {currentMatches.map(renderMatch)}
+              </> : null}
+              {historyMatches.length ? <>
+                <div className="room-match-section-heading is-history"><strong>Completed history</strong><span>{historyMatches.length} verified {historyMatches.length === 1 ? "replay" : "replays"}</span></div>
+                {historyMatches.map(renderMatch)}
+              </> : null}
               {!schedule.matches.length ? <div className="room-empty"><strong>The draw has not been locked.</strong><p>Matches appear after the roster reaches its minimum and the operator locks the competition.</p></div> : null}
             </div>
           ) : null}

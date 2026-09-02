@@ -9,6 +9,7 @@ import { ProjectService } from "@/server/projects/project-service";
 import { StrategyService } from "./strategy-service";
 import { ArenaMatchService } from "./arena-match-service";
 import { createReceiptSigner, verifySignedArenaMatchReceipt } from "@/server/receipts/signing";
+import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 
 const address = (value: string) => "0x" + value.padStart(64, "0");
 const company = address("1");
@@ -132,6 +133,87 @@ describe("ArenaMatchService", () => {
     expect(result.value.matches).toHaveLength(1);
     expect(result.value.leaderboard).toHaveLength(2);
     expect(result.value.leaderboard.every((entry) => entry.matches === 1)).toBe(true);
+  });
+
+  it("returns only the participant's verified cards for a completed scheduled match", async () => {
+    const { repositories, projectId, service } = await setup();
+    const match = await service.runMatch({
+      projectId,
+      actorWalletAddress: company,
+      leftAgentId: "CINDER",
+      rightAgentId: "EMBER",
+      hands: 2,
+      idempotencyKey: "private-table-match",
+    });
+    expect(match.ok).toBe(true);
+    if (!match.ok) throw new Error(match.code);
+
+    const seasonId = "season-private-table";
+    const now = new Date("2026-08-29T00:00:00.000Z");
+    await repositories.projects.saveArenaSeason({
+      id: seasonId,
+      projectId,
+      name: "Private table",
+      rulesetVersion: "holdem-sealed-v0.3",
+      startsAt: now,
+      locksAt: new Date(now.getTime() + 60_000),
+      endsAt: new Date(now.getTime() + 120_000),
+      status: "completed",
+      entryMode: "open",
+      maxEntries: 2,
+      createdBy: "test",
+      createdAt: now,
+    });
+    await repositories.projects.saveArenaSeasonEntry({
+      id: "entry-cinder",
+      seasonId,
+      projectId,
+      agentId: "CINDER",
+      displayName: "Cinder",
+      artifactCommitment: "cinder-commitment",
+      ownerFingerprint: fingerprintWallet(company, "test-wallet-pepper-0123456789012345"),
+      version: 1,
+      joinedAt: now,
+    });
+    const scheduledMatchId = "scheduled-private-table";
+    await repositories.projects.saveArenaScheduledMatch({
+      id: scheduledMatchId,
+      seasonId,
+      projectId,
+      sequence: 1,
+      hands: 2,
+      leftAgentId: "CINDER",
+      rightAgentId: "EMBER",
+      status: "completed",
+      matchId: match.value.matchId,
+      attempts: 1,
+      completedAt: now,
+      createdAt: now,
+    });
+
+    const privateMatch = await service.getPrivateMatch({
+      projectId,
+      seasonId,
+      scheduledMatchId,
+      actorWalletAddress: company,
+    });
+    expect(privateMatch.ok).toBe(true);
+    if (!privateMatch.ok) throw new Error(privateMatch.code);
+    expect(privateMatch.value.agentId).toBe("CINDER");
+    expect(privateMatch.value.hands).toHaveLength(4);
+    expect(privateMatch.value.hands[0]?.holeCards).toHaveLength(2);
+    expect(privateMatch.value.hands[0]?.board).toHaveLength(5);
+    expect(JSON.stringify(privateMatch.value)).not.toContain("leftHole");
+    expect(JSON.stringify(privateMatch.value)).not.toContain("rightHole");
+    expect(JSON.stringify(privateMatch.value)).not.toContain("outcomes");
+
+    const unauthorized = await service.getPrivateMatch({
+      projectId,
+      seasonId,
+      scheduledMatchId,
+      actorWalletAddress: contributor,
+    });
+    expect(unauthorized).toEqual({ ok: false, code: "ARENA_MATCH_NOT_FOUND" });
   });
 
   it("selectively reveals one losing action with a real inclusion proof", async () => {

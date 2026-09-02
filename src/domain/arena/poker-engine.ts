@@ -55,6 +55,8 @@ export type HandResult = Readonly<{
     left: HandCategory;
     right: HandCategory;
   }>;
+  leftHole: readonly [Card, Card];
+  rightHole: readonly [Card, Card];
   outcomes: readonly HandOutcome[];
   scoreDelta: Readonly<Record<AgentId, number>>;
   seatSwapped: boolean;
@@ -409,6 +411,8 @@ function runHand(
       board: deal.board,
       handNumber,
       handStrength: { left: leftCategory, right: rightCategory },
+      leftHole,
+      rightHole,
       outcomes: [
         { action: leftAction, agentId: leftAgent.id, handNumber, position: leftPosition, seatSwapped },
         { action: rightAction, agentId: rightAgent.id, handNumber, position: rightPosition, seatSwapped },

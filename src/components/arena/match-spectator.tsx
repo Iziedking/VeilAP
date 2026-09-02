@@ -32,6 +32,40 @@ type ViewerSession = {
   };
 };
 
+type PrivateCard = {
+  rank: number;
+  suit: "clubs" | "diamonds" | "hearts" | "spades";
+};
+
+type PrivateMatch = {
+  matchId: string;
+  agentId: string;
+  displayName: string;
+  handCount: number;
+  hands: Array<{
+    handNumber: number;
+    seatSwapped: boolean;
+    board: PrivateCard[];
+    holeCards: [PrivateCard, PrivateCard];
+    action: "fold" | "check" | "call" | "raise";
+    position: "button" | "big_blind";
+    winner: string | "tie";
+    handCommitment: string;
+  }>;
+};
+
+function formatCard(card: PrivateCard): string {
+  const rank = card.rank <= 10 ? String(card.rank) : ({ 11: "J", 12: "Q", 13: "K", 14: "A" }[card.rank] ?? "?");
+  const suit = { clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠" }[card.suit];
+  return `${rank}${suit}`;
+}
+
+function TableCard({ card, hidden = false }: { card?: PrivateCard; hidden?: boolean }) {
+  const label = hidden ? "Sealed card" : card ? formatCard(card) : "Card unavailable";
+  const red = card?.suit === "diamonds" || card?.suit === "hearts";
+  return <i className={`spectator-card ${hidden ? "is-hidden" : ""} ${red ? "is-red" : ""}`} aria-label={label}><span>{hidden ? "?" : label}</span></i>;
+}
+
 function displayName(schedule: CompetitionSchedule, agentId: string): string {
   return schedule.entries.find((entry) => entry.agentId === agentId)?.displayName ?? agentId;
 }
@@ -80,6 +114,7 @@ export function MatchSpectator({
   const [schedule, setSchedule] = useState<CompetitionSchedule | null>(null);
   const [scheduledMatch, setScheduledMatch] = useState<ScheduledMatch | null>(null);
   const [receipt, setReceipt] = useState<PublicMatch | null>(null);
+  const [privateMatch, setPrivateMatch] = useState<PrivateMatch | null>(null);
   const [viewerEntry, setViewerEntry] = useState<ViewerEntry | null>(null);
   const [viewerProfileImageUrl, setViewerProfileImageUrl] = useState<string | null>(null);
   const [viewerUsername, setViewerUsername] = useState<string | null>(null);
@@ -149,10 +184,24 @@ export function MatchSpectator({
           privateProfileImageUrl = null;
         }
 
+        let participantMatch: PrivateMatch | null = null;
+        if (privateEntry && match.status === "completed") {
+          try {
+            const privateResponse = await apiFetch(
+              `/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}/matches/${encodeURIComponent(scheduledMatchId)}/private`,
+            );
+            const privateBody = await privateResponse.json() as ApiEnvelope<PrivateMatch>;
+            if (privateResponse.ok && privateBody.ok) participantMatch = privateBody.value;
+          } catch {
+            participantMatch = null;
+          }
+        }
+
         if (!active) return;
         setSchedule(body.value);
         setScheduledMatch(match);
         setReceipt(publicMatch);
+        setPrivateMatch(participantMatch);
         setViewerEntry(privateEntry);
         setViewerUsername(privateUsername);
         setViewerProfileImageUrl(privateProfileImageUrl);
@@ -168,6 +217,7 @@ export function MatchSpectator({
 
   const handReceipts = useMemo(() => receipt?.publicHandReceipts ?? [], [receipt?.publicHandReceipts]);
   const currentHand = handReceipts[activeIndex];
+  const currentPrivateHand = privateMatch?.hands[activeIndex];
   const currentScore = useMemo(() => scoreThrough(handReceipts, activeIndex), [activeIndex, handReceipts]);
 
   useEffect(() => {
@@ -252,6 +302,18 @@ export function MatchSpectator({
         </div>
         <code>{shortCommitment(artifactCommitment)}</code>
         <small>{yours ? `PRIVATE PLAYER VIEW${viewerUsername ? ` / @${viewerUsername}` : ""}` : "STRATEGY SEALED"}</small>
+        {yours && currentPrivateHand ? (
+          <div className="spectator-hole-cards" aria-label="Your private hole cards">
+            {currentPrivateHand.holeCards.map((card) => <TableCard card={card} key={formatCard(card)} />)}
+            <small>YOUR CARDS</small>
+          </div>
+        ) : (
+          <div className="spectator-hole-cards is-sealed" aria-label="Opponent cards remain sealed">
+            <TableCard hidden />
+            <TableCard hidden />
+            <small>{yours ? "CARDS SEALED UNTIL RESULT" : "OPPONENT SEALED"}</small>
+          </div>
+        )}
         <b className="spectator-seat-score">{score}</b>
       </article>
     );
@@ -281,7 +343,7 @@ export function MatchSpectator({
 
         <div className={`spectator-room-banner ${privateView ? "is-private" : "is-public"}`}>
           <div><i /> <strong>{privateView ? "PRIVATE PLAYER VIEW" : "PUBLIC BROADCAST"}</strong></div>
-          <span>{privateView ? "Your agent is highlighted in this browser. Opponent strategy remains sealed." : "Results, timing, and proof are public. Agent strategy remains sealed."}</span>
+          <span>{privateView ? "Your seat is highlighted. Verified cards appear only after your match result is available; opponent cards remain sealed." : "Results, timing, and proof are public. Agent strategy and cards remain sealed."}</span>
         </div>
 
         <section className="spectator-stage" aria-label={`${leftName} versus ${rightName}`}>
@@ -293,18 +355,20 @@ export function MatchSpectator({
               <span>{currentHand ? `DEAL ${String(currentHand.handNumber).padStart(2, "0")}` : "SEALED TABLE"}</span>
               <span>{currentHand?.seatSwapped ? "SEATS SWAPPED" : "PRIMARY SEATS"}</span>
             </div>
-            <div className="spectator-board" aria-label="Private cards and board remain sealed">
+            <div className="spectator-board" aria-label={currentPrivateHand ? "Verified board cards" : "Board cards remain sealed"}>
               <span className="spectator-board-mark">V</span>
               <div className="spectator-board-cards">
-                {[0, 1, 2, 3, 4].map((card) => <i key={card}><span>?</span></i>)}
+                {currentPrivateHand
+                  ? currentPrivateHand.board.map((card) => <TableCard card={card} key={formatCard(card)} />)
+                  : [0, 1, 2, 3, 4].map((card) => <TableCard hidden key={card} />)}
               </div>
-              <small>CARDS SEALED</small>
+              <small>{currentPrivateHand ? "VERIFIED BOARD" : "CARDS SEALED"}</small>
             </div>
             {currentHand ? (
               <div className="spectator-hand-result">
                 <span>HAND RESULT</span>
                 <strong>{handWinner}</strong>
-                <small>Board commitment {shortCommitment(currentHand.boardCommitment)}</small>
+                <small>{currentPrivateHand ? `Your ${currentPrivateHand.action} was recorded · board verified for your private view` : `Board commitment ${shortCommitment(currentHand.boardCommitment)}`}</small>
               </div>
             ) : (
               <div className="spectator-hand-result">

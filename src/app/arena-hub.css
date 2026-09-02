@@ -119,6 +119,9 @@
 .room-tabs button { min-width: 150px; padding: 0 22px; border: 0; border-right: 1px solid var(--ink); background: transparent; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 10px; text-transform: uppercase; cursor: pointer; }
 .room-tabs button.is-active { background: var(--ink); color: var(--signal); }
 .room-match-list { padding: 16px; display: grid; gap: 10px; }
+.room-match-section-heading { margin-top: 6px; padding: 10px 8px 4px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-top: 1px solid var(--ink); color: var(--signal-dark); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; }
+.room-match-section-heading.is-history { margin-top: 18px; color: var(--ink-soft); }
+.room-match-section-heading span { color: var(--ink-soft); font-size: 7px; }
 .room-match { min-height: 92px; display: grid; grid-template-columns: 70px minmax(0, 1.4fr) minmax(130px, .6fr) 140px; align-items: stretch; border: 1px solid var(--ink); background: var(--paper); }
 .room-match:hover { background: #fff; }
 .room-match-index { display: grid; place-items: center; border-right: 1px solid var(--ink); color: var(--signal-dark); font-family: var(--arena-display); font-size: 24px; }
@@ -296,6 +299,14 @@
 .spectator-board-cards i { width: clamp(42px, 6vw, 72px); aspect-ratio: .7; display: grid; place-items: center; border: 2px solid var(--ink); background: var(--ink); box-shadow: 4px 4px 0 var(--signal); color: var(--signal); font-family: var(--arena-display); font-size: 22px; font-style: normal; }
 .spectator-board-cards i:nth-child(2), .spectator-board-cards i:nth-child(4) { transform: translateY(8px); }
 .spectator-board > small { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 7px; letter-spacing: .12em; }
+.spectator-card { color: var(--ink); background: var(--paper-light) !important; font-family: var(--arena-mono) !important; font-size: clamp(11px, 1.2vw, 16px) !important; font-weight: 700; letter-spacing: -.04em; }
+.spectator-card span { display: block; transform: rotate(0deg); }
+.spectator-card.is-red { color: #a5412a; }
+.spectator-card.is-hidden { color: var(--signal); background: var(--ink) !important; }
+.spectator-hole-cards { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 42px)); align-items: start; gap: 6px; }
+.spectator-hole-cards .spectator-card { width: 42px; box-shadow: 3px 3px 0 var(--ink); }
+.spectator-hole-cards > small { grid-column: 1 / -1; min-height: 0; margin-top: 4px; color: var(--signal-dark); font-family: var(--arena-mono); font-size: 7px; line-height: 1.2; }
+.spectator-hole-cards.is-sealed > small { color: var(--ink-soft); }
 .spectator-hand-result { min-height: 136px; }
 .spectator-hand-result > strong { font-size: clamp(19px, 2.7vw, 34px); }
 .spectator-live-strip { min-height: 74px; padding: 14px 20px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 18px; border-top: 1px solid var(--ink); background: color-mix(in srgb, var(--signal) 10%, var(--paper-light)); }
@@ -332,6 +343,8 @@
   .spectator-seat-identity strong { display: block; font-size: 15px; }
   .spectator-seat > code { margin-top: 10px; font-size: 7px; }
   .spectator-seat > small { margin-top: 8px; font-size: 6px; }
+  .spectator-hole-cards { margin-top: 12px; grid-template-columns: repeat(2, 34px); gap: 5px; }
+  .spectator-hole-cards .spectator-card { width: 34px; box-shadow: 2px 2px 0 var(--ink); font-size: 10px !important; }
   .spectator-seat-score { padding-top: 15px; font-size: 43px; }
   .spectator-table-meta { min-height: 74px; padding: 10px 12px; display: grid; gap: 4px; }
   .spectator-board { min-height: 158px; padding: 24px 10px; }
