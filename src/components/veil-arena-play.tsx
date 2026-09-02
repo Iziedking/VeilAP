@@ -61,6 +61,7 @@ type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
 type LoadState = "idle" | "loading" | "ready" | "error";
 type SessionState = "checking" | "authenticated" | "signed-out" | "unavailable";
 type ClaimState = "idle" | "loading" | "loaded" | "error";
+type SaveState = "idle" | "saving" | "saved" | "error";
 type XIdentity = {
   username: string;
   profileImageUrl: string | null;
@@ -175,6 +176,7 @@ type PackageReview =
       commitment: string;
       agentPackage?: AgentPackage;
       submissionToken?: string;
+      checks: Array<{ label: string; detail: string }>;
     };
 
 function reviewAgentPackage(value: string): PackageReview {
@@ -195,6 +197,12 @@ function reviewAgentPackage(value: string): PackageReview {
       },
       agentPackage,
       commitment: agentPackageCommitment(agentPackage),
+      checks: [
+        { label: "Package format", detail: "Valid Veil Agent Protocol v1 JSON" },
+        { label: "Safety boundary", detail: "Declarative fields only; no executable files or unknown fields" },
+        { label: "Deterministic policy", detail: `${agentPackage.policy.rules.length} legal-action rules ready for the sealed runner` },
+        { label: "Commitment", detail: "Canonical fingerprint generated for this exact package" },
+      ],
     };
   } catch {
     return { status: "invalid", message: "This is not a valid Veil Agent Protocol v1 package." };
@@ -234,6 +242,16 @@ export function VeilArenaPlay({
   const [claimState, setClaimState] = useState<ClaimState>("idle");
   const [claimMessage, setClaimMessage] = useState("");
   const [claimedPackage, setClaimedPackage] = useState<Extract<PackageReview, { status: "ready" }> | null>(null);
+  const [savedAgents, setSavedAgents] = useState<Array<{
+    id: string;
+    agentId: string;
+    displayName: string;
+    engineVersion: string;
+    artifactCommitment: string;
+    version: number;
+  }>>([]);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveMessage, setSaveMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [replacementMode, setReplacementMode] = useState(false);
@@ -304,6 +322,11 @@ export function VeilArenaPlay({
           agent: body.value.agent,
           commitment: body.value.artifactCommitment,
           submissionToken: token,
+          checks: [
+            { label: "Secure submission", detail: "Received through the signed coding-agent handoff" },
+            { label: "Protocol", detail: `${body.value.agent.protocolVersion} / ${body.value.agent.engineVersion}` },
+            { label: "Commitment", detail: "Matches the package sealed for this challenge" },
+          ],
         });
         setReplacementMode(true);
         setClaimState("loaded");
@@ -345,6 +368,18 @@ export function VeilArenaPlay({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (sessionState !== "authenticated") return;
+    let active = true;
+    void apiFetch("/api/profile/agents")
+      .then(async (response) => {
+        const body = await response.json() as ApiEnvelope<typeof savedAgents>;
+        if (active && response.ok && body.ok) setSavedAgents(body.value);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [sessionState]);
 
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get("xVerification");
@@ -411,6 +446,51 @@ export function VeilArenaPlay({
   const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now, invitedSeasonId) : false;
   const localPackageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
   const packageReview = claimedPackage ?? localPackageReview;
+
+  async function loadSavedAgent(agentId: string) {
+    setSaveMessage("");
+    try {
+      const response = await apiFetch(`/api/profile/agents/${encodeURIComponent(agentId)}`);
+      const body = await response.json() as ApiEnvelope<{ agentPackage: AgentPackage }>;
+      if (!response.ok || !body.ok) {
+        setSaveMessage("That saved package could not be opened. Nothing was changed.");
+        return;
+      }
+      setClaimedPackage(null);
+      setAgentPackageText(JSON.stringify(body.value.agentPackage, null, 2));
+      setSaveState("idle");
+      setSaveMessage(`${agentId} loaded from your private agent library.`);
+    } catch {
+      setSaveMessage("Your saved package could not be reached. Try again in a moment.");
+    }
+  }
+
+  async function saveAgent() {
+    if (sessionState !== "authenticated" || packageReview.status !== "ready" || !packageReview.agentPackage || saveState === "saving") return;
+    setSaveState("saving");
+    setSaveMessage("");
+    try {
+      const response = await apiFetch("/api/profile/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentPackage: packageReview.agentPackage }),
+      });
+      const body = await response.json() as ApiEnvelope<typeof savedAgents[number]>;
+      if (!response.ok || !body.ok) {
+        setSaveState("error");
+        setSaveMessage("The package passed local review but could not be saved. Nothing was entered.");
+        return;
+      }
+      setSavedAgents((current) => [body.value, ...current.filter((agent) => agent.agentId !== body.value.agentId)]);
+      setSaveState("saved");
+      setSaveMessage(joinableSeasons.length > 0
+        ? "Saved to your private agent library. Choose an open arena above, or pass for now."
+        : "Saved to your private agent library. No open arena is required to keep it here.");
+    } catch {
+      setSaveState("error");
+      setSaveMessage("The agent library could not be reached. Nothing was entered.");
+    }
+  }
 
   useEffect(() => {
     if (sessionState !== "authenticated" || !projectId || !selectedSeasonId) {
@@ -483,6 +563,8 @@ export function VeilArenaPlay({
   function updateAgentPackage(value: string) {
     setClaimedPackage(null);
     setAgentPackageText(value);
+    setSaveState("idle");
+    setSaveMessage("");
     resetSubmission();
   }
 
@@ -579,6 +661,8 @@ export function VeilArenaPlay({
       setEntryState("ready");
       setAgentPackageText("");
       setClaimedPackage(null);
+      setSaveState("idle");
+      setSaveMessage("");
       setReplacementMode(false);
       setReplacementConfirmed(false);
     } catch {
@@ -757,7 +841,17 @@ export function VeilArenaPlay({
                         [ CHOOSE PACKAGE ]
                       </label>
                     </div>
-                    <p className="play-package-intro">Importing lets you review the package. It is saved to your Veil Arena account only after the wallet approval succeeds. The operator sees its name and commitment, not its strategy.</p>
+                    <p className="play-package-intro">Importing starts a safety review. Save the sealed package to your private agent library first; entering a competition is a separate choice. The operator sees its name and commitment, not its strategy.</p>
+                    {savedAgents.length > 0 && (
+                      <div className="play-saved-agents" aria-label="Saved agents">
+                        <span>SAVED IN YOUR PRIVATE LIBRARY</span>
+                        {savedAgents.map((savedAgent) => (
+                          <button type="button" key={savedAgent.id} onClick={() => void loadSavedAgent(savedAgent.agentId)}>
+                            {savedAgent.displayName} / V{savedAgent.version}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <textarea
                       value={agentPackageText}
                       onChange={(event) => updateAgentPackage(event.target.value)}
@@ -778,12 +872,23 @@ export function VeilArenaPlay({
                     <h3 id="review-title">{packageReview.status === "ready" ? `${packageReview.agent.displayName} / ${packageReview.agent.agentId}` : "WAITING FOR A VALID AGENT PACKAGE"}</h3>
                   </div>
                   {packageReview.status === "ready" && (
-                    <dl className="play-package-facts">
-                      <div><dt>PROTOCOL</dt><dd>{packageReview.agent.protocolVersion}</dd></div>
-                      <div><dt>ENGINE</dt><dd>{packageReview.agent.engineVersion}</dd></div>
-                      <div><dt>RULES</dt><dd>{packageReview.agent.ruleCount}</dd></div>
-                      <div><dt>COMMITMENT</dt><dd><code>{shortCommitment(packageReview.commitment)}</code></dd></div>
-                    </dl>
+                    <>
+                      <div className="play-review-owner">
+                        {xIdentity?.profileImageUrl ? (
+                          <span className="play-x-avatar" role="img" aria-label={`X profile picture for @${xIdentity.username}`} style={{ backgroundImage: `url(${xIdentity.profileImageUrl})` }} />
+                        ) : <span className="play-review-owner-fallback" aria-hidden="true">{xIdentity ? xIdentity.username.slice(0, 2).toUpperCase() : "VA"}</span>}
+                        <span><strong>{xIdentity ? `@${xIdentity.username}` : "Wallet owner"}</strong><small>PRIVATE PACKAGE OWNER</small></span>
+                      </div>
+                      <dl className="play-package-facts">
+                        <div><dt>PROTOCOL</dt><dd>{packageReview.agent.protocolVersion}</dd></div>
+                        <div><dt>ENGINE</dt><dd>{packageReview.agent.engineVersion}</dd></div>
+                        <div><dt>RULES</dt><dd>{packageReview.agent.ruleCount}</dd></div>
+                        <div><dt>COMMITMENT</dt><dd><code>{shortCommitment(packageReview.commitment)}</code></dd></div>
+                      </dl>
+                      <ol className="play-validation-list" aria-label="Package validation">
+                        {packageReview.checks.map((check) => <li key={check.label}><i /> <span><strong>{check.label}</strong><small>{check.detail}</small></span></li>)}
+                      </ol>
+                    </>
                   )}
                   <div className="play-privacy-grid">
                     <p><span>PUBLIC</span> Agent name, entry commitment, match score, and rank.</p>
@@ -851,10 +956,21 @@ export function VeilArenaPlay({
                   )
                 )}
                 {xMessage && <p className="play-claim-status" role="status">{xMessage}</p>}
+                {saveMessage && <p className={`play-save-message${saveState === "error" ? " is-error" : ""}`} role="status">{saveMessage}</p>}
 
                 {submitError && <p className="play-error" role="alert">{submitError}</p>}
                 {entryState === "error" && <div className="play-error play-entry-error" role="alert"><span>Your existing entry could not be checked. Nothing new was submitted.</span><button type="button" onClick={() => { setEntryState("loading"); setEntryRefresh((current) => current + 1); }}>CHECK AGAIN</button></div>}
 
+                <div className="play-submit-actions">
+                <button
+                  className="play-save"
+                  type="button"
+                  onClick={() => void saveAgent()}
+                  disabled={sessionState !== "authenticated" || packageReview.status !== "ready" || !packageReview.agentPackage || submitting || saveState === "saving"}
+                >
+                  <span>{saveState === "saving" ? "VALIDATING AND SAVING..." : saveState === "saved" ? "AGENT SAVED TO PROFILE" : "SAVE AGENT TO PROFILE"}</span>
+                  <strong aria-hidden="true">↓</strong>
+                </button>
                 <button
                   className="play-submit"
                   type="submit"
@@ -863,6 +979,7 @@ export function VeilArenaPlay({
                   <span>{submitLabel}</span>
                   <strong aria-hidden="true">↓</strong>
                 </button>
+                </div>
               </form>
             )}
           </section>

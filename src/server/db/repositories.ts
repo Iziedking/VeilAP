@@ -23,6 +23,7 @@ import {
   decisions,
   projectMembers,
   projects,
+  participantAgentPackages,
   releases,
   revenueEvents,
   selectiveReceipts,
@@ -212,6 +213,21 @@ export interface ArenaStrategyArtifactRecord {
   encryptedOwnerWallet?: EncryptedField;
   status: "sealed";
   createdAt: Date;
+}
+
+export interface ParticipantAgentPackageRecord {
+  id: string;
+  ownerFingerprint: string;
+  agentId: string;
+  displayName: string;
+  protocolVersion: string;
+  engineVersion: string;
+  ruleCount: number;
+  artifactCommitment: string;
+  encryptedPackage: EncryptedField;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ArenaMatchReceiptRecord {
@@ -410,6 +426,9 @@ export interface ProjectRepository extends ProjectKeyRepository {
   saveArenaStrategyArtifact(record: ArenaStrategyArtifactRecord): Promise<void>;
   getArenaStrategyArtifact(projectId: string, agentId: string): Promise<ArenaStrategyArtifactRecord | undefined>;
   listArenaStrategyArtifacts(projectId: string): Promise<ArenaStrategyArtifactRecord[]>;
+  saveParticipantAgentPackage(record: ParticipantAgentPackageRecord): Promise<void>;
+  getParticipantAgentPackage(ownerFingerprint: string, agentId: string): Promise<ParticipantAgentPackageRecord | undefined>;
+  listParticipantAgentPackages(ownerFingerprint: string): Promise<ParticipantAgentPackageRecord[]>;
   saveArenaMatchReceipt(record: ArenaMatchReceiptRecord): Promise<void>;
   getArenaMatchReceipt(projectId: string, matchId: string): Promise<ArenaMatchReceiptRecord | undefined>;
   getArenaMatchReceiptByIdempotencyKey(projectId: string, idempotencyKey: string): Promise<ArenaMatchReceiptRecord | undefined>;
@@ -496,6 +515,23 @@ function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$infer
     encryptedOwnerWallet: row.encryptedOwnerWallet as EncryptedField | undefined,
     status: "sealed",
     createdAt: row.createdAt,
+  };
+}
+
+function toParticipantAgentPackageRecord(row: typeof participantAgentPackages.$inferSelect): ParticipantAgentPackageRecord {
+  return {
+    id: row.id,
+    ownerFingerprint: row.ownerFingerprint,
+    agentId: row.agentId,
+    displayName: row.displayName,
+    protocolVersion: row.protocolVersion,
+    engineVersion: row.engineVersion,
+    ruleCount: row.ruleCount,
+    artifactCommitment: row.artifactCommitment,
+    encryptedPackage: row.encryptedPackage as EncryptedField,
+    version: row.version,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -1158,6 +1194,46 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(asc(arenaStrategyArtifacts.createdAt));
         return rows.map(toArenaStrategyArtifactRecord);
       },
+      async saveParticipantAgentPackage(record) {
+        await db
+          .insert(participantAgentPackages)
+          .values({
+            ...record,
+            encryptedPackage: record.encryptedPackage,
+          })
+          .onConflictDoUpdate({
+            target: [participantAgentPackages.ownerFingerprint, participantAgentPackages.agentId],
+            set: {
+              displayName: record.displayName,
+              protocolVersion: record.protocolVersion,
+              engineVersion: record.engineVersion,
+              ruleCount: record.ruleCount,
+              artifactCommitment: record.artifactCommitment,
+              encryptedPackage: record.encryptedPackage,
+              version: record.version,
+              updatedAt: record.updatedAt,
+            },
+          });
+      },
+      async getParticipantAgentPackage(ownerFingerprint, agentId) {
+        const rows = await db
+          .select()
+          .from(participantAgentPackages)
+          .where(and(
+            eq(participantAgentPackages.ownerFingerprint, ownerFingerprint),
+            eq(participantAgentPackages.agentId, agentId),
+          ))
+          .limit(1);
+        return rows[0] ? toParticipantAgentPackageRecord(rows[0]) : undefined;
+      },
+      async listParticipantAgentPackages(ownerFingerprint) {
+        const rows = await db
+          .select()
+          .from(participantAgentPackages)
+          .where(eq(participantAgentPackages.ownerFingerprint, ownerFingerprint))
+          .orderBy(desc(participantAgentPackages.updatedAt));
+        return rows.map(toParticipantAgentPackageRecord);
+      },
       async saveArenaMatchReceipt(record) {
         await db.insert(arenaMatchReceipts).values({
           id: record.id,
@@ -1790,6 +1866,7 @@ export function createMemoryRepositories(): {
   const revenueEventRows = new Map<string, RevenueEventRecord>();
   const selectiveReceiptRows = new Map<string, SelectiveReceiptRecord>();
   const arenaStrategyArtifactRows = new Map<string, ArenaStrategyArtifactRecord>();
+  const participantAgentPackageRows = new Map<string, ParticipantAgentPackageRecord>();
   const arenaMatchReceiptRows = new Map<string, ArenaMatchReceiptRecord>();
   const arenaMatchRevealRows = new Map<string, ArenaMatchRevealRecord>();
   const arenaSeasonRows = new Map<string, ArenaSeasonRecord>();
@@ -2016,6 +2093,25 @@ export function createMemoryRepositories(): {
         return [...arenaStrategyArtifactRows.values()]
           .filter((record) => record.projectId === projectId)
           .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async saveParticipantAgentPackage(record) {
+        const existing = [...participantAgentPackageRows.values()].find((item) => (
+          item.ownerFingerprint === record.ownerFingerprint && item.agentId === record.agentId
+        ));
+        if (existing && existing.id !== record.id) throw new Error("PARTICIPANT_AGENT_PACKAGE_CONFLICT");
+        participantAgentPackageRows.set(record.id, structuredClone(record));
+      },
+      async getParticipantAgentPackage(ownerFingerprint, agentId) {
+        const record = [...participantAgentPackageRows.values()].find((item) => (
+          item.ownerFingerprint === ownerFingerprint && item.agentId === agentId
+        ));
+        return record ? structuredClone(record) : undefined;
+      },
+      async listParticipantAgentPackages(ownerFingerprint) {
+        return [...participantAgentPackageRows.values()]
+          .filter((record) => record.ownerFingerprint === ownerFingerprint)
+          .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
           .map((record) => structuredClone(record));
       },
       async saveArenaMatchReceipt(record) {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ArenaNav } from "@/components/arena/arena-nav";
 import {
@@ -66,6 +66,28 @@ export function MatchSpectator({
   const [state, setState] = useState<LoadState>("loading");
   const [activeIndex, setActiveIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.localStorage.getItem("veil-arena-sound") === "on"; } catch { return false; }
+  });
+  const lastMatchStatus = useRef<string | null>(null);
+
+  const playUiTone = useCallback((frequency: number) => {
+    if (!soundEnabled || typeof window === "undefined") return;
+    const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+    const audioContext = new AudioContextConstructor();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.frequency.value = frequency;
+    oscillator.type = "square";
+    gain.gain.setValueAtTime(0.035, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.12);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.12);
+    window.setTimeout(() => void audioContext.close(), 180);
+  }, [soundEnabled]);
 
   useEffect(() => {
     let active = true;
@@ -127,6 +149,13 @@ export function MatchSpectator({
   const handReceipts = useMemo(() => receipt?.publicHandReceipts ?? [], [receipt?.publicHandReceipts]);
   const currentHand = handReceipts[activeIndex];
   const currentScore = useMemo(() => scoreThrough(handReceipts, activeIndex), [activeIndex, handReceipts]);
+
+  useEffect(() => {
+    const status = scheduledMatch?.status;
+    if (!status) return;
+    if (lastMatchStatus.current && lastMatchStatus.current !== status) playUiTone(status === "completed" ? 660 : 440);
+    lastMatchStatus.current = status;
+  }, [playUiTone, scheduledMatch?.status]);
 
   useEffect(() => {
     if (!playing || handReceipts.length < 2 || activeIndex >= handReceipts.length - 1) return;
@@ -217,7 +246,17 @@ export function MatchSpectator({
             <Link href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`}>← {schedule.season.name}</Link>
             <span>Match {String(scheduledMatch.sequence).padStart(2, "0")}</span>
           </div>
-          <strong><i /> {executionState}</strong>
+          <div className="spectator-header-tools">
+            <button type="button" className="spectator-sound" aria-pressed={soundEnabled} onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              try { window.localStorage.setItem("veil-arena-sound", next ? "on" : "off"); } catch { /* preference is optional */ }
+              if (next) playUiTone(520);
+            }} aria-label={soundEnabled ? "Mute table sounds" : "Enable table sounds"}>
+              {soundEnabled ? "◉ SOUND ON" : "○ SOUND OFF"}
+            </button>
+            <strong><i /> {executionState}</strong>
+          </div>
         </header>
 
         <div className={`spectator-room-banner ${privateView ? "is-private" : "is-public"}`}>

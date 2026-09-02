@@ -1,7 +1,7 @@
 import { checkKmsKeyAccess, KmsKeyProvider } from "@/server/crypto/kms-key-provider";
 import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
 import { RpcProvider } from "starknet";
-import { getAuthRepositories } from "@/server/auth/runtime";
+import { getAuthRepositories, getSessionSecret } from "@/server/auth/runtime";
 import { readServerConfig, requirePersistedConfig } from "@/server/env";
 import { CheckpointService } from "@/server/checkpoints/checkpoint-service";
 import { VerificationService } from "@/server/verification/verification-service";
@@ -20,6 +20,7 @@ import { ArenaEnrollmentService } from "@/server/arena/arena-enrollment-service"
 import { ArenaPrizePoolService } from "@/server/arena/arena-prize-pool-service";
 import { ArenaWorkerService } from "@/server/arena/arena-worker-service";
 import { ArenaReadinessService } from "@/server/arena/arena-readiness-service";
+import { ParticipantAgentService } from "@/server/arena/participant-agent-service";
 import { checkArenaDatabaseReadiness } from "@/server/arena/arena-readiness-database";
 
 const previewKeyProvider = createPreviewKeyProvider();
@@ -75,6 +76,14 @@ export function getArenaSeasonService(): ArenaSeasonService {
 
 export function getArenaEnrollmentService(): ArenaEnrollmentService {
   return new ArenaEnrollmentService(dependencies());
+}
+
+export function getParticipantAgentService(): ParticipantAgentService {
+  return new ParticipantAgentService({
+    repositories: getAuthRepositories().projects,
+    walletHashPepper: dependencies().walletHashPepper,
+    sessionSecret: getSessionSecret(),
+  });
 }
 
 export function getArenaPrizePoolService(): ArenaPrizePoolService {

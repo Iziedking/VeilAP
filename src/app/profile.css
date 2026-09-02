@@ -39,6 +39,18 @@
 .profile-entry code { font-family: var(--arena-mono); font-size: 9px; }
 .profile-entry-link, .profile-primary, .profile-secondary { min-height: 46px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; }
 .profile-entry-link, .profile-primary { background: var(--signal); }
+.profile-agent-library { margin-top: 28px; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 7px 7px 0 var(--signal); }
+.profile-agent-library > header { min-height: 70px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); }
+.profile-agent-library > header span { color: var(--signal); font-family: var(--arena-mono); font-size: 8px; }
+.profile-agent-library h2 { margin: 8px 0 0; font-family: var(--arena-readable-display); font-size: 25px; }
+.profile-agent-library > header a { color: var(--signal); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; }
+.profile-library-row { min-height: 70px; padding: 14px 20px; display: grid; grid-template-columns: minmax(0, 1.4fr) 60px minmax(140px, .8fr) 130px; align-items: center; gap: 18px; border-bottom: 1px solid var(--rule); }
+.profile-library-row:last-child { border-bottom: 0; }
+.profile-library-row > div { min-width: 0; display: grid; gap: 5px; }
+.profile-library-row strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-library-row small, .profile-library-row code { overflow: hidden; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-library-row > span { font-family: var(--arena-display); font-size: 18px; }
+.profile-library-empty { padding: 24px 20px; color: var(--ink-soft); font-size: 12px; }
 .profile-secondary { background: var(--paper-light); cursor: pointer; }
 .profile-state, .profile-empty { min-height: 240px; margin-top: 58px; padding: 40px; display: grid; place-items: center; align-content: center; gap: 16px; border: 2px dashed var(--rule); text-align: center; }
 .profile-state strong, .profile-empty strong { font-family: var(--arena-readable-display); font-size: 22px; }
@@ -61,6 +73,9 @@
   .profile-private-room .profile-primary { width: 100%; }
   .profile-entries > header { align-items: flex-start; flex-direction: column; }
   .profile-entry { grid-template-columns: 1fr; padding: 20px 16px; }
+  .profile-agent-library > header { align-items: flex-start; flex-direction: column; }
+  .profile-library-row { grid-template-columns: 1fr auto; gap: 10px; }
+  .profile-library-row code, .profile-library-row > small { grid-column: 1 / -1; }
   .profile-entry dl { grid-template-columns: 1fr; }
   .profile-entry dl div { border-right: 0; border-bottom: 1px solid var(--rule); }
   .profile-entry dl div:last-child { border-bottom: 0; }

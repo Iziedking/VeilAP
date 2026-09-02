@@ -187,8 +187,11 @@
 .spectator-header { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; }
 .spectator-header > div { display: flex; align-items: center; gap: 24px; }
 .spectator-header a { padding-block: 14px; border-bottom: 1px solid var(--ink); }
-.spectator-header > strong { display: flex; align-items: center; gap: 9px; color: var(--signal-dark); }
-.spectator-header > strong i { width: 9px; height: 9px; background: var(--signal); animation: hub-live-pulse 1.2s steps(2, end) infinite; }
+.spectator-header > strong, .spectator-header-tools > strong { display: flex; align-items: center; gap: 9px; color: var(--signal-dark); }
+.spectator-header > strong i, .spectator-header-tools > strong i { width: 9px; height: 9px; background: var(--signal); animation: hub-live-pulse 1.2s steps(2, end) infinite; }
+.spectator-header-tools { display: flex; align-items: center; gap: 16px; }
+.spectator-sound { min-height: 40px; padding: 0 12px; border: 1px solid var(--ink); background: var(--paper-light); color: var(--ink); cursor: pointer; font-family: var(--arena-mono); font-size: 8px; }
+.spectator-sound[aria-pressed="true"], .spectator-sound:hover { background: var(--signal); }
 .spectator-stage { min-height: 620px; padding: clamp(46px, 7vw, 100px) clamp(0px, 2vw, 34px); display: grid; grid-template-columns: minmax(180px, .52fr) minmax(480px, 1.6fr) minmax(180px, .52fr); gap: clamp(18px, 3.5vw, 54px); align-items: center; }
 .spectator-seat { min-height: 244px; padding: 24px; display: grid; align-content: start; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 7px 7px 0 var(--ink); }
 .spectator-seat > span { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 8px; }
@@ -234,7 +237,9 @@
   .spectator-header { padding: 14px 0; align-items: flex-start; }
   .spectator-header > div { display: grid; gap: 12px; }
   .spectator-header > div span { display: none; }
-  .spectator-header > strong { padding-top: 10px; font-size: 7px; }
+  .spectator-header > strong, .spectator-header-tools > strong { padding-top: 10px; font-size: 7px; }
+  .spectator-header-tools { align-items: flex-end; flex-direction: column; gap: 8px; }
+  .spectator-sound { min-height: 36px; padding-inline: 8px; font-size: 7px; }
   .spectator-stage { min-height: 0; padding: 36px 0; grid-template-columns: 1fr 1fr; gap: 12px; }
   .spectator-table { grid-column: 1 / -1; }
   .spectator-seat { min-height: 170px; padding: 16px; box-shadow: 4px 4px 0 var(--ink); }
@@ -251,7 +256,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spectator-header > strong i { animation: none; }
+  .spectator-header > strong i, .spectator-header-tools > strong i { animation: none; }
 }
 
 /* The match room is a broadcast surface, not a second operator console. */

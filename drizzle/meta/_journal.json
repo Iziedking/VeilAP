@@ -141,6 +141,13 @@
       "when": 1788171600000,
       "tag": "0019_participant_x_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788175200000,
+      "tag": "0020_participant_agent_packages",
+      "breakpoints": true
     }
   ]
 }

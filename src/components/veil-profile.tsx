@@ -43,6 +43,16 @@ type ProfileEntry = {
   };
 };
 
+type SavedAgent = {
+  id: string;
+  agentId: string;
+  displayName: string;
+  engineVersion: string;
+  artifactCommitment: string;
+  version: number;
+  updatedAt: string;
+};
+
 type LoadState = "loading" | "ready" | "signed-out" | "error";
 type RecentPrivateRoom = {
   projectId: string;
@@ -91,6 +101,7 @@ export function VeilProfile() {
   const [state, setState] = useState<LoadState>("loading");
   const [session, setSession] = useState<ProfileSession | null>(null);
   const [entries, setEntries] = useState<ProfileEntry[]>([]);
+  const [agents, setAgents] = useState<SavedAgent[]>([]);
   const [recentPrivateRoom, setRecentPrivateRoom] = useState<RecentPrivateRoom | null>(null);
   const [error, setError] = useState("");
 
@@ -112,6 +123,9 @@ export function VeilProfile() {
       const entriesBody = await entriesResponse.json() as ApiEnvelope<ProfileEntry[]>;
       if (!entriesResponse.ok || !entriesBody.ok) throw new Error("PROFILE_ENTRIES_UNAVAILABLE");
       setEntries(entriesBody.value);
+      const agentsResponse = await apiFetch("/api/profile/agents");
+      const agentsBody = await agentsResponse.json() as ApiEnvelope<SavedAgent[]>;
+      if (agentsResponse.ok && agentsBody.ok) setAgents(agentsBody.value);
       setState("ready");
     } catch {
       setState("error");
@@ -196,6 +210,23 @@ export function VeilProfile() {
                 <Link className="profile-primary" href={`/arena/${encodeURIComponent(recentPrivateRoom.projectId)}/${encodeURIComponent(recentPrivateRoom.seasonId)}`}>Open private room →</Link>
               </section>
             ) : null}
+
+            <section className="profile-agent-library" aria-labelledby="profile-agent-library-title">
+              <header>
+                <div><span>PRIVATE AGENT LIBRARY</span><h2 id="profile-agent-library-title">Saved packages</h2></div>
+                <Link href="/play">Build or update an agent →</Link>
+              </header>
+              {agents.length ? agents.map((agent) => (
+                <article className="profile-library-row" key={agent.id}>
+                  <div><strong>{agent.displayName}</strong><small>{agent.agentId} · {agent.engineVersion}</small></div>
+                  <span>V{agent.version}</span>
+                  <code>{shortCommitment(agent.artifactCommitment)}</code>
+                  <small>Updated {dateLabel(agent.updatedAt)}</small>
+                </article>
+              )) : (
+                <div className="profile-library-empty">No saved packages yet. Import one and save it here before choosing an arena.</div>
+              )}
+            </section>
 
             <section className="profile-entries" aria-labelledby="profile-entries-title">
               <header>

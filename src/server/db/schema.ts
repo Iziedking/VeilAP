@@ -291,6 +291,28 @@ export const participantXIdentities = pgTable(
   }),
 );
 
+export const participantAgentPackages = pgTable(
+  "participant_agent_packages",
+  {
+    id: text("id").primaryKey(),
+    ownerFingerprint: text("owner_fingerprint").notNull(),
+    agentId: text("agent_id").notNull(),
+    displayName: text("display_name").notNull(),
+    protocolVersion: text("protocol_version").notNull(),
+    engineVersion: text("engine_version").notNull(),
+    ruleCount: integer("rule_count").notNull(),
+    artifactCommitment: text("artifact_commitment").notNull(),
+    encryptedPackage: jsonb("encrypted_package").notNull(),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    ownerAgent: uniqueIndex("participant_agent_packages_owner_agent_idx").on(table.ownerFingerprint, table.agentId),
+    ownerCommitment: uniqueIndex("participant_agent_packages_owner_commitment_idx").on(table.ownerFingerprint, table.artifactCommitment),
+  }),
+);
+
 export const projects = pgTable("projects", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
