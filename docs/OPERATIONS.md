@@ -9,7 +9,7 @@ Do not advance a live season while health, readiness, database backup, wallet pl
 1. Confirm the GitHub deployment and Vercel deployment both succeeded for the same reviewed commit.
 2. Confirm `https://api.veilap.xyz/api/health` reports persisted mode and a reachable database.
 3. Confirm the protected readiness endpoint reports every check as true.
-4. Confirm the worker timer is active and has no recent failures.
+4. Confirm the worker container is running and has no recent failures.
 5. Confirm the default player-entry project in Vercel matches the intended database project. The global lobby discovers all persisted competitions independently.
 6. Confirm the season template, rules commitment, exact workload, entry capacity, replacement policy, reward mode, and, when funded rewards are advertised, the token, amount, sponsor wallet, and STRK20 pool.
 7. Take a PostgreSQL backup before a production migration or high-value season.
@@ -22,8 +22,8 @@ ssh veil-vm
 cd /opt/veil-arena/current
 docker compose --env-file /opt/veil-arena/config/veil-arena.env -f docker-compose.prod.yml ps
 docker compose --env-file /opt/veil-arena/config/veil-arena.env -f docker-compose.prod.yml logs --tail=150 app
-sudo systemctl status veil-arena-worker.timer
-sudo journalctl -u veil-arena-worker.service -n 100 --no-pager
+sudo docker compose --project-directory /opt/veil-arena/current --env-file /opt/veil-arena/config/veil-arena.env -f /opt/veil-arena/current/docker-compose.prod.yml ps worker
+sudo docker compose --project-directory /opt/veil-arena/current --env-file /opt/veil-arena/config/veil-arena.env -f /opt/veil-arena/current/docker-compose.prod.yml logs --tail=100 worker
 ```
 
 Logs must not include strategy policies, payout addresses, transfer authorizations, session cookies, viewing keys, private keys, or complete request bodies.
@@ -72,7 +72,7 @@ Copy backups to encrypted storage outside the VM and test restoration into a dis
 7. Review the exact shield plan, approve it in the sponsor wallet, sign the matching Veil Arena authorization, and wait for confirmed funding state.
 8. For a benchmark gauntlet, select an enrolled benchmark agent before lock.
 9. Lock only after the intended roster is complete. Locking makes the active versions and rules snapshot authoritative.
-10. Enable the worker timer for the active project and season.
+10. Confirm the worker is running. It discovers locked seasons globally and starts queued matches automatically.
 11. Monitor scheduled, running, completed, retryable, and terminal match counts.
 12. Open the public competition room and verify that completed matches expose a hand-receipt replay without cards, policies, reasoning, or a raw seed.
 13. Prepare settlement only after every pairing is complete and a unique winner exists.
@@ -117,7 +117,7 @@ The application accepts terminal idempotent confirmation only for the same recor
 
 ### Database unavailable
 
-Stop the worker timer, inspect disk and container health, and restore service before accepting entries or wallet actions. Do not switch to in-memory preview mode in production.
+Stop the worker container, inspect disk and container health, and restore service before accepting entries or wallet actions. Do not switch to in-memory preview mode in production.
 
 ### KMS denied or unavailable
 
@@ -129,7 +129,7 @@ Stop new match execution. Existing signed receipts remain readable. Repair the c
 
 ### Worker repeats or stalls
 
-Disable the timer, inspect lease expiry and terminal records, and run one protected tick manually. Do not edit match rows directly unless a reviewed recovery procedure accounts for idempotency and receipt state.
+Stop the worker container, inspect lease expiry and terminal records, and run one protected tick manually. Do not edit match rows directly unless a reviewed recovery procedure accounts for idempotency and receipt state.
 
 ### Suspected strategy disclosure
 
@@ -141,6 +141,6 @@ Stop reward actions immediately. Do not change the sponsor wallet inside an acti
 
 ## Release rollback
 
-Pause the worker before rollback. Use a known release directory and the deployment script described in [DEPLOYMENT.md](DEPLOYMENT.md). Verify health, readiness, and one read-only public route before restarting the worker.
+Stop the worker before rollback. Use a known release directory and the deployment script described in [DEPLOYMENT.md](DEPLOYMENT.md). Verify health, readiness, and one read-only public route before restarting the worker.
 
 Application rollback is safe only while the database migration remains backward compatible.

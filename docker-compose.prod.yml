@@ -73,6 +73,25 @@ services:
     networks:
       - private
 
+  worker:
+    image: ${VEIL_ARENA_IMAGE:-veil-arena:local}
+    init: true
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      VEILAP_ARENA_WORKER_API_URL: http://app:3000
+      VEILAP_ARENA_WORKER_SECRET: ${VEILAP_ARENA_WORKER_SECRET}
+      VEILAP_ARENA_WORKER_POLL_MS: ${VEILAP_ARENA_WORKER_POLL_MS:-1000}
+      VEILAP_ARENA_WORKER_IDLE_POLL_MS: ${VEILAP_ARENA_WORKER_IDLE_POLL_MS:-2500}
+      VEILAP_ARENA_WORKER_ERROR_BACKOFF_MS: ${VEILAP_ARENA_WORKER_ERROR_BACKOFF_MS:-5000}
+    depends_on:
+      app:
+        condition: service_healthy
+    command: ["node", "scripts/arena-worker.mjs"]
+    stop_grace_period: 20s
+    networks:
+      - private
+
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped

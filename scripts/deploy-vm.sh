@@ -34,7 +34,7 @@ rollback() {
       --project-directory "$previous_release" \
       --env-file "$environment_file" \
       -f "$previous_release/docker-compose.prod.yml" \
-      up -d --wait --wait-timeout 120 app caddy || true
+      up -d --wait --wait-timeout 120 app worker caddy || true
   fi
   exit "$exit_code"
 }
@@ -46,7 +46,7 @@ trap rollback ERR
 
 ln -sfn "$release_dir" "$deployment_root/current"
 switched=1
-"${compose[@]}" up -d --wait --wait-timeout 120 app caddy
+"${compose[@]}" up -d --wait --wait-timeout 120 app worker caddy
 "${compose[@]}" exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(async (response) => { if (!response.ok) process.exit(1); console.log(await response.text()); }).catch(() => process.exit(1))"
 "${compose[@]}" ps
 

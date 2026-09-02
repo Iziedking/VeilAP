@@ -107,7 +107,7 @@ Wallet identity is normalized as a Starknet felt before comparison. Database joi
 
 The browser calls `https://api.veilap.xyz` with credentials. The API permits only the exact configured `VEILAP_APP_ORIGIN`, supports credentialed CORS, and returns no wildcard origin.
 
-The API and database share a private Docker network. PostgreSQL has no host port. Caddy is the only public container. The systemd worker calls Caddy through VM loopback.
+The API, database, and dedicated worker share a private Docker network. PostgreSQL has no host port. Caddy is the only public container. The worker calls the protected API service directly over the private network, so match execution does not depend on public DNS or an exposed worker port.
 
 ## Current limitations
 

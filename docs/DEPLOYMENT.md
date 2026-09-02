@@ -20,7 +20,7 @@ Player browser
           |
           +--> Next.js API       private Docker network
           +--> PostgreSQL 16     private Docker network and EBS volume
-          +--> worker endpoint   localhost systemd timer
+          +--> match worker      private Docker network
           +--> AWS KMS           EC2 instance role
           +--> Starknet RPC      outbound HTTPS
 ```
@@ -159,50 +159,33 @@ Create an `A` record for `api.veilap.xyz` that points to a stable Elastic IP att
 
 Before DNS is ready, `VEIL_API_DOMAIN=:80` can support a VM-only HTTP smoke test. Do not connect the HTTPS Vercel frontend to that temporary endpoint.
 
-## Worker timer
+## Arena worker
 
-The worker consumes one scheduled or retryable match per tick. It never signs or broadcasts a reward transaction.
+The production Compose stack includes one dedicated worker container. It polls the protected worker endpoint over the private Docker network, claims one scheduled or retryable match using a database lease, and immediately polls again after completion. This means a locked competition begins within the polling interval and continues through its schedule without an operator clicking every match.
 
-Create `/opt/veil-arena/config/veil-arena-worker.env` with the real project and season IDs. The internal secret remains in the protected application environment file. Restrict both files to root or the service account.
+The worker is deliberately single-flight: it never runs two matches in the same process, database claims prevent duplicate execution, and stable idempotency keys make retries safe. It backs off when the API is unavailable or misconfigured, logs only state and match identifiers, and exits cleanly on deployment shutdown. It never signs or broadcasts a reward transaction.
+
+Optional tuning values belong in `/opt/veil-arena/config/veil-arena.env`. Keep the worker secret in that protected file and never add it to Vercel:
 
 ```dotenv
-VEILAP_ARENA_PROJECT_ID=REPLACE_WITH_REAL_PROJECT_ID
-VEILAP_ARENA_SEASON_ID=REPLACE_WITH_REAL_SEASON_ID
+VEILAP_ARENA_WORKER_POLL_MS=1000
+VEILAP_ARENA_WORKER_IDLE_POLL_MS=2500
+VEILAP_ARENA_WORKER_ERROR_BACKOFF_MS=5000
 ```
 
-```ini
-# /etc/systemd/system/veil-arena-worker.service
-[Unit]
-Description=Veil Arena scheduled match worker
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-EnvironmentFile=/opt/veil-arena/config/veil-arena.env
-EnvironmentFile=/opt/veil-arena/config/veil-arena-worker.env
-ExecStart=/usr/bin/bash /opt/veil-arena/current/scripts/arena-worker-tick.sh
-```
-
-```ini
-# /etc/systemd/system/veil-arena-worker.timer
-[Unit]
-Description=Run Veil Arena scheduled match worker
-
-[Timer]
-OnBootSec=30s
-OnUnitActiveSec=15s
-Unit=veil-arena-worker.service
-
-[Install]
-WantedBy=timers.target
-```
-
-Review the rendered unit, then run:
+The deployment script starts `worker` only after the app health check passes. Inspect it with:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now veil-arena-worker.timer
+sudo docker compose \
+  --project-directory /opt/veil-arena/current \
+  --env-file /opt/veil-arena/config/veil-arena.env \
+  -f /opt/veil-arena/current/docker-compose.prod.yml \
+  ps worker
+sudo docker compose \
+  --project-directory /opt/veil-arena/current \
+  --env-file /opt/veil-arena/config/veil-arena.env \
+  -f /opt/veil-arena/current/docker-compose.prod.yml \
+  logs --tail=100 worker
 ```
 
 ## First deployment
@@ -230,10 +213,13 @@ Releases live under `/opt/veil-arena/releases/<commit-sha>`. The active release 
 To redeploy a reviewed previous release:
 
 ```bash
-sudo systemctl stop veil-arena-worker.timer
+sudo docker compose \
+  --project-directory /opt/veil-arena/current \
+  --env-file /opt/veil-arena/config/veil-arena.env \
+  -f /opt/veil-arena/current/docker-compose.prod.yml \
+  stop worker
 VEIL_ARENA_RELEASE_DIR=/opt/veil-arena/releases/PREVIOUS_COMMIT_SHA \
   bash /opt/veil-arena/releases/PREVIOUS_COMMIT_SHA/scripts/deploy-vm.sh
-sudo systemctl start veil-arena-worker.timer
 ```
 
 Only roll application code back across migrations that are backward compatible. Take and verify a database backup before schema changes that cannot support the previous release.
