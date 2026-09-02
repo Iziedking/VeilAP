@@ -254,6 +254,94 @@
   .spectator-header > strong i { animation: none; }
 }
 
+/* The match room is a broadcast surface, not a second operator console. */
+.spectator-stage { position: relative; isolation: isolate; }
+.spectator-stage::before { content: ""; position: absolute; inset: 12% 22%; z-index: -1; border: 1px solid color-mix(in srgb, var(--signal-dark) 32%, transparent); border-radius: 50%; opacity: .45; background: repeating-radial-gradient(circle at center, transparent 0 54px, color-mix(in srgb, var(--signal) 11%, transparent) 55px 56px); pointer-events: none; }
+.spectator-room-banner { min-height: 58px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px solid var(--ink); background: var(--paper-light); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; }
+.spectator-room-banner > div { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.spectator-room-banner > div i { width: 9px; height: 9px; display: inline-block; background: var(--signal); }
+.spectator-room-banner > span { color: var(--ink-soft); line-height: 1.5; text-align: right; }
+.spectator-room-banner.is-private { background: color-mix(in srgb, var(--signal) 19%, var(--paper-light)); }
+.spectator-room-banner.is-private > div strong { color: var(--signal-dark); }
+.spectator-stage { min-height: 610px; padding-top: clamp(42px, 6vw, 82px); }
+.spectator-seat { position: relative; min-height: 300px; padding: 20px; display: flex; flex-direction: column; align-items: stretch; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 7px 7px 0 var(--ink); }
+.spectator-seat.is-right { box-shadow: 7px 7px 0 var(--signal); }
+.spectator-seat.is-yours { background: color-mix(in srgb, var(--signal) 21%, var(--paper-light)); box-shadow: 8px 8px 0 var(--signal-dark); }
+.spectator-seat.is-sealed { background: color-mix(in srgb, var(--paper) 72%, var(--paper-light)); }
+.spectator-seat > header { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--signal-dark); font-family: var(--arena-mono); font-size: 8px; }
+.spectator-seat > header b { padding: 5px 7px; border: 1px solid currentColor; font-size: 7px; font-weight: 500; white-space: nowrap; }
+.spectator-seat.is-sealed > header b { color: var(--ink-soft); }
+.spectator-seat-identity { min-width: 0; margin-top: 26px; display: flex; align-items: center; gap: 12px; }
+.spectator-seat-identity strong { min-width: 0; overflow-wrap: anywhere; font-family: var(--arena-display); font-size: clamp(18px, 2.1vw, 29px); line-height: 1.08; text-transform: uppercase; }
+.spectator-avatar { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background-position: center; background-size: cover; background-color: var(--ink); color: var(--signal); font-family: var(--arena-mono); font-size: 14px; }
+.spectator-avatar.is-fallback { background: var(--ink); }
+.spectator-seat > code { margin-top: 16px; color: var(--ink-soft); font-size: 8px; }
+.spectator-seat > small { min-height: 30px; margin-top: 14px; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 7px; line-height: 1.45; text-transform: uppercase; }
+.spectator-seat-score { margin-top: auto; padding-top: 24px; font-family: var(--arena-display); font-size: 64px; line-height: .8; }
+.spectator-table { position: relative; overflow: hidden; box-shadow: 10px 10px 0 var(--ink); }
+.spectator-table.is-running { box-shadow: 10px 10px 0 var(--signal-dark); }
+.spectator-table-meta { min-height: 58px; padding-inline: 18px; }
+.spectator-table-meta span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.spectator-live-dot { width: 8px; height: 8px; display: inline-block; background: var(--signal); }
+.spectator-table.is-running .spectator-live-dot { animation: hub-live-pulse 1.2s steps(2, end) infinite; }
+.spectator-board { position: relative; min-height: 224px; flex-direction: column; gap: 13px; }
+.spectator-board-mark { position: absolute; top: 18px; left: 20px; color: color-mix(in srgb, var(--signal-dark) 55%, transparent); font-family: var(--arena-display); font-size: 36px; line-height: 1; }
+.spectator-board-cards { display: flex; align-items: center; justify-content: center; gap: clamp(7px, 1.2vw, 15px); }
+.spectator-board-cards i { width: clamp(42px, 6vw, 72px); aspect-ratio: .7; display: grid; place-items: center; border: 2px solid var(--ink); background: var(--ink); box-shadow: 4px 4px 0 var(--signal); color: var(--signal); font-family: var(--arena-display); font-size: 22px; font-style: normal; }
+.spectator-board-cards i:nth-child(2), .spectator-board-cards i:nth-child(4) { transform: translateY(8px); }
+.spectator-board > small { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 7px; letter-spacing: .12em; }
+.spectator-hand-result { min-height: 136px; }
+.spectator-hand-result > strong { font-size: clamp(19px, 2.7vw, 34px); }
+.spectator-live-strip { min-height: 74px; padding: 14px 20px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 18px; border-top: 1px solid var(--ink); background: color-mix(in srgb, var(--signal) 10%, var(--paper-light)); }
+.spectator-live-strip > span { display: inline-flex; align-items: center; gap: 8px; color: var(--signal-dark); font-family: var(--arena-mono); font-size: 8px; white-space: nowrap; }
+.spectator-live-strip > span i { width: 7px; height: 7px; display: inline-block; background: var(--signal); }
+.spectator-live-strip p { margin: 0; color: var(--ink-soft); font-size: 10px; line-height: 1.5; }
+.spectator-feed { margin-bottom: 22px; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 8px 8px 0 var(--signal); }
+.spectator-feed > header { min-height: 52px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); font-family: var(--arena-mono); font-size: 8px; }
+.spectator-feed > header span { color: var(--signal); }
+.spectator-feed ol { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); list-style: none; }
+.spectator-feed li { min-width: 0; min-height: 86px; padding: 16px 18px; display: grid; grid-template-columns: 12px 1fr; column-gap: 10px; align-content: center; border-right: 1px solid var(--rule); }
+.spectator-feed li:last-child { border-right: 0; }
+.spectator-feed li > i { width: 9px; height: 9px; margin-top: 3px; grid-row: span 2; border: 1px solid var(--ink-soft); background: transparent; }
+.spectator-feed li.is-done > i { border-color: var(--ink); background: var(--signal); }
+.spectator-feed li.is-current > i { border-color: var(--signal-dark); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 28%, transparent); }
+.spectator-feed li > span { min-width: 0; font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; }
+.spectator-feed li > small { min-width: 0; margin-top: 7px; color: var(--ink-soft); font-size: 9px; line-height: 1.35; }
+.spectator-controls button:focus-visible, .spectator-progress button:focus-visible { outline: 3px solid var(--signal-dark); outline-offset: -3px; }
+
+@media (max-width: 1020px) {
+  .spectator-room-banner { align-items: flex-start; flex-direction: column; padding-block: 14px; }
+  .spectator-room-banner > span { text-align: left; }
+  .spectator-stage::before { inset: 12% 12%; }
+}
+
+@media (max-width: 620px) {
+  .spectator-stage { padding-top: 32px; }
+  .spectator-stage::before { inset: 20% 0; }
+  .spectator-seat { min-height: 188px; padding: 14px; }
+  .spectator-seat > header { display: grid; gap: 7px; }
+  .spectator-seat > header b { justify-self: start; }
+  .spectator-seat-identity { margin-top: 16px; display: block; }
+  .spectator-avatar { width: 32px; height: 32px; margin-bottom: 10px; }
+  .spectator-seat-identity strong { display: block; font-size: 15px; }
+  .spectator-seat > code { margin-top: 10px; font-size: 7px; }
+  .spectator-seat > small { margin-top: 8px; font-size: 6px; }
+  .spectator-seat-score { padding-top: 15px; font-size: 43px; }
+  .spectator-table-meta { min-height: 74px; padding: 10px 12px; display: grid; gap: 4px; }
+  .spectator-board { min-height: 158px; padding: 24px 10px; }
+  .spectator-board-mark { top: 10px; left: 12px; font-size: 25px; }
+  .spectator-board-cards { gap: 5px; }
+  .spectator-board-cards i { width: 36px; box-shadow: 2px 2px 0 var(--signal); font-size: 15px; }
+  .spectator-live-strip { grid-template-columns: 1fr; gap: 8px; padding: 13px 14px; }
+  .spectator-feed ol { grid-template-columns: 1fr; }
+  .spectator-feed li { min-height: 70px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .spectator-feed li:last-child { border-bottom: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spectator-table.is-running .spectator-live-dot { animation: none; }
+}
+
 .champion-main { width: min(1380px, 92vw); min-height: calc(100vh - 136px); margin: 0 auto; padding: clamp(72px, 10vh, 130px) 0; display: grid; grid-template-columns: minmax(0, .8fr) minmax(520px, 1fr); align-items: center; gap: clamp(48px, 8vw, 126px); }
 .champion-copy h1 { max-width: 720px; margin: 22px 0 24px; font-family: var(--arena-display); font-size: clamp(44px, 6.2vw, 94px); line-height: .96; text-transform: uppercase; }
 .champion-copy > p { max-width: 620px; color: var(--ink-soft); font-size: clamp(16px, 1.5vw, 21px); line-height: 1.65; }

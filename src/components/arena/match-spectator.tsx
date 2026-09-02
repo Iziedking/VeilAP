@@ -16,6 +16,22 @@ import { apiFetch } from "@/lib/api/client";
 
 type LoadState = "loading" | "ready" | "error";
 
+type ViewerEntry = {
+  agentId: string;
+  displayName: string;
+  artifactCommitment: string;
+  version: number;
+};
+
+type ViewerSession = {
+  xVerification?: {
+    identity?: {
+      username: string;
+      profileImageUrl?: string | null;
+    } | null;
+  };
+};
+
 function displayName(schedule: CompetitionSchedule, agentId: string): string {
   return schedule.entries.find((entry) => entry.agentId === agentId)?.displayName ?? agentId;
 }
@@ -26,6 +42,10 @@ function scoreThrough(receipts: readonly PublicHandReceipt[], index: number): Re
     if (receipt.winner !== "tie") score[receipt.winner] = (score[receipt.winner] ?? 0) + 1;
   }
   return score;
+}
+
+function viewerOwnsSeat(viewerEntry: ViewerEntry | null, agentId: string): boolean {
+  return viewerEntry?.agentId === agentId;
 }
 
 export function MatchSpectator({
@@ -40,6 +60,9 @@ export function MatchSpectator({
   const [schedule, setSchedule] = useState<CompetitionSchedule | null>(null);
   const [scheduledMatch, setScheduledMatch] = useState<ScheduledMatch | null>(null);
   const [receipt, setReceipt] = useState<PublicMatch | null>(null);
+  const [viewerEntry, setViewerEntry] = useState<ViewerEntry | null>(null);
+  const [viewerProfileImageUrl, setViewerProfileImageUrl] = useState<string | null>(null);
+  const [viewerUsername, setViewerUsername] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [activeIndex, setActiveIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -60,10 +83,37 @@ export function MatchSpectator({
           const matchBody = await matchResponse.json() as ApiEnvelope<PublicMatch>;
           if (matchResponse.ok && matchBody.ok) publicMatch = matchBody.value;
         }
+
+        let privateEntry: ViewerEntry | null = null;
+        try {
+          const entryResponse = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}/join`);
+          const entryBody = await entryResponse.json() as ApiEnvelope<ViewerEntry | null>;
+          if (entryResponse.ok && entryBody.ok) privateEntry = entryBody.value;
+        } catch {
+          privateEntry = null;
+        }
+
+        let privateUsername: string | null = null;
+        let privateProfileImageUrl: string | null = null;
+        try {
+          const sessionResponse = await apiFetch("/api/auth/session");
+          const sessionBody = await sessionResponse.json() as ApiEnvelope<ViewerSession | null>;
+          if (sessionResponse.ok && sessionBody.ok && sessionBody.value) {
+            privateUsername = sessionBody.value.xVerification?.identity?.username ?? null;
+            privateProfileImageUrl = sessionBody.value.xVerification?.identity?.profileImageUrl ?? null;
+          }
+        } catch {
+          privateUsername = null;
+          privateProfileImageUrl = null;
+        }
+
         if (!active) return;
         setSchedule(body.value);
         setScheduledMatch(match);
-        if (publicMatch) setReceipt(publicMatch);
+        setReceipt(publicMatch);
+        setViewerEntry(privateEntry);
+        setViewerUsername(privateUsername);
+        setViewerProfileImageUrl(privateProfileImageUrl);
         setState("ready");
         if (match.status !== "completed" || !publicMatch) timer = window.setTimeout(() => void load(), 2200);
       } catch {
@@ -95,7 +145,12 @@ export function MatchSpectator({
 
   const leftName = displayName(schedule, scheduledMatch.leftAgentId);
   const rightName = displayName(schedule, scheduledMatch.rightAgentId);
+  const leftEntry = schedule.entries.find((entry) => entry.agentId === scheduledMatch.leftAgentId);
+  const rightEntry = schedule.entries.find((entry) => entry.agentId === scheduledMatch.rightAgentId);
   const hasReplay = handReceipts.length > 0;
+  const viewerIsLeft = viewerOwnsSeat(viewerEntry, scheduledMatch.leftAgentId);
+  const viewerIsRight = viewerOwnsSeat(viewerEntry, scheduledMatch.rightAgentId);
+  const privateView = viewerIsLeft || viewerIsRight;
   const executionState = scheduledMatch.status === "scheduled"
     ? "DRAW WAITING"
     : scheduledMatch.status === "running"
@@ -110,6 +165,48 @@ export function MatchSpectator({
     : currentHand?.winner
       ? displayName(schedule, currentHand.winner)
       : null;
+  const liveDescription = scheduledMatch.status === "running"
+    ? "The worker has claimed this table. Both agents are deciding inside the sealed runner."
+    : scheduledMatch.status === "scheduled"
+      ? "The next table is in the draw. It will open when the worker claims the match."
+      : scheduledMatch.status === "failed"
+        ? "Execution stopped before a public receipt could be issued."
+        : `${handReceipts.length} public hand ${handReceipts.length === 1 ? "receipt" : "receipts"} are available to replay.`;
+
+  const renderSeat = ({
+    side,
+    agentId,
+    name,
+    artifactCommitment,
+    score,
+  }: {
+    side: "A" | "B";
+    agentId: string;
+    name: string;
+    artifactCommitment?: string;
+    score: number | string;
+  }) => {
+    const yours = viewerOwnsSeat(viewerEntry, agentId);
+    return (
+      <article className={`spectator-seat ${side === "A" ? "is-left" : "is-right"} ${yours ? "is-yours" : "is-sealed"}`}>
+        <header>
+          <span>SEAT {side}</span>
+          <b>{yours ? "YOUR AGENT" : privateView ? "SEALED OPPONENT" : "PUBLIC SEAT"}</b>
+        </header>
+        <div className="spectator-seat-identity">
+          {yours && viewerProfileImageUrl ? (
+            <span className="spectator-avatar" style={{ backgroundImage: `url(${viewerProfileImageUrl})` }} role="img" aria-label={`${viewerUsername ?? name} X profile`} />
+          ) : (
+            <span className="spectator-avatar is-fallback" aria-hidden="true">{yours && viewerUsername ? "X" : name.slice(0, 1)}</span>
+          )}
+          <strong>{name}</strong>
+        </div>
+        <code>{shortCommitment(artifactCommitment)}</code>
+        <small>{yours ? `PRIVATE PLAYER VIEW${viewerUsername ? ` / @${viewerUsername}` : ""}` : "STRATEGY SEALED"}</small>
+        <b className="spectator-seat-score">{score}</b>
+      </article>
+    );
+  };
 
   return (
     <div className="hub-page spectator-page">
@@ -123,27 +220,32 @@ export function MatchSpectator({
           <strong><i /> {executionState}</strong>
         </header>
 
-        <section className="spectator-stage" aria-label={`${leftName} versus ${rightName}`}>
-          <div className="spectator-seat is-left">
-            <span>SEAT A</span>
-            <strong>{leftName}</strong>
-            <code>{shortCommitment(schedule.entries.find((entry) => entry.agentId === scheduledMatch.leftAgentId)?.artifactCommitment)}</code>
-            <b>{hasReplay ? currentScore[scheduledMatch.leftAgentId] ?? 0 : "–"}</b>
-          </div>
+        <div className={`spectator-room-banner ${privateView ? "is-private" : "is-public"}`}>
+          <div><i /> <strong>{privateView ? "PRIVATE PLAYER VIEW" : "PUBLIC BROADCAST"}</strong></div>
+          <span>{privateView ? "Your agent is highlighted in this browser. Opponent strategy remains sealed." : "Results, timing, and proof are public. Agent strategy remains sealed."}</span>
+        </div>
 
-          <div className="spectator-table">
+        <section className="spectator-stage" aria-label={`${leftName} versus ${rightName}`}>
+          {renderSeat({ side: "A", agentId: scheduledMatch.leftAgentId, name: leftName, artifactCommitment: leftEntry?.artifactCommitment, score: hasReplay ? currentScore[scheduledMatch.leftAgentId] ?? 0 : "–" })}
+
+          <div className={`spectator-table is-${scheduledMatch.status}`}>
             <div className="spectator-table-meta">
+              <span><i className="spectator-live-dot" /> {scheduledMatch.status === "completed" ? "REPLAY TABLE" : "LIVE TABLE"}</span>
               <span>{currentHand ? `DEAL ${String(currentHand.handNumber).padStart(2, "0")}` : "SEALED TABLE"}</span>
               <span>{currentHand?.seatSwapped ? "SEATS SWAPPED" : "PRIMARY SEATS"}</span>
             </div>
             <div className="spectator-board" aria-label="Private cards and board remain sealed">
-              {[0, 1, 2, 3, 4].map((card) => <i key={card}><span>V</span></i>)}
+              <span className="spectator-board-mark">V</span>
+              <div className="spectator-board-cards">
+                {[0, 1, 2, 3, 4].map((card) => <i key={card}><span>?</span></i>)}
+              </div>
+              <small>CARDS SEALED</small>
             </div>
             {currentHand ? (
               <div className="spectator-hand-result">
                 <span>HAND RESULT</span>
                 <strong>{handWinner}</strong>
-                <small>Board {shortCommitment(currentHand.boardCommitment)}</small>
+                <small>Board commitment {shortCommitment(currentHand.boardCommitment)}</small>
               </div>
             ) : (
               <div className="spectator-hand-result">
@@ -152,18 +254,26 @@ export function MatchSpectator({
                 <small>{scheduledMatch.status === "running" ? "The signed public receipt will appear here when execution finishes." : "No private strategy or card data is exposed."}</small>
               </div>
             )}
+            <div className="spectator-live-strip">
+              <span><i /> {scheduledMatch.status === "completed" ? "RECEIPT STREAM" : "LIVE EXECUTION"}</span>
+              <p>{liveDescription}</p>
+            </div>
             <div className="spectator-proof-strip">
               <span>HAND COMMITMENT</span>
               <code>{shortCommitment(currentHand?.handCommitment ?? receipt?.transcriptRoot)}</code>
             </div>
           </div>
 
-          <div className="spectator-seat is-right">
-            <span>SEAT B</span>
-            <strong>{rightName}</strong>
-            <code>{shortCommitment(schedule.entries.find((entry) => entry.agentId === scheduledMatch.rightAgentId)?.artifactCommitment)}</code>
-            <b>{hasReplay ? currentScore[scheduledMatch.rightAgentId] ?? 0 : "–"}</b>
-          </div>
+          {renderSeat({ side: "B", agentId: scheduledMatch.rightAgentId, name: rightName, artifactCommitment: rightEntry?.artifactCommitment, score: hasReplay ? currentScore[scheduledMatch.rightAgentId] ?? 0 : "–" })}
+        </section>
+
+        <section className="spectator-feed" aria-label="Table status">
+          <header><strong>TABLE FEED</strong><span>{scheduledMatch.status === "completed" ? "RECEIPTS PUBLISHED" : "PRIVATE RUNNER"}</span></header>
+          <ol>
+            <li className="is-done"><i /> <span>Agent packages sealed</span><small>Commitments visible</small></li>
+            <li className={scheduledMatch.status === "scheduled" ? "is-current" : "is-done"}><i /> <span>{scheduledMatch.status === "scheduled" ? "Table waiting for worker" : "Worker claimed table"}</span><small>{scheduledMatch.status === "scheduled" ? "No cards or actions are shown" : "Decisions stay private"}</small></li>
+            <li className={hasReplay ? "is-done" : "is-current"}><i /> <span>{hasReplay ? `${handReceipts.length} hand receipts published` : "Public receipt pending"}</span><small>{hasReplay ? "Replay is available below" : "The table will update automatically"}</small></li>
+          </ol>
         </section>
 
         <section className="spectator-console">
