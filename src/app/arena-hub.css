@@ -213,7 +213,7 @@
 .spectator-controls { min-height: 68px; display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); }
 .spectator-controls button { min-width: 150px; padding: 0 20px; border: 0; border-right: 1px solid var(--ink); background: transparent; font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; cursor: pointer; }
 .spectator-controls button.is-primary { background: var(--signal); color: var(--ink); }
-.spectator-controls button:disabled { color: var(--rule); cursor: not-allowed; }
+.spectator-controls button:disabled { color: var(--ink-soft); cursor: not-allowed; opacity: .86; }
 .spectator-progress { min-height: 72px; padding: 22px; display: flex; align-items: center; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--ink); }
 .spectator-progress button { min-width: 18px; height: 18px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
 .spectator-progress button.is-past { background: var(--ink-soft); }
@@ -278,7 +278,8 @@
 .spectator-seat.is-sealed > header b { color: var(--ink-soft); }
 .spectator-seat-identity { min-width: 0; margin-top: 26px; display: flex; align-items: center; gap: 12px; }
 .spectator-seat-identity strong { min-width: 0; overflow-wrap: anywhere; font-family: var(--arena-display); font-size: clamp(18px, 2.1vw, 29px); line-height: 1.08; text-transform: uppercase; }
-.spectator-avatar { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background-position: center; background-size: cover; background-color: var(--ink); color: var(--signal); font-family: var(--arena-mono); font-size: 14px; }
+.spectator-avatar { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; overflow: hidden; border: 2px solid var(--ink); border-radius: 50%; background-position: center; background-size: cover; background-color: var(--ink); color: var(--signal); font-family: var(--arena-mono); font-size: 14px; }
+.spectator-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .spectator-avatar.is-fallback { background: var(--ink); }
 .spectator-seat > code { margin-top: 16px; color: var(--ink-soft); font-size: 8px; }
 .spectator-seat > small { min-height: 30px; margin-top: 14px; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 7px; line-height: 1.45; text-transform: uppercase; }

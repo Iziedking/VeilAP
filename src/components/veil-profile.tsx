@@ -195,6 +195,7 @@ export function VeilProfile() {
                   <span><XMark /> X ACCOUNT</span>
                   <strong>{session.xVerification.identity ? `@${session.xVerification.identity.username}` : "Not verified"}</strong>
                   <small>{session.xVerification.identity ? "Verified for competition entry." : "Connect X during entry to finish verification."}</small>
+                  {session.xVerification.identity && !session.xVerification.identity.profileImageUrl ? <small className="profile-x-avatar-note">X did not return a profile image. Refresh X profile to request it again.</small> : null}
                   {session.xVerification.identity ? <Link href="/play">Refresh X profile →</Link> : null}
                 </div>
               </div>

@@ -48,6 +48,26 @@ function viewerOwnsSeat(viewerEntry: ViewerEntry | null, agentId: string): boole
   return viewerEntry?.agentId === agentId;
 }
 
+function SpectatorAvatar({
+  imageUrl,
+  fallback,
+  label,
+}: {
+  imageUrl: string | null;
+  fallback: string;
+  label: string;
+}) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+
+  if (imageUrl && failedImageUrl !== imageUrl) {
+    // X returns a provider-hosted image URL that is not a fixed local asset.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <span className="spectator-avatar" role="img" aria-label={label}><img src={imageUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedImageUrl(imageUrl)} /></span>;
+  }
+
+  return <span className="spectator-avatar is-fallback" aria-hidden="true">{fallback}</span>;
+}
+
 export function MatchSpectator({
   projectId,
   seasonId,
@@ -223,11 +243,11 @@ export function MatchSpectator({
           <b>{yours ? "YOUR AGENT" : privateView ? "SEALED OPPONENT" : "PUBLIC SEAT"}</b>
         </header>
         <div className="spectator-seat-identity">
-          {yours && viewerProfileImageUrl ? (
-            <span className="spectator-avatar" style={{ backgroundImage: `url(${viewerProfileImageUrl})` }} role="img" aria-label={`${viewerUsername ?? name} X profile`} />
-          ) : (
-            <span className="spectator-avatar is-fallback" aria-hidden="true">{yours && viewerUsername ? "X" : name.slice(0, 1)}</span>
-          )}
+          <SpectatorAvatar
+            imageUrl={yours ? viewerProfileImageUrl : null}
+            fallback={yours && viewerUsername ? "X" : name.slice(0, 1)}
+            label={`${viewerUsername ?? name} X profile`}
+          />
           <strong>{name}</strong>
         </div>
         <code>{shortCommitment(artifactCommitment)}</code>
