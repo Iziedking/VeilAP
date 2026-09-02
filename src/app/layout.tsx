@@ -4,6 +4,7 @@ import Script from "next/script";
 import type { ReactNode } from "react";
 
 import { VeilEntryLoader } from "@/components/veil-entry-loader";
+import { ArenaBackgroundMusic } from "@/components/arena/arena-background-music";
 
 import "@fontsource-variable/manrope";
 import "@fontsource-variable/newsreader";
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
 })();`}
         </Script>
         <VeilEntryLoader />
+        <ArenaBackgroundMusic />
         {children}
         <noscript>
           <style>{`html.is-loading body { overflow: auto; } html.has-js .veil-entry-loader { display: none; }`}</style>

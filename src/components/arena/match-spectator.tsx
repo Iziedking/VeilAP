@@ -431,6 +431,7 @@ export function MatchSpectator({
               const next = !soundEnabled;
               setSoundEnabled(next);
               try { window.localStorage.setItem("veil-arena-sound", next ? "on" : "off"); } catch { /* preference is optional */ }
+              window.dispatchEvent(new CustomEvent("veil-arena-sound-preference", { detail: { enabled: next } }));
               if (next) playTableSound("check", next);
             }} aria-label={soundEnabled ? "Mute table sounds" : "Enable table sounds"}>
               {soundEnabled ? "◉ SOUND ON" : "○ SOUND OFF"}
