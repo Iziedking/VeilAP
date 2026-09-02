@@ -18,6 +18,7 @@ import type { KeyProvider } from "@/server/crypto/key-provider";
 import type { ArenaMatchService, ArenaMatchServiceErrorCode, PublicArenaMatchView } from "@/server/arena/arena-match-service";
 import type {
   ArenaScheduledMatchRecord,
+  ArenaEntryVersionRecord,
   ArenaSeasonEntryRecord,
   ArenaSeasonRecord,
   ArenaPrizePoolStatus,
@@ -105,6 +106,30 @@ export interface ArenaCompetitionSummaryView extends ArenaSeasonView {
   matchCount: number;
   completedMatchCount: number;
   runningMatchCount: number;
+}
+
+export interface ArenaOwnedEntryView {
+  projectId: string;
+  seasonId: string;
+  competition: ArenaCompetitionSummaryView;
+  entry: {
+    id: string;
+    seasonId: string;
+    agentId: string;
+    displayName: string;
+    artifactCommitment: string;
+    version: number;
+    joinedAt: string;
+    versions: Array<{
+      version: number;
+      agentId: string;
+      displayName: string;
+      artifactCommitment: string;
+      status: "active" | "retired";
+      submittedAt: string;
+      retiredAt?: string;
+    }>;
+  };
 }
 
 export interface ArenaSeasonServiceDependencies {
@@ -683,6 +708,52 @@ export class ArenaSeasonService {
     }
   }
 
+  async listOwnedEntries(input: {
+    actorWalletAddress: string;
+  }): Promise<ArenaSeasonServiceResult<ArenaOwnedEntryView[]>> {
+    try {
+      const ownerFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const [seasons, ownedEntries] = await Promise.all([
+        this.repositories.listAllArenaSeasons(),
+        this.repositories.listArenaSeasonEntriesByOwnerFingerprint(ownerFingerprint),
+      ]);
+      const seasonsById = new Map(seasons.map((season) => [`${season.projectId}:${season.id}`, season]));
+      const values = await Promise.all(ownedEntries.map(async (entry) => {
+        const season = seasonsById.get(`${entry.projectId}:${entry.seasonId}`);
+        if (!season) return null;
+        const [project, entries, matches, prizePool, versions] = await Promise.all([
+          this.repositories.getProject(entry.projectId),
+          this.repositories.listArenaSeasonEntries(entry.projectId, entry.seasonId),
+          this.repositories.listArenaScheduledMatches(entry.projectId, entry.seasonId),
+          this.repositories.getArenaPrizePool(entry.projectId, entry.seasonId),
+          this.repositories.listArenaEntryVersions(entry.projectId, entry.seasonId, entry.id),
+        ]);
+        const seasonView = normalizeSchedule(season, entries, matches, prizePool?.status).season;
+        const competition: ArenaCompetitionSummaryView = {
+          ...seasonView,
+          projectName: project?.name ?? "Veil Arena",
+          matchCount: matches.length,
+          completedMatchCount: matches.filter((match) => match.status === "completed").length,
+          runningMatchCount: matches.filter((match) => match.status === "running").length,
+        };
+        return {
+          projectId: entry.projectId,
+          seasonId: entry.seasonId,
+          competition,
+          entry: this.ownedEntryView(entry, versions),
+        } satisfies ArenaOwnedEntryView;
+      }));
+      return {
+        ok: true,
+        value: values
+          .filter((value): value is ArenaOwnedEntryView => value !== null)
+          .sort((left, right) => new Date(right.entry.joinedAt).getTime() - new Date(left.entry.joinedAt).getTime()),
+      };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
   private view(record: ArenaSeasonRecord): ArenaSeasonView {
     return normalizeSchedule(record, [], []).season;
   }
@@ -695,6 +766,39 @@ export class ArenaSeasonService {
       displayName: record.displayName,
       artifactCommitment: record.artifactCommitment,
       joinedAt: record.joinedAt.toISOString(),
+    };
+  }
+
+  private ownedEntryView(record: ArenaSeasonEntryRecord, versions: ArenaEntryVersionRecord[]): ArenaOwnedEntryView["entry"] {
+    const history = versions.length > 0 ? versions : [{
+      id: `${record.id}:v${record.version}`,
+      entryId: record.id,
+      seasonId: record.seasonId,
+      projectId: record.projectId,
+      version: record.version,
+      agentId: record.agentId,
+      displayName: record.displayName,
+      artifactCommitment: record.artifactCommitment,
+      status: "active" as const,
+      submittedAt: record.joinedAt,
+    }];
+    return {
+      id: record.id,
+      seasonId: record.seasonId,
+      agentId: record.agentId,
+      displayName: record.displayName,
+      artifactCommitment: record.artifactCommitment,
+      version: record.version,
+      joinedAt: record.joinedAt.toISOString(),
+      versions: history.map((version) => ({
+        version: version.version,
+        agentId: version.agentId,
+        displayName: version.displayName,
+        artifactCommitment: version.artifactCommitment,
+        status: version.status,
+        submittedAt: version.submittedAt.toISOString(),
+        ...(version.retiredAt ? { retiredAt: version.retiredAt.toISOString() } : {}),
+      })),
     };
   }
 

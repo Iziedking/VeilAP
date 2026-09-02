@@ -835,6 +835,11 @@ export function VeilArenaPlay({
                       </div>
                       <strong>@{xIdentity.username}</strong>
                       <small>This proves account control for entry. Veil Arena cannot post, follow, or read private messages.</small>
+                      {xConfigured ? (
+                        <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
+                          [ {xConnecting ? "OPENING X" : "REFRESH X PROFILE"} ]
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="play-sign-in-callout">

@@ -128,6 +128,9 @@
 .play-x-avatar { width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid var(--play-ink); border-radius: 50%; background-position: center; background-size: cover; }
 .play-x-label { display: inline-flex !important; align-items: center; gap: 8px; }
 .play-x-label svg { width: 14px; height: 14px; flex: 0 0 auto; fill: currentColor; }
+.play-inline-action { min-height: 40px; padding: 0 12px; border: 1px solid var(--play-ink); background: transparent; color: var(--play-ink); cursor: pointer; font: inherit; font-size: 9px; }
+.play-inline-action:hover:not(:disabled) { background: var(--play-signal); }
+.play-inline-action:disabled { cursor: wait; opacity: .65; }
 .play-sign-in-callout { background: #e8ded2; }
 .play-sign-in-callout span { color: var(--play-signal-dark); font-size: 9px; }
 .play-sign-in-callout p { margin: 7px 0 0; color: var(--play-dim); font-size: 10px; }

@@ -70,6 +70,23 @@ function initials(username: string): string {
   return username.slice(0, 2).toUpperCase();
 }
 
+function ProfileAvatar({ identity }: { identity: ProfileIdentity | null }) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const imageUrl = identity?.profileImageUrl;
+
+  if (imageUrl && failedImageUrl !== imageUrl) {
+    // X returns a provider-hosted image URL that is not a fixed local asset.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={imageUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedImageUrl(imageUrl)} />;
+  }
+
+  return (
+    <span className="profile-avatar-fallback" aria-hidden="true">
+      {identity ? initials(identity.username) : <XMark />}
+    </span>
+  );
+}
+
 export function VeilProfile() {
   const [state, setState] = useState<LoadState>("loading");
   const [session, setSession] = useState<ProfileSession | null>(null);
@@ -91,20 +108,10 @@ export function VeilProfile() {
       }
 
       setSession(sessionBody.value);
-      const competitionResponse = await apiFetch("/api/competitions");
-      const competitionBody = await competitionResponse.json() as ApiEnvelope<CompetitionSummary[]>;
-      if (!competitionResponse.ok || !competitionBody.ok) throw new Error("COMPETITIONS_UNAVAILABLE");
-
-      const checkedEntries = await Promise.all(competitionBody.value.slice(0, 32).map(async (competition) => {
-        const response = await apiFetch(
-          `/api/projects/${encodeURIComponent(competition.projectId)}/seasons/${encodeURIComponent(competition.id)}/join`,
-        );
-        if (!response.ok) return null;
-        const body = await response.json() as ApiEnvelope<ProfileEntry["entry"] | null>;
-        if (!body.ok || !body.value) return null;
-        return { projectId: competition.projectId, seasonId: competition.id, competition, entry: body.value };
-      }));
-      setEntries(checkedEntries.filter((entry): entry is ProfileEntry => entry !== null));
+      const entriesResponse = await apiFetch("/api/profile/entries");
+      const entriesBody = await entriesResponse.json() as ApiEnvelope<ProfileEntry[]>;
+      if (!entriesResponse.ok || !entriesBody.ok) throw new Error("PROFILE_ENTRIES_UNAVAILABLE");
+      setEntries(entriesBody.value);
       setState("ready");
     } catch {
       setState("error");
@@ -169,19 +176,12 @@ export function VeilProfile() {
                 <small>This wallet approves entries. It cannot move funds from this session.</small>
               </div>
               <div className="profile-x">
-                {session.xVerification.identity?.profileImageUrl ? (
-                  // X returns a provider-hosted image URL that is not a fixed local asset.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={session.xVerification.identity.profileImageUrl} alt="" referrerPolicy="no-referrer" />
-                ) : (
-                  <span className="profile-avatar-fallback" aria-hidden="true">
-                    {session.xVerification.identity ? initials(session.xVerification.identity.username) : <XMark />}
-                  </span>
-                )}
+                <ProfileAvatar identity={session.xVerification.identity} />
                 <div>
                   <span><XMark /> X ACCOUNT</span>
                   <strong>{session.xVerification.identity ? `@${session.xVerification.identity.username}` : "Not verified"}</strong>
                   <small>{session.xVerification.identity ? "Verified for competition entry." : "Connect X during entry to finish verification."}</small>
+                  {session.xVerification.identity ? <Link href="/play">Refresh X profile →</Link> : null}
                 </div>
               </div>
             </section>

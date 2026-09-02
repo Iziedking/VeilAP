@@ -13,6 +13,7 @@
 .profile-x img, .profile-avatar-fallback { width: 54px; height: 54px; flex: 0 0 auto; border: 2px solid var(--ink); border-radius: 50%; object-fit: cover; background: var(--signal); }
 .profile-avatar-fallback { display: grid; place-items: center; font-family: var(--arena-mono); font-size: 13px; }
 .profile-x > div { display: grid; gap: 8px; }
+.profile-x > div > a { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; }
 .profile-x > div > span { display: inline-flex; align-items: center; gap: 7px; }
 .profile-x svg { width: 14px; height: 14px; fill: currentColor; }
 .profile-private-room { margin-top: 34px; padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border: 2px solid var(--ink); background: color-mix(in srgb, var(--signal) 24%, var(--paper-light)); box-shadow: 5px 5px 0 var(--ink); }

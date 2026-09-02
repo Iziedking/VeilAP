@@ -429,6 +429,7 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getArenaSeasonEntryByOwnerFingerprint(projectId: string, seasonId: string, ownerFingerprint: string): Promise<ArenaSeasonEntryRecord | undefined>;
   getArenaSeasonEntryByIdempotencyKey(projectId: string, seasonId: string, idempotencyKey: string): Promise<ArenaSeasonEntryRecord | undefined>;
   listArenaSeasonEntries(projectId: string, seasonId: string): Promise<ArenaSeasonEntryRecord[]>;
+  listArenaSeasonEntriesByOwnerFingerprint(ownerFingerprint: string): Promise<ArenaSeasonEntryRecord[]>;
   listArenaEntryVersions(projectId: string, seasonId: string, entryId: string): Promise<ArenaEntryVersionRecord[]>;
   saveArenaEnrollment(input: {
     artifact: ArenaStrategyArtifactRecord;
@@ -1373,6 +1374,14 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(asc(arenaSeasonEntries.joinedAt));
         return rows.map(toArenaSeasonEntryRecord);
       },
+      async listArenaSeasonEntriesByOwnerFingerprint(ownerFingerprint) {
+        const rows = await db
+          .select()
+          .from(arenaSeasonEntries)
+          .where(eq(arenaSeasonEntries.ownerFingerprint, ownerFingerprint))
+          .orderBy(desc(arenaSeasonEntries.joinedAt));
+        return rows.map(toArenaSeasonEntryRecord);
+      },
       async listArenaEntryVersions(projectId, seasonId, entryId) {
         const rows = await db
           .select()
@@ -2127,6 +2136,12 @@ export function createMemoryRepositories(): {
         return [...arenaSeasonEntryRows.values()]
           .filter((record) => record.projectId === projectId && record.seasonId === seasonId)
           .sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime())
+          .map((record) => structuredClone(record));
+      },
+      async listArenaSeasonEntriesByOwnerFingerprint(ownerFingerprint) {
+        return [...arenaSeasonEntryRows.values()]
+          .filter((record) => record.ownerFingerprint === ownerFingerprint)
+          .sort((left, right) => right.joinedAt.getTime() - left.joinedAt.getTime())
           .map((record) => structuredClone(record));
       },
       async listArenaEntryVersions(projectId, seasonId, entryId) {
