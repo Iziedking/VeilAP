@@ -221,9 +221,10 @@
 .spectator-proof-strip code { font-size: 8px; }
 .spectator-console { border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 8px 8px 0 var(--ink); }
 .spectator-controls { min-height: 68px; display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); }
-.spectator-controls button { min-width: 150px; padding: 0 20px; border: 0; border-right: 1px solid var(--ink); background: transparent; font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; cursor: pointer; }
-.spectator-controls button.is-primary { background: var(--signal); color: var(--ink); }
-.spectator-controls button:disabled { color: var(--ink-soft); cursor: not-allowed; opacity: .86; }
+.spectator-controls button { min-width: 150px; padding: 0 20px; border: 0; border-right: 1px solid var(--ink); background: transparent; color: var(--ink); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; cursor: pointer; }
+.spectator-controls button.is-primary { background: var(--signal); color: var(--signal-ink); }
+.spectator-controls button:disabled { color: var(--ink-soft); cursor: not-allowed; opacity: .92; }
+.spectator-controls button.is-primary:disabled { color: var(--signal-ink); opacity: 1; }
 .spectator-progress { min-height: 72px; padding: 22px; display: flex; align-items: center; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--ink); }
 .spectator-progress button { min-width: 18px; height: 18px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
 .spectator-progress button.is-past { background: var(--ink-soft); }

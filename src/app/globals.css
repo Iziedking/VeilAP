@@ -12,6 +12,7 @@
   --ink-soft: #696773;
   --rule: #b9b7c1;
   --signal: #f2a572;
+  --signal-ink: #19181f;
   --signal-dark: #6a3215;
   --green: #315b48;
   --display: "Newsreader Variable", Georgia, serif;
@@ -31,6 +32,7 @@ html[data-theme="dark"] {
   --ink-soft: #b4b0ba;
   --rule: #56525d;
   --signal: #f2a572;
+  --signal-ink: #19181f;
   --signal-dark: #f7bf91;
   --green: #8ec5a4;
 }
