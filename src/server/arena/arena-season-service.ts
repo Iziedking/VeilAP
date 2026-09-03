@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { arenaMatchStartsAt } from "@/domain/arena/match-schedule";
 
 import { commitment } from "@/domain/canonical";
 import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
@@ -93,6 +94,7 @@ export interface ArenaScheduledMatchView {
   status: ArenaScheduledMatchRecord["status"];
   matchId?: string;
   createdAt: string;
+  startsAt: string;
 }
 
 export interface ArenaSeasonScheduleView {
@@ -214,6 +216,7 @@ function normalizeSchedule(
       status: match.status,
       matchId: match.matchId,
       createdAt: match.createdAt.toISOString(),
+      startsAt: arenaMatchStartsAt(match).toISOString(),
     })),
   };
 }

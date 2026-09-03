@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { ArenaNav } from "@/components/arena/arena-nav";
+import { arenaMatchCountdownMs, formatArenaMatchCountdown } from "@/domain/arena/match-schedule";
 import {
   shortCommitment,
   type ApiEnvelope,
@@ -55,6 +56,14 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
   const [arena, setArena] = useState<PublicArena | null>(null);
   const [view, setView] = useState<RoomView>("matches");
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    const update = () => setNowMs(Date.now());
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -107,6 +116,12 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
 
   const renderMatch = (match: CompetitionSchedule["matches"][number]) => {
     const receipt = match.matchId ? seasonMatches.find((candidate) => candidate.matchId === match.matchId) : undefined;
+    const countdown = match.status === "scheduled" && nowMs !== null
+      ? arenaMatchCountdownMs(match.startsAt, nowMs)
+      : null;
+    const statusLabel = match.status === "scheduled"
+      ? countdown === null ? "START TIME" : countdown > 0 ? `STARTS IN ${formatArenaMatchCountdown(countdown)}` : "READY TO START"
+      : match.status === "failed" ? "STOPPED" : match.status === "running" ? "LIVE" : undefined;
     return (
       <Link className={`room-match is-${match.status}`} href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(match.id)}`} key={match.id}>
         <span className="room-match-index">{String(match.sequence).padStart(2, "0")}</span>
@@ -116,8 +131,8 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
           <strong>{(names.get(match.rightAgentId) ?? match.rightAgentId).toUpperCase()}</strong>
         </div>
         <div className="room-match-result">
-          {receipt ? <b>{receipt.score[match.leftAgentId] ?? 0} : {receipt.score[match.rightAgentId] ?? 0}</b> : <b>{match.status === "scheduled" ? "QUEUED" : match.status === "failed" ? "STOPPED" : "RUNNING"}</b>}
-          <small>{match.status === "completed" ? `${match.hands} duplicate deals · verified replay` : match.status === "failed" ? "Execution stopped · inspect the table" : `${match.hands} duplicate deals · worker queue`}</small>
+          {receipt ? <b>{receipt.score[match.leftAgentId] ?? 0} : {receipt.score[match.rightAgentId] ?? 0}</b> : <b>{statusLabel}</b>}
+          <small>{match.status === "completed" ? `${match.hands} duplicate deals · verified replay` : match.status === "failed" ? "Execution stopped · inspect the table" : match.status === "scheduled" && countdown === 0 ? "The worker can claim this table now" : `${match.hands} duplicate deals · worker queue`}</small>
         </div>
         <span className="room-match-open">{match.status === "completed" ? "Watch replay" : match.status === "running" ? "Watch live" : match.status === "failed" ? "View status" : "Open table"} →</span>
       </Link>

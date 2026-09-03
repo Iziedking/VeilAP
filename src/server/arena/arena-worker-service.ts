@@ -1,5 +1,6 @@
 import type { ArenaSeasonService } from "./arena-season-service";
 import type { ProjectRepository } from "@/server/db/repositories";
+import { arenaMatchStartsAt } from "@/domain/arena/match-schedule";
 
 export type ArenaWorkerTickResult = {
   status: "idle" | "completed" | "in_progress" | "failed";
@@ -14,17 +15,20 @@ export interface ArenaWorkerServiceDependencies {
   repositories: Pick<ProjectRepository, "listAllArenaSeasons" | "listArenaScheduledMatches">;
   seasonService: Pick<ArenaSeasonService, "runScheduledMatch">;
   workerWalletAddress: string;
+  now?: () => Date;
 }
 
 export class ArenaWorkerService {
   private readonly repositories: ArenaWorkerServiceDependencies["repositories"];
   private readonly seasonService: ArenaWorkerServiceDependencies["seasonService"];
   private readonly workerWalletAddress: string;
+  private readonly now: () => Date;
 
   constructor(dependencies: ArenaWorkerServiceDependencies) {
     this.repositories = dependencies.repositories;
     this.seasonService = dependencies.seasonService;
     this.workerWalletAddress = dependencies.workerWalletAddress.trim();
+    this.now = dependencies.now ?? (() => new Date());
   }
 
   async runNext(input: { projectId?: string; seasonId?: string } = {}): Promise<ArenaWorkerTickResult> {
@@ -51,7 +55,11 @@ export class ArenaWorkerService {
 
   private async runNextForSeason(projectId: string, seasonId: string): Promise<ArenaWorkerTickResult> {
     const scheduledMatches = await this.repositories.listArenaScheduledMatches(projectId, seasonId);
-    const next = scheduledMatches.find((match) => match.status === "scheduled" || match.status === "failed");
+    const now = this.now();
+    const next = scheduledMatches.find((match) => (
+      match.status === "failed"
+      || (match.status === "scheduled" && arenaMatchStartsAt(match) <= now)
+    ));
     if (!next) return { status: "idle", projectId, seasonId };
 
     const result = await this.seasonService.runScheduledMatch({

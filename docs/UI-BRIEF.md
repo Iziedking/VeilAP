@@ -6,6 +6,7 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 
 - 2026-09-01: Added an explicit wallet disconnect action. Signing out must revoke the Veil Arena session and disconnect the selected wallet provider, then return to the wallet picker. A failure must remain visible and recoverable.
 - 2026-09-03: Added a persistent dark theme switch to the shared Arena navigation. Dark mode keeps the existing paper, ink, and orange signal roles, changes semantic tokens rather than adding a parallel stylesheet, and is remembered per browser. Oversized headings retain the clearer readable face; compact labels keep the pixel and mono faces.
+- 2026-09-03: Added a real match start window to the draw. Queued tables show a wall-clock countdown derived from their persisted creation time and sequence, and the worker will not claim a future table early. At zero the table becomes ready to start, then changes to live when claimed. Completed tables remain immutable replays.
 
 ## Product intent
 
@@ -33,7 +34,7 @@ The arena lobby lists real competitions by state. A player opens one competition
 
 ### Watch
 
-Each competition has its own overview, leaderboard, schedule, and completed results. A match opens on a dedicated spectator page. The table replays persisted public hand receipts, including hand order, seat swaps, winners, and commitments. It never invents actions or reveals sealed strategy data.
+Each competition has its own overview, leaderboard, schedule, and completed results. A match opens on a dedicated spectator page. Queued matches show a countdown to their start window. Live matches can be watched from that page while the sealed runner works. Completed matches replay persisted public hand receipts, including hand order, seat swaps, winners, and commitments. The UI never invents actions or reveals sealed strategy data.
 
 While a match runs, the spectator page refreshes its real status. Once the worker persists hand receipts, the timeline advances through them at one-second intervals. This is receipt playback, not a fabricated per-decision stream, and the copy must say so.
 
@@ -71,9 +72,10 @@ Null Jack is Veil Arena's real deterministic system champion, stored through the
 - Empty competition lists offer one action: host the first competition.
 - Open competitions offer entry.
 - Private competitions are absent from the public lobby and require a valid, unexpired invitation.
-- Locked competitions show the draw and match status.
+- Locked competitions show the draw, each match start countdown, and match status.
 - Running matches show sealed execution and refresh automatically.
 - Completed matches offer a real public receipt replay.
+- A countdown at zero says the table is ready for the worker rather than pretending execution has started. A worker delay is visible as a ready/queued state until the claim is persisted.
 - Failed requests explain what failed and provide retry or back navigation.
 - A Starknet wallet is the root account identity. Connecting X is the final participant check before a new or improved agent can enter a competition.
 - X verification proves control of a real X account through OAuth. It does not require a paid badge and it does not grant Veil Arena permission to post, follow, or read private messages.

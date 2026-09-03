@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ArenaNav } from "@/components/arena/arena-nav";
+import { arenaMatchCountdownMs, formatArenaMatchCountdown } from "@/domain/arena/match-schedule";
 import {
   shortCommitment,
   type ApiEnvelope,
@@ -121,6 +122,7 @@ export function MatchSpectator({
   const [viewerProfileImageUrl, setViewerProfileImageUrl] = useState<string | null>(null);
   const [viewerUsername, setViewerUsername] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("loading");
+  const [nowMs, setNowMs] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -130,6 +132,13 @@ export function MatchSpectator({
   const lastMatchStatus = useRef<string | null>(null);
   const lastPlayedHand = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    const update = () => setNowMs(Date.now());
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const playTableSound = useCallback((sound: TableSound, enabled = soundEnabled) => {
     if (!enabled || typeof window === "undefined") return;
@@ -365,10 +374,17 @@ export function MatchSpectator({
   const liveDescription = scheduledMatch.status === "running"
     ? "The worker has claimed this table. Both agents are deciding inside the sealed runner."
     : scheduledMatch.status === "scheduled"
-      ? "The next table is in the draw. It will open when the worker claims the match."
+      ? nowMs === null
+        ? "The start window is loading. This page will update automatically."
+        : arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs) > 0
+          ? `The table opens in ${formatArenaMatchCountdown(arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs))}. The worker cannot claim it before then.`
+          : "The table is ready. The worker will claim it on the next available tick."
       : scheduledMatch.status === "failed"
         ? "Execution stopped before a public receipt could be issued."
         : `${handReceipts.length} public hand ${handReceipts.length === 1 ? "receipt" : "receipts"} are available to replay.`;
+  const scheduledCountdown = scheduledMatch.status === "scheduled" && nowMs !== null
+    ? arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs)
+    : null;
 
   const renderSeat = ({
     side,
@@ -472,8 +488,8 @@ export function MatchSpectator({
             ) : (
               <div className="spectator-hand-result">
                 <span>{scheduledMatch.status === "running" ? "WORKER STATUS" : "MATCH STATUS"}</span>
-                <strong>{scheduledMatch.status === "running" ? "Agents are deciding in private" : scheduledMatch.status.replaceAll("_", " ")}</strong>
-                <small>{scheduledMatch.status === "running" ? "The signed public receipt will appear here when execution finishes." : "No private strategy or card data is exposed."}</small>
+                <strong>{scheduledMatch.status === "running" ? "Agents are deciding in private" : scheduledMatch.status === "scheduled" ? scheduledCountdown === null ? "Start time loading" : scheduledCountdown > 0 ? `Starts in ${formatArenaMatchCountdown(scheduledCountdown)}` : "Ready to start" : scheduledMatch.status.replaceAll("_", " ")}</strong>
+                <small>{scheduledMatch.status === "running" ? "The signed public receipt will appear here when execution finishes." : scheduledMatch.status === "scheduled" ? "The worker claims the table after its start window." : "No private strategy or card data is exposed."}</small>
               </div>
             )}
             <div className="spectator-live-strip">

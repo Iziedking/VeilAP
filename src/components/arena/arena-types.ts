@@ -40,6 +40,7 @@ export type ScheduledMatch = {
   status: "scheduled" | "running" | "completed" | "failed";
   matchId?: string;
   createdAt: string;
+  startsAt: string;
 };
 
 export type TournamentRules = {

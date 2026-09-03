@@ -61,6 +61,24 @@ describe("ArenaWorkerService", () => {
     });
   });
 
+  it("waits for a queued match start window", async () => {
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [],
+        listArenaScheduledMatches: async () => [scheduled("match-2", "scheduled")],
+      },
+      seasonService: { runScheduledMatch: async () => ({ ok: true, value: { matchId: "receipt-2" } as never }) },
+      workerWalletAddress: "0xworker",
+      now: () => new Date("2026-08-30T00:00:00.000Z"),
+    });
+
+    await expect(service.runNext({ projectId: "project-1", seasonId: "season-1" })).resolves.toEqual({
+      status: "idle",
+      projectId: "project-1",
+      seasonId: "season-1",
+    });
+  });
+
   it("discovers the next runnable match across locked competitions", async () => {
     const calls: string[] = [];
     const service = new ArenaWorkerService({
