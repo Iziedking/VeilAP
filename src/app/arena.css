@@ -1,11 +1,11 @@
 .arena-page {
-  --arena-paper: #e8e9ed;
-  --arena-panel: #f7f7f9;
-  --arena-ink: #19181f;
-  --arena-dim: #696773;
-  --arena-rule: #b9b7c1;
-  --arena-signal: #f2a572;
-  --arena-signal-ink: #402313;
+  --arena-paper: var(--paper);
+  --arena-panel: var(--paper-light);
+  --arena-ink: var(--ink);
+  --arena-dim: var(--ink-soft);
+  --arena-rule: var(--rule);
+  --arena-signal: var(--signal);
+  --arena-signal-ink: var(--signal-dark);
   min-width: 320px;
   min-height: 100vh;
   overflow-x: hidden;
@@ -28,7 +28,10 @@
 .arena-nav nav a { min-width: 116px; padding: 0 22px; display: grid; place-items: center; border-left: 1px solid var(--arena-rule); font-size: 10px; text-transform: uppercase; }
 .arena-nav nav a:last-child { border-right: 1px solid var(--arena-rule); }
 .arena-nav nav a:hover { background: var(--arena-signal); }
-.arena-nav-cta { min-height: 46px; padding: 0 18px; display: inline-flex; align-items: center; align-self: center; justify-self: end; border: 2px solid var(--arena-ink); background: var(--arena-signal); box-shadow: 4px 4px 0 var(--arena-ink); font-size: 9px; text-transform: uppercase; }
+.arena-nav-actions { display: flex; align-items: center; align-self: center; justify-self: end; gap: 12px; }
+.arena-nav-actions .hub-theme-toggle { border-color: var(--arena-ink); color: var(--arena-ink); }
+.arena-nav-actions .hub-theme-toggle[aria-pressed="true"] .hub-theme-toggle-icon { box-shadow: inset 0 0 0 2px var(--arena-panel); }
+.arena-nav-cta { min-height: 46px; padding: 0 18px; display: inline-flex; align-items: center; border: 2px solid var(--arena-ink); background: var(--arena-signal); box-shadow: 4px 4px 0 var(--arena-ink); font-size: 9px; text-transform: uppercase; }
 
 .arena-button { min-height: 54px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--arena-ink); background: var(--arena-panel); box-shadow: 6px 6px 0 var(--arena-ink); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .arena-button:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--arena-ink); }
@@ -124,6 +127,8 @@
   .arena-nav nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 50; height: 58px; border-top: 2px solid var(--arena-ink); background: var(--arena-panel); }
   .arena-nav nav a { min-width: 0; flex: 1; padding: 0 10px; }
   .arena-brand .veil-logo-wordmark { display: none; }
+  .arena-nav-actions { gap: 8px; }
+  .arena-nav-actions .hub-theme-toggle { min-height: 44px; padding-inline: 8px; font-size: 7px; }
   .arena-nav-cta { font-size: 8px; }
   .arena-home-hero, .arena-home-host { width: calc(100% - 28px); }
   .arena-home-hero { padding: 62px 0 84px; gap: 64px; }

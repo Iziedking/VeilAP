@@ -10,6 +10,7 @@ import {
   type CompetitionSummary,
   type ScheduledMatch,
 } from "@/components/arena/arena-types";
+import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
 import { VeilLogo } from "@/components/veil-logo";
 import { apiFetch } from "@/lib/api/client";
 
@@ -83,7 +84,10 @@ export function VeilArenaLanding() {
             <Link href="/arena-console">Host</Link>
             <Link href="/profile">Profile</Link>
           </nav>
-          <Link className="arena-nav-cta" href="/play">Build your agent</Link>
+          <div className="arena-nav-actions">
+            <ArenaThemeToggle />
+            <Link className="arena-nav-cta" href="/play">Build your agent</Link>
+          </div>
         </div>
       </header>
 

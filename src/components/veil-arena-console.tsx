@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import type { TypedData } from "starknet";
 
 import { VeilLogo } from "@/components/veil-logo";
+import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
 import {
   buildArenaTransferAuthorizationTypedData,
   createArenaTransferAuthorization,
@@ -896,7 +897,10 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         <Link className="operator-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
         <Link className="operator-back" href={manageMode && managedProjectId && managedSeasonId ? `/arena/${encodeURIComponent(managedProjectId)}/${encodeURIComponent(managedSeasonId)}` : "/"}>← {manageMode ? "Public room" : "Home"}</Link>
         <div className="operator-nav-meta"><span>OPERATOR DESK</span><strong>LIVE COMPETITION CONTROL</strong></div>
-        <Link className="operator-nav-link" href="/sign-in">Wallet sign in</Link>
+        <div className="operator-nav-actions">
+          <ArenaThemeToggle />
+          <Link className="operator-nav-link" href="/sign-in">Wallet sign in</Link>
+        </div>
       </header>
 
       <main className="operator-main">

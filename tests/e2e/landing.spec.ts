@@ -57,6 +57,22 @@ test("offers a real free challenge against the sealed Champion", async ({ page }
   await expect(page.locator("body")).not.toContainText(/sample champion|mock opponent|synthetic result/i);
 });
 
+test("switches and remembers the Arena theme", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.removeItem("veil-arena-theme"));
+  await page.reload();
+
+  const toggle = page.getByRole("button", { name: "Switch to dark theme" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("button", { name: "Switch to light theme" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.evaluate(() => localStorage.getItem("veil-arena-theme"))).resolves.toBe("dark");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
 test("keeps the public arena usable at 390 pixels", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");

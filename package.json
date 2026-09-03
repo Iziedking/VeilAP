@@ -17,6 +17,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "prove": "tsx scripts/prove.ts",
+    "benchmark:null-jack": "tsx scripts/benchmark-null-jack.ts",
     "check": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {

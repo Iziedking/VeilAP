@@ -5,6 +5,7 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 ## Change log
 
 - 2026-09-01: Added an explicit wallet disconnect action. Signing out must revoke the Veil Arena session and disconnect the selected wallet provider, then return to the wallet picker. A failure must remain visible and recoverable.
+- 2026-09-03: Added a persistent dark theme switch to the shared Arena navigation. Dark mode keeps the existing paper, ink, and orange signal roles, changes semantic tokens rather than adding a parallel stylesheet, and is remembered per browser. Oversized headings retain the clearer readable face; compact labels keep the pixel and mono faces.
 
 ## Product intent
 
@@ -93,6 +94,16 @@ Null Jack is Veil Arena's real deterministic system champion, stored through the
 ## Visual direction
 
 Keep the approved pale orange, cool paper, black ink, pixel display face, stepped VA mark, hard borders, and offset shadows. Use the pixel face for event names and state labels. Use the existing body face for instructions and explanations. The memorable element is a sealed poker table whose public timeline advances while both policies remain blacked out.
+
+### Dark theme decision
+
+The theme toggle lives in the shared top navigation so it is available before a visitor chooses a route. It changes the same semantic roles: page surface, panel surface, ink, quiet text, rule, signal, and failure. The orange signal remains the live and action colour, while near-black surfaces provide the game-room feel. The saved preference is local to the browser and the existing light theme remains the default for first-time visitors. The toggle has an explicit accessible name and pressed state, and the initial preference is applied before hydration to avoid a flash between themes.
+
+### Benchmark decision
+
+Null Jack remains a deterministic sealed agent, not an unbeatable claim. The benchmark records match wins, losses, ties, mean score difference, hand-level outcomes, policy failures, and matches where every hand tied. It runs the real `runMatch` engine with fixed development and held-out seeds, a same-policy control, and named baseline packages. A policy change is accepted only when it improves held-out mean score and match win rate without increasing policy failures or turning real ties into fabricated wins. The benchmark output is evidence for the champion label, not a promise that future builders cannot beat it.
+
+The 2026-09-03 run promoted the 700/525 policy from the frozen 625/500 policy. On 24 held-out seeds against Value Bot, it scored 14 wins, 4 losses, and 6 ties with mean score difference +1.50, compared with the prior policy's 11 wins, 10 losses, and 3 ties at +0.29. It had zero policy failures and zero matches in which every hand tied. The claim remains bounded: a future agent can beat Null Jack, and a tie remains a valid result.
 
 ## Rejected alternatives
 

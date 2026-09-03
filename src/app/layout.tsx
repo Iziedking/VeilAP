@@ -38,6 +38,11 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           {`(() => {
   const root = document.documentElement;
   root.classList.add("has-js", "is-loading");
+  try {
+    root.dataset.theme = window.localStorage.getItem("veil-arena-theme") === "dark" ? "dark" : "light";
+  } catch {
+    root.dataset.theme = "light";
+  }
   const firstVisitKey = "veil-arena:landing-loader-seen";
   let isFirstLandingVisit = false;
   try {

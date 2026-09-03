@@ -23,6 +23,18 @@
   --arena-readable-display: "Cascadia Mono", "IBM Plex Mono", Consolas, ui-monospace, monospace;
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #15141b;
+  --paper-light: #211f29;
+  --ink: #f4f1eb;
+  --ink-soft: #b4b0ba;
+  --rule: #56525d;
+  --signal: #f2a572;
+  --signal-dark: #f7bf91;
+  --green: #8ec5a4;
+}
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--ink); color: var(--ink); font-family: var(--body); }

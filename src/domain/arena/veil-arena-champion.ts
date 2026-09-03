@@ -16,8 +16,8 @@ export const VEIL_ARENA_CHAMPION: AgentPackage = parseAgentPackage({
   displayName: "Null Jack",
   policy: {
     rules: [
-      { when: { minEquityPermille: 625 }, action: "raise" },
-      { when: { minEquityPermille: 500 }, action: "call" },
+      { when: { minEquityPermille: 700 }, action: "raise" },
+      { when: { minEquityPermille: 525 }, action: "call" },
     ],
     fallbackAction: "fold",
   },
