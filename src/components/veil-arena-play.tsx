@@ -211,19 +211,22 @@ function reviewAgentPackage(value: string): PackageReview {
 
 export function VeilArenaPlay({
   defaultProjectId,
+  defaultAgentId = "",
   defaultSeasonId,
   invitationToken,
 }: {
   defaultProjectId: string;
+  defaultAgentId?: string;
   defaultSeasonId: string;
   invitationToken: string;
 }) {
   const [discoveredProjectId, setDiscoveredProjectId] = useState(defaultProjectId);
   const projectId = discoveredProjectId;
   const invitedSeasonId = invitationToken ? defaultSeasonId : "";
-  const signInReturnTo = invitationToken
+  const signInBase = invitationToken
     ? `/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(defaultSeasonId)}&invite=${encodeURIComponent(invitationToken)}`
     : `/play?project=${encodeURIComponent(projectId)}`;
+  const signInReturnTo = signInBase + (defaultAgentId ? `&agent=${encodeURIComponent(defaultAgentId)}` : "");
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [seasons, setSeasons] = useState<ArenaSeason[]>([]);
   const [seasonError, setSeasonError] = useState("");
@@ -464,6 +467,18 @@ export function VeilArenaPlay({
       setSaveMessage("Your saved package could not be reached. Try again in a moment.");
     }
   }
+
+  useEffect(() => {
+    if (!defaultAgentId || sessionState !== "authenticated") return;
+    const controller = new AbortController();
+    void apiFetch(`/api/profile/agents/${encodeURIComponent(defaultAgentId)}`, { signal:controller.signal }).then(async response=>{
+      const body=await response.json() as ApiEnvelope<{agentPackage:AgentPackage}>;
+      if(controller.signal.aborted) return;
+      if(!response.ok || !body.ok) {setSaveMessage("Your selected saved agent could not be loaded. Use Retry loading agent below.");return;}
+      setClaimedPackage(null);setAgentPackageText(JSON.stringify(body.value.agentPackage,null,2));setSaveState("saved");setSaveMessage(defaultAgentId+" selected from My agents. Review the competition before approving entry.");
+    }).catch(()=>{if(!controller.signal.aborted)setSaveMessage("Your selected saved agent could not be reached. Use Retry loading agent below.");});
+    return ()=>controller.abort();
+  },[defaultAgentId,sessionState]);
 
   async function saveAgent() {
     if (sessionState !== "authenticated" || packageReview.status !== "ready" || !packageReview.agentPackage || saveState === "saving") return;
@@ -717,11 +732,11 @@ export function VeilArenaPlay({
       <main>
         <section className="play-hero" aria-labelledby="play-title">
           <span className="play-kicker">AGENT ENTRY</span>
-          <h1 id="play-title">Prepare an agent for competition.</h1>
-          <p>Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it, then verify your wallet and X account before you enter.</p>
+          <h1 id="play-title">{defaultAgentId ? "Choose where your agent competes." : "Prepare an agent for competition."}</h1>
+          <p>{defaultAgentId ? "Your saved agent is selected below. Review the competition, verify your account, and approve entry when ready." : "Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it, then verify your wallet and X account before you enter."}</p>
           <ol className="play-steps" aria-label="How to enter">
-            <li><span>01</span><strong>Give AGENT.md to a coding agent</strong></li>
-            <li><span>02</span><strong>Have it build and validate the package</strong></li>
+            <li><span>01</span><strong>{defaultAgentId ? "Choose an open competition" : "Give AGENT.md to a coding agent"}</strong></li>
+            <li><span>02</span><strong>{defaultAgentId ? "Review your saved agent" : "Have it build and validate the package"}</strong></li>
             <li><span>03</span><strong>Review the package and sign in with your wallet</strong></li>
             <li><span>04</span><strong>Verify your X account and approve entry</strong></li>
           </ol>
@@ -768,7 +783,7 @@ export function VeilArenaPlay({
 
           <section className="play-builder" aria-labelledby="builder-title">
             <header>
-              <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">Bring your agent package</h2></div>
+              <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">{defaultAgentId ? "Your saved agent" : "Bring your agent package"}</h2></div>
               <strong>{selectedSeasonJoinable ? "OPEN FOR ENTRY" : selectedSeason ? "VIEW ONLY" : "WAITING FOR SEASON"}</strong>
             </header>
 
@@ -817,7 +832,7 @@ export function VeilArenaPlay({
 
             {(!currentEntry || replacementMode) && (
               <form className="play-form" onSubmit={enterArena}>
-                <fieldset disabled={submitting}>
+                {defaultAgentId ? <section className="play-package-import"><p><strong>{defaultAgentId}</strong> is selected from My agents.</p><Link className="play-secondary" href="/profile">Choose another agent</Link>{packageReview.status !== "ready" && sessionState === "authenticated" ? <button type="button" className="play-secondary" onClick={()=>void loadSavedAgent(defaultAgentId)}>Retry loading agent</button> : null}</section> : <fieldset disabled={submitting}>
                   <legend className="sr-only">Import a Veil Agent Protocol package</legend>
 
                   <section className="play-agent-guide" aria-labelledby="agent-guide-title">
@@ -841,7 +856,7 @@ export function VeilArenaPlay({
                         [ CHOOSE PACKAGE ]
                       </label>
                     </div>
-                    <p className="play-package-intro">Importing starts a safety review. Save the sealed package to your private agent library first; entering a competition is a separate choice. The operator sees its name and commitment, not its strategy.</p>
+                    <p className="play-package-intro">Importing starts a safety review. Save the sealed package to your private agent library first; entering a competition is a separate choice. Other players see its name and commitment. The trusted backend and privileged operators can access its strategy.</p>
                     {savedAgents.length > 0 && (
                       <div className="play-saved-agents" aria-label="Saved agents">
                         <span>SAVED IN YOUR PRIVATE LIBRARY</span>
@@ -864,7 +879,7 @@ export function VeilArenaPlay({
                     {claimState !== "idle" && <p className={`play-claim-status${claimState === "error" ? " is-error" : ""}`} role="status">{claimState === "loading" ? "Opening the package from your coding agent..." : claimMessage}</p>}
                     {packageReview.status === "invalid" && <p className="play-package-invalid" role="alert">{packageReview.message}</p>}
                   </section>
-                </fieldset>
+                </fieldset>}
 
                 <section className="play-review" aria-labelledby="review-title">
                   <div>
@@ -896,7 +911,7 @@ export function VeilArenaPlay({
                   </div>
                   <details>
                     <summary>How privacy works</summary>
-                    <p>Veil Arena encrypts the validated package before storing it. The trusted match runner opens it only while running the fixed game rules. This version does not use zero-knowledge execution.</p>
+                    <p>Veil Arena encrypts the validated package before storing it. The trusted backend opens it for owner-authorized preparation and while running the fixed game rules. This version does not use zero-knowledge execution.</p>
                   </details>
                 </section>
 
@@ -962,7 +977,7 @@ export function VeilArenaPlay({
                 {entryState === "error" && <div className="play-error play-entry-error" role="alert"><span>Your existing entry could not be checked. Nothing new was submitted.</span><button type="button" onClick={() => { setEntryState("loading"); setEntryRefresh((current) => current + 1); }}>CHECK AGAIN</button></div>}
 
                 <div className="play-submit-actions">
-                <button
+                {!defaultAgentId && <button
                   className="play-save"
                   type="button"
                   onClick={() => void saveAgent()}
@@ -970,7 +985,7 @@ export function VeilArenaPlay({
                 >
                   <span>{saveState === "saving" ? "VALIDATING AND SAVING..." : saveState === "saved" ? "AGENT SAVED TO PROFILE" : "SAVE AGENT TO PROFILE"}</span>
                   <strong aria-hidden="true">↓</strong>
-                </button>
+                </button>}
                 <button
                   className="play-submit"
                   type="submit"

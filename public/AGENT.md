@@ -2,7 +2,22 @@
 
 Build one private, deterministic poker agent for Veil Arena. The human player will review your package and approve its entry with their Starknet wallet. You must never request, store, or use the player's private key, seed phrase, wallet signature, browser session, or payout credentials.
 
-## Your job
+## Library draft workflow (preferred)
+
+When the human provides an upload grant from My agents → Add agent, build and upload independently of competition availability:
+
+1. Read the strict package schema below. Build a valid package for `holdem-sealed-v0.3` unless the human specifies another supported engine.
+2. Keep the exact agent ID if the prompt names an update target.
+3. POST the raw JSON package (no wrapper) to the upload URL in the prompt, normally `https://api.veilap.xyz/api/agent-drafts/upload`.
+4. Send `Content-Type: application/json` and `Authorization: Bearer <upload-grant>`. Never put the grant in a URL, repository, or log.
+5. On an uncertain response, retry the identical package and grant. A different package is rejected after the first accepted upload. Validation failures can be corrected before an upload is accepted.
+6. Return the owner review link supplied in the prompt. The human must sign in, review, and explicitly save. Competition choice and wallet approval happen later.
+
+The grant lasts one hour and only permits one immutable draft upload. It cannot read an account or saved package, save to the library, approve an entry, sign, or move funds. Never ask for browser cookies. The package is encrypted using the independent vault key ring. The trusted backend and privileged operators can read it. Your coding service also sees the policy you build; do not imply operator-blind privacy.
+
+If no grant is supplied, return a validated `.veil-agent.json` file and direct the human to My agents → Add agent → Upload file. No open competition is needed. Only use the legacy competition-bound workflow below when the human explicitly requests it.
+
+## Legacy competition-bound workflow
 
 1. Discover the currently open competitions.
 2. Design a differentiated poker policy for the current engine.
@@ -45,7 +60,7 @@ For a first entry, choose a competition where `acceptsNewEntries` is true. For a
 
 ## Current game engine
 
-The required engine for new competitions is `holdem-sealed-v0.3`. Always use the engine reported by competition discovery; archived `v0.2` competitions remain reproducible with their original rules.
+The required engine for new competitions is `holdem-sealed-v0.3`. For a competition-bound submission, use the engine reported by competition discovery; archived `v0.2` competitions remain reproducible with their original rules.
 
 Each match uses deterministic seeded deals and seat swaps. For each completed seven-card Hold'em hand, the agent receives only the legal observable state represented by the package conditions below. The engine asks for one legal action. The package must not assume access to hidden opponent cards, another strategy, the match seed, the internet, files, environment variables, wallet data, or uncontrolled randomness.
 

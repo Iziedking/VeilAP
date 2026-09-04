@@ -2,19 +2,19 @@
 
 Build a private poker agent with any coding agent. Keep its strategy sealed. Compete in open tournaments.
 
-Veil Arena is a private competition platform for deterministic agents on Starknet. A player gives [`AGENT.md`](public/AGENT.md) to the coding agent they already use. That agent engineers a strict strategy package and returns a private approval link. The player reviews the package commitment, signs in with a compatible wallet, and approves entry. The arena runs every package under the same fixed rules, publishes verifiable match receipts, and never returns a submitted strategy through a public API.
+Veil Arena is a private competition platform for deterministic agents on Starknet. A player opens My agents, signs in, and chooses Add agent. They can copy a private upload prompt to their coding agent or upload a `.veil-agent.json` file. Both paths lead to a package review and explicit save. Competition choice and wallet approval happen afterward. The arena runs every package under the same fixed rules, publishes verifiable match receipts, and never returns a submitted strategy through a public API.
 
 The first game is a heads-up poker decision benchmark. It is an agent competition, not a casino and not a token price market.
 
 ## The player experience
 
-1. Copy `AGENT.md` into any coding agent.
-2. The coding agent discovers an open competition, builds a differentiated package, validates it, and returns a private approval link.
-3. Review the exact package identity and commitment in Veil Arena.
-4. Sign in with a Starknet wallet.
-5. Connect a valid X account as the final participant check, then approve the sealed entry.
-6. If the format permits improvements, approve a new version before roster lock. The previous version remains sealed and cannot leak into the public history.
-7. Watch match results and leaderboard movement in public.
+1. Open **My agents → Add agent** and sign in with a Starknet wallet.
+2. Choose **Send from coding agent** for a complete private upload prompt, or **Upload file** for a local package.
+3. Review the validated name, agent ID, engine and package fingerprint. Your strategy remains private to your account and the trusted backend.
+4. Choose **Save agent**. No open competition or X verification is required for your library.
+5. Choose a compatible competition when ready. Connect X and approve entry with your wallet.
+6. To improve a saved package, choose **Update** from My agents. Existing sealed competition entries and historical results remain unchanged. Entry replacement is a separate, explicit action permitted only by that competition's rules.
+7. Watch published match results and replay completed computation. The engine is a decision benchmark; replay is not live gameplay.
 8. If the competition has a funded reward and the agent wins, the registered wallet can receive a private STRK20 transfer.
 
 The player does not need to write code or configure a special builder account. The coding agent cannot approve an entry, access the player's wallet, or move funds. Wallet sign-in proves wallet control. X OAuth proves control of a current X account. Neither action is a payment.
@@ -26,7 +26,8 @@ An agent strategy is valuable intellectual property. A public tournament should 
 Veil Arena separates competition evidence from private strategy data:
 
 - coding agents submit strict declarative JSON over HTTPS; executable code, unknown fields, and packages larger than 64 KB are rejected;
-- approval links keep the encrypted claim token in the URL fragment, which browsers do not send in ordinary HTTP requests or referrer headers;
+- owner-bound upload grants expire after one hour and permit one immutable draft upload; only the signed-in owner can review and save, and a retry cannot duplicate a saved version;
+- legacy approval links keep the encrypted claim token in the URL fragment, which browsers do not send in ordinary HTTP requests or referrer headers;
 - the browser receives package identity, engine, rule count, expiry, and commitment for approval, but never receives the submitted strategy from the claim API;
 - competitors see aliases, commitments, scores, ranks, and signed receipts;
 - submitted policies and payout wallets are encrypted before database storage;
@@ -52,7 +53,8 @@ Veil Arena uses several independent controls instead of treating encryption as t
 
 - The accepted package is declarative JSON, not executable code. Strict schemas reject unknown fields, unsupported protocol versions, illegal actions, and packages over 64 KB.
 - Coding-agent preparation cannot enter a tournament. A valid wallet session, a wallet-bound X identity, and a final player action are required.
-- The claim preview returns package identity, engine, rule count, expiry, and commitment. It does not return strategy rules.
+- Library drafts are encrypted with the independent participant vault key ring. Only the grant digest is stored; grants and plaintext packages are not written to browser local storage. Final save and draft consumption commit atomically. Five active drafts and twenty creations per owner per rolling day bound storage.
+- Draft review and the legacy claim preview return package identity, engine, rule count, expiry, and commitment. It does not return strategy rules.
 - The server parses and commits the package again during entry. Browser checks are convenience only and are never trusted as the final validator.
 
 **Storage and execution**

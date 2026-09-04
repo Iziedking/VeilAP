@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { ApiEnvelope, CompetitionSummary } from "@/components/arena/arena-types";
 import { ArenaNav } from "@/components/arena/arena-nav";
 import { XMark } from "@/components/brand/x-mark";
+import type { AgentDraftView } from "@/server/arena/participant-agent-draft-record";
+import { onboardingRequest } from "@/lib/api/agent-onboarding";
 import { apiFetch } from "@/lib/api/client";
 
 type ProfileIdentity = {
@@ -102,6 +104,10 @@ export function VeilProfile() {
   const [session, setSession] = useState<ProfileSession | null>(null);
   const [entries, setEntries] = useState<ProfileEntry[]>([]);
   const [agents, setAgents] = useState<SavedAgent[]>([]);
+  const [drafts, setDrafts] = useState<AgentDraftView[]>([]);
+  const [libraryError, setLibraryError] = useState(false);
+  const [draftError, setDraftError] = useState(false);
+  const [entriesError, setEntriesError] = useState(false);
   const [recentPrivateRoom, setRecentPrivateRoom] = useState<RecentPrivateRoom | null>(null);
   const [error, setError] = useState("");
 
@@ -111,21 +117,28 @@ export function VeilProfile() {
     try {
       const sessionResponse = await apiFetch("/api/auth/session");
       const sessionBody = await sessionResponse.json() as ApiEnvelope<ProfileSession | null>;
-      if (!sessionResponse.ok || !sessionBody.ok || !sessionBody.value) {
+      if (!sessionResponse.ok || !sessionBody.ok) throw new Error("PROFILE_SESSION_UNAVAILABLE");
+      if (!sessionBody.value) {
         setSession(null);
         setEntries([]);
+        setAgents([]);
+        setDrafts([]);
         setState("signed-out");
         return;
       }
 
       setSession(sessionBody.value);
-      const entriesResponse = await apiFetch("/api/profile/entries");
-      const entriesBody = await entriesResponse.json() as ApiEnvelope<ProfileEntry[]>;
-      if (!entriesResponse.ok || !entriesBody.ok) throw new Error("PROFILE_ENTRIES_UNAVAILABLE");
-      setEntries(entriesBody.value);
-      const agentsResponse = await apiFetch("/api/profile/agents");
-      const agentsBody = await agentsResponse.json() as ApiEnvelope<SavedAgent[]>;
-      if (agentsResponse.ok && agentsBody.ok) setAgents(agentsBody.value);
+      const [entryResult, agentResult, draftResult] = await Promise.allSettled([
+        onboardingRequest<ProfileEntry[]>("/api/profile/entries"),
+        onboardingRequest<SavedAgent[]>("/api/profile/agents"),
+        onboardingRequest<AgentDraftView[]>("/api/profile/agent-drafts"),
+      ]);
+      setEntriesError(entryResult.status === "rejected");
+      setLibraryError(agentResult.status === "rejected");
+      setDraftError(draftResult.status === "rejected");
+      setEntries(entryResult.status === "fulfilled" ? entryResult.value : []);
+      setAgents(agentResult.status === "fulfilled" ? agentResult.value : []);
+      setDrafts(draftResult.status === "fulfilled" ? draftResult.value.filter(d=>d.status === "pending" || d.status === "ready") : []);
       setState("ready");
     } catch {
       setState("error");
@@ -214,19 +227,25 @@ export function VeilProfile() {
 
             <section className="profile-agent-library" aria-labelledby="profile-agent-library-title">
               <header>
-                <div><span>PRIVATE AGENT LIBRARY</span><h2 id="profile-agent-library-title">Saved packages</h2></div>
-                <Link href="/play">Build or update an agent →</Link>
+                <div><span>PRIVATE AGENT LIBRARY</span><h2 id="profile-agent-library-title">My agents</h2></div>
+                <Link className="profile-primary" href="/profile/agents/new">Add agent →</Link>
               </header>
-              {agents.length ? agents.map((agent) => (
+              {libraryError ? <p role="alert">Your agents could not be loaded. <button className="profile-secondary" type="button" onClick={() => void load()}>Try again</button></p> : agents.length ? agents.map((agent) => (
                 <article className="profile-library-row" key={agent.id}>
                   <div><strong>{agent.displayName}</strong><small>{agent.agentId} · {agent.engineVersion}</small></div>
                   <span>V{agent.version}</span>
                   <code>{shortCommitment(agent.artifactCommitment)}</code>
                   <small>Updated {dateLabel(agent.updatedAt)}</small>
+                  <div className="profile-library-actions"><Link href={`/play?agent=${encodeURIComponent(agent.agentId)}`}>Choose competition</Link><Link href={`/profile/agents/new?update=${encodeURIComponent(agent.agentId)}`}>Update</Link></div>
                 </article>
               )) : (
                 <div className="profile-library-empty">No saved packages yet. Import one and save it here before choosing an arena.</div>
               )}
+            </section>
+
+            <section className="profile-agent-library" aria-label="Agent drafts">
+              <header><div><span>IN PROGRESS</span><h2>Agent drafts</h2></div></header>
+              {draftError ? <p role="alert">Drafts could not be loaded. <button className="profile-secondary" type="button" onClick={() => void load()}>Try again</button></p> : drafts.length ? drafts.map(d=><article className="profile-draft-row" key={d.id}><div><strong>{d.agent?.displayName ?? d.targetAgentId ?? "Waiting for upload"}</strong><p>{d.status === "ready" ? "Ready for your review" : "Upload permission active"}</p></div><Link href={"/profile/agents/new?draft="+encodeURIComponent(d.id)}>{d.status === "ready" ? "Review agent" : "Open draft"} →</Link></article>) : <p>No drafts waiting for review.</p>}
             </section>
 
             <section className="profile-entries" aria-labelledby="profile-entries-title">
@@ -234,7 +253,7 @@ export function VeilProfile() {
                 <div><span>SEALED AGENTS</span><h2 id="profile-entries-title">Your competition entries</h2></div>
                 <Link href="/play">Enter a competition →</Link>
               </header>
-              {entries.length ? entries.map(({ projectId, seasonId, competition, entry }) => (
+              {entriesError ? <p role="alert">Competition history could not be loaded. <button className="profile-secondary" type="button" onClick={() => void load()}>Try again</button></p> : entries.length ? entries.map(({ projectId, seasonId, competition, entry }) => (
                 <article className="profile-entry" key={`${projectId}:${seasonId}`}>
                   <div className="profile-entry-main">
                     <span>{competition.name}</span>
@@ -250,8 +269,8 @@ export function VeilProfile() {
                 </article>
               )) : (
                 <div className="profile-empty">
-                  <strong>No approved agents found.</strong>
-                  <p>Importing a package is only a local review step. It appears here after you approve the entry with your wallet.</p>
+                  <strong>No competition entries yet.</strong>
+                  <p>Saved agents stay in My agents above. Competition entries appear here after you approve entry with your wallet.</p>
                   <Link className="profile-primary" href="/play">Bring an agent →</Link>
                 </div>
               )}

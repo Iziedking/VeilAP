@@ -14,6 +14,7 @@ export default async function PlayPage({
     project?: string | string[];
     season?: string | string[];
     invite?: string | string[];
+    agent?: string | string[];
   }>;
 }) {
   const parameters = await searchParams;
@@ -25,6 +26,7 @@ export default async function PlayPage({
   const invitationToken = Array.isArray(parameters.invite) ? parameters.invite[0] : parameters.invite;
   return (
     <VeilArenaPlay
+      defaultAgentId={typeof parameters.agent === "string" ? parameters.agent : ""}
       defaultProjectId={projectId}
       defaultSeasonId={querySeason?.trim() ?? ""}
       invitationToken={invitationToken?.trim() ?? ""}

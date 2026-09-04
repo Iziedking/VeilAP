@@ -38,7 +38,7 @@ function context(recordId: string) {
   } as const;
 }
 
-function view(record: ParticipantAgentPackageRecord): ParticipantAgentView {
+export function participantAgentView(record: ParticipantAgentPackageRecord): ParticipantAgentView {
   return {
     id: record.id,
     agentId: record.agentId,
@@ -92,19 +92,26 @@ export class ParticipantAgentService {
       if (agentPackageCommitment(plaintext) !== existing.artifactCommitment) throw new Error("PARTICIPANT_AGENT_COMMITMENT_MISMATCH");
       return { ...existing, encryptedPackage: this.seal(JSON.stringify(plaintext), existing.id) };
     });
-    return view(record);
+    return participantAgentView(record);
   }
 
   async list(actorWalletAddress: string): Promise<ParticipantAgentView[]> {
     const ownerFingerprint = fingerprintWallet(actorWalletAddress, this.dependencies.walletHashPepper);
     const records = await this.dependencies.repositories.listParticipantAgentPackages(ownerFingerprint);
-    return records.map(view);
+    return records.map(participantAgentView);
   }
 
   async save(input: { actorWalletAddress: string; agentPackage: unknown }): Promise<ParticipantAgentView> {
     const agentPackage = parseAgentPackage(input.agentPackage);
     const ownerFingerprint = fingerprintWallet(input.actorWalletAddress, this.dependencies.walletHashPepper);
     const record = await this.dependencies.repositories.updateParticipantAgentPackage(ownerFingerprint, agentPackage.agentId, (existing) => {
+      return this.buildRecord(ownerFingerprint, agentPackage, existing);
+    });
+    return participantAgentView(record);
+  }
+
+  // Synchronous builder also used inside atomic draft finalization.
+  buildRecord(ownerFingerprint: string, agentPackage: AgentPackage, existing?: ParticipantAgentPackageRecord): ParticipantAgentPackageRecord {
     const now = this.dependencies.now?.() ?? new Date();
     const id = existing?.id ?? this.dependencies.idFactory?.() ?? randomUUID();
     const record: ParticipantAgentPackageRecord = {
@@ -122,8 +129,6 @@ export class ParticipantAgentService {
       updatedAt: now,
     };
     return record;
-    });
-    return view(record);
   }
 
   async open(input: { actorWalletAddress: string; agentId: string }): Promise<{ view: ParticipantAgentView; agentPackage: AgentPackage } | null> {
@@ -139,6 +144,6 @@ export class ParticipantAgentService {
     if (agentPackageCommitment(agentPackage) !== record.artifactCommitment) {
       throw new Error("PARTICIPANT_AGENT_COMMITMENT_MISMATCH");
     }
-    return { view: view(record), agentPackage };
+    return { view: participantAgentView(record), agentPackage };
   }
 }

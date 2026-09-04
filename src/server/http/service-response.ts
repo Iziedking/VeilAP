@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 const notFoundCodes = new Set([
+  "DRAFT_NOT_FOUND",
   "PROJECT_NOT_FOUND",
   "AGREEMENT_NOT_FOUND",
   "CHECKPOINT_NOT_FOUND",
@@ -15,6 +16,7 @@ const notFoundCodes = new Set([
   "ARENA_PRIZE_POOL_NOT_FOUND",
 ]);
 const conflictCodes = new Set([
+  "DRAFT_IDENTITY_CONFLICT", "DRAFT_UPLOAD_CONFLICT", "DRAFT_REVIEW_CHANGED", "DRAFT_VERSION_CONFLICT", "DRAFT_UPDATE_REQUIRED", "DRAFT_NOT_READY", "DRAFT_REVOKED", "DRAFT_EXPIRED",
   "STRATEGY_ARTIFACT_ALREADY_EXISTS",
   "IDEMPOTENCY_KEY_REUSED",
   "ARENA_SEASON_ALREADY_LOCKED",
@@ -70,6 +72,8 @@ export function serviceResponse(
   if (notFoundCodes.has(result.code)) status = 404;
   else if (conflictCodes.has(result.code)) status = 409;
   else if (forbiddenCodes.has(result.code)) status = 403;
+  else if (result.code === "DRAFT_LIMIT_REACHED") status = 429;
+  else if (result.code === "DRAFT_KEY_UNAVAILABLE") status = 503;
   else if (result.code === "AUTH_REQUIRED") status = 401;
   else if (result.code === "X_VERIFICATION_REQUIRED") status = 403;
   else if (result.code === "NO_LOSING_AGENT") status = 409;

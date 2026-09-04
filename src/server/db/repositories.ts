@@ -1,3 +1,4 @@
+import type { AgentDraftRecord, DraftMutation } from "@/server/arena/participant-agent-draft-record";
 import { eligibleMatch, MAX_MATCH_ATTEMPTS } from "@/domain/arena/queue-policy";
 import { and, asc, count, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 
@@ -25,6 +26,7 @@ import {
   projectMembers,
   projects,
   participantAgentPackages,
+  participantAgentDrafts,
   releases,
   revenueEvents,
   selectiveReceipts,
@@ -431,6 +433,9 @@ export interface ProjectRepository extends ProjectKeyRepository {
   saveArenaStrategyArtifact(record: ArenaStrategyArtifactRecord): Promise<void>;
   getArenaStrategyArtifact(projectId: string, agentId: string): Promise<ArenaStrategyArtifactRecord | undefined>;
   listArenaStrategyArtifacts(projectId: string): Promise<ArenaStrategyArtifactRecord[]>;
+  createParticipantAgentDraft(record: AgentDraftRecord): Promise<AgentDraftRecord>;
+  listParticipantAgentDrafts(owner: string): Promise<AgentDraftRecord[]>;
+  mutateParticipantAgentDraft(id: string, owner: string | null, build: DraftMutation): Promise<AgentDraftRecord>;
   saveParticipantAgentPackage(record: ParticipantAgentPackageRecord): Promise<void>;
   updateParticipantAgentPackage(ownerFingerprint: string, agentId: string, build: (existing: ParticipantAgentPackageRecord | undefined) => ParticipantAgentPackageRecord): Promise<ParticipantAgentPackageRecord>;
   getParticipantAgentPackage(ownerFingerprint: string, agentId: string): Promise<ParticipantAgentPackageRecord | undefined>;
@@ -523,6 +528,10 @@ function toArenaStrategyArtifactRecord(row: typeof arenaStrategyArtifacts.$infer
     status: "sealed",
     createdAt: row.createdAt,
   };
+}
+
+function toAgentDraftRecord(row: typeof participantAgentDrafts.$inferSelect): AgentDraftRecord {
+  return { ...row, status: row.status as AgentDraftRecord["status"], agent: row.agent as AgentDraftRecord["agent"], encryptedPackage: row.encryptedPackage as AgentDraftRecord["encryptedPackage"] };
 }
 
 function toParticipantAgentPackageRecord(row: typeof participantAgentPackages.$inferSelect): ParticipantAgentPackageRecord {
@@ -1218,6 +1227,51 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(asc(arenaStrategyArtifacts.createdAt));
         return rows.map(toArenaStrategyArtifactRecord);
       },
+      // Drizzle ORM 0.45.2: existing transaction/returning contract and installed
+      // node-postgres/session.d.ts, reviewed 2026-09-04; verified with PostgreSQL 16.
+      async createParticipantAgentDraft(record) {
+        return db.transaction(async (tx) => {
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["participant-drafts", record.ownerFingerprint])}, 0))`);
+          const cutoff = new Date(record.createdAt.getTime() - 86_400_000);
+          await tx.delete(participantAgentDrafts).where(and(eq(participantAgentDrafts.ownerFingerprint, record.ownerFingerprint), lt(participantAgentDrafts.createdAt, cutoff)));
+          const prior = await tx.select().from(participantAgentDrafts).where(eq(participantAgentDrafts.id, record.id)).limit(1);
+          if (prior[0]) {
+            if (prior[0].ownerFingerprint !== record.ownerFingerprint || prior[0].targetAgentId !== record.targetAgentId) throw new Error("DRAFT_IDENTITY_CONFLICT");
+            return toAgentDraftRecord(prior[0]);
+          }
+          const rows = await tx.select().from(participantAgentDrafts).where(eq(participantAgentDrafts.ownerFingerprint, record.ownerFingerprint));
+          if (rows.length >= 20 || rows.filter(r => r.expiresAt > record.createdAt && (r.status === "pending" || r.status === "ready")).length >= 5) throw new Error("DRAFT_LIMIT_REACHED");
+          const saved = await tx.insert(participantAgentDrafts).values(record).returning();
+          return toAgentDraftRecord(saved[0]!);
+        });
+      },
+      async listParticipantAgentDrafts(owner) {
+        const rows = await db.select().from(participantAgentDrafts).where(eq(participantAgentDrafts.ownerFingerprint, owner)).orderBy(desc(participantAgentDrafts.createdAt)).limit(20);
+        return rows.map(toAgentDraftRecord);
+      },
+      async mutateParticipantAgentDraft(id, owner, build) {
+        // Same vault lock as direct saves; the draft and agent commit together.
+        return db.transaction(async (tx) => {
+          const rows = await tx.select().from(participantAgentDrafts).where(owner === null ? eq(participantAgentDrafts.id, id) : and(eq(participantAgentDrafts.id, id), eq(participantAgentDrafts.ownerFingerprint, owner))).for("update");
+          if (!rows[0]) throw new Error("DRAFT_NOT_FOUND");
+          const draft = toAgentDraftRecord(rows[0]);
+          const agentId = draft.agent?.agentId ?? draft.targetAgentId;
+          let existing: ParticipantAgentPackageRecord | undefined;
+          if (agentId) {
+            await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["participant-vault", draft.ownerFingerprint, agentId])}, 0))`);
+            const agents = await tx.select().from(participantAgentPackages).where(and(eq(participantAgentPackages.ownerFingerprint, draft.ownerFingerprint), eq(participantAgentPackages.agentId, agentId))).limit(1);
+            existing = agents[0] ? toParticipantAgentPackageRecord(agents[0]) : undefined;
+          }
+          const next = build(draft, existing);
+          if (next.draft.id !== id || next.draft.ownerFingerprint !== draft.ownerFingerprint) throw new Error("DRAFT_IDENTITY_CONFLICT");
+          if (next.agent) {
+            if (next.agent.ownerFingerprint !== draft.ownerFingerprint || next.agent.agentId !== agentId || (existing && next.agent.id !== existing.id)) throw new Error("DRAFT_IDENTITY_CONFLICT");
+            await tx.insert(participantAgentPackages).values(next.agent).onConflictDoUpdate({target:[participantAgentPackages.ownerFingerprint, participantAgentPackages.agentId],set:next.agent});
+          }
+          await tx.update(participantAgentDrafts).set(next.draft).where(eq(participantAgentDrafts.id,id));
+          return next.draft;
+        });
+      },
       async updateParticipantAgentPackage(ownerFingerprint, agentId, build) {
         // Drizzle 0.45.2 transaction API; PostgreSQL 16 advisory xact locks,
         // docs/16/explicit-locking.html, reviewed 2026-09-04. Lock absent rows too.
@@ -1904,6 +1958,7 @@ export function createMemoryRepositories(): {
   const revenueEventRows = new Map<string, RevenueEventRecord>();
   const selectiveReceiptRows = new Map<string, SelectiveReceiptRecord>();
   const arenaStrategyArtifactRows = new Map<string, ArenaStrategyArtifactRecord>();
+  const participantAgentDraftRows = new Map<string, AgentDraftRecord>();
   const participantAgentPackageRows = new Map<string, ParticipantAgentPackageRecord>();
   const arenaMatchReceiptRows = new Map<string, ArenaMatchReceiptRecord>();
   const arenaMatchRevealRows = new Map<string, ArenaMatchRevealRecord>();
@@ -2144,6 +2199,35 @@ export function createMemoryRepositories(): {
           .filter((record) => record.projectId === projectId)
           .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
           .map((record) => structuredClone(record));
+      },
+      async createParticipantAgentDraft(record) {
+        for (const [id, row] of participantAgentDraftRows) if (row.ownerFingerprint === record.ownerFingerprint && row.createdAt.getTime() < record.createdAt.getTime() - 86_400_000) participantAgentDraftRows.delete(id);
+        const prior = participantAgentDraftRows.get(record.id);
+        if (prior) {
+          if (prior.ownerFingerprint !== record.ownerFingerprint || prior.targetAgentId !== record.targetAgentId) throw new Error("DRAFT_IDENTITY_CONFLICT");
+          return structuredClone(prior);
+        }
+        const rows = [...participantAgentDraftRows.values()].filter(r => r.ownerFingerprint === record.ownerFingerprint);
+        if (rows.length >= 20 || rows.filter(r => r.expiresAt > record.createdAt && (r.status === "pending" || r.status === "ready")).length >= 5) throw new Error("DRAFT_LIMIT_REACHED");
+        participantAgentDraftRows.set(record.id,structuredClone(record));
+        return structuredClone(record);
+      },
+      async listParticipantAgentDrafts(owner) {
+        return [...participantAgentDraftRows.values()].filter(r => r.ownerFingerprint === owner).sort((a,b)=>b.createdAt.getTime()-a.createdAt.getTime()).slice(0,20).map(r=>structuredClone(r));
+      },
+      async mutateParticipantAgentDraft(id, owner, build) {
+        const draft = participantAgentDraftRows.get(id);
+        if (!draft || (owner !== null && draft.ownerFingerprint !== owner)) throw new Error("DRAFT_NOT_FOUND");
+        const agentId = draft.agent?.agentId ?? draft.targetAgentId;
+        const existing = [...participantAgentPackageRows.values()].find(r=>r.ownerFingerprint === draft.ownerFingerprint && r.agentId === agentId);
+        const next = build(structuredClone(draft),existing ? structuredClone(existing) : undefined);
+        if (next.draft.id !== id || next.draft.ownerFingerprint !== draft.ownerFingerprint) throw new Error("DRAFT_IDENTITY_CONFLICT");
+        if (next.agent) {
+          if (next.agent.ownerFingerprint !== draft.ownerFingerprint || next.agent.agentId !== agentId || (existing && next.agent.id !== existing.id)) throw new Error("DRAFT_IDENTITY_CONFLICT");
+          participantAgentPackageRows.set(next.agent.id,structuredClone(next.agent));
+        }
+        participantAgentDraftRows.set(id,structuredClone(next.draft));
+        return structuredClone(next.draft);
       },
       async updateParticipantAgentPackage(ownerFingerprint, agentId, build) {
         // The callback is synchronous, so this memory operation cannot interleave.

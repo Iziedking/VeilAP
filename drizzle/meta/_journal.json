@@ -162,6 +162,13 @@
       "when": 1788470401000,
       "tag": "0022_worker_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788470402000,
+      "tag": "0023_participant_agent_drafts",
+      "breakpoints": true
     }
   ]
 }

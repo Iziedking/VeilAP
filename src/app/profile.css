@@ -81,3 +81,51 @@
   .profile-entry dl div:last-child { border-bottom: 0; }
   .profile-entry-link { width: 100%; }
 }
+
+/* Agent onboarding: the approved library → review → save flow. */
+.onboarding-main { max-width: 980px; }
+.onboarding-top { margin-bottom: 28px; font-family: var(--arena-mono); font-size: 12px; }
+.onboarding-top a { display: inline-flex; min-height: 44px; align-items: center; text-decoration: underline; }
+.onboarding-progress { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 0; list-style: none; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 12px; }
+.onboarding-progress li[aria-current] { color: var(--ink); border-bottom: 3px solid var(--signal); padding-bottom: 8px; }
+.onboarding-main .profile-hero h1 { font-size: clamp(42px, 6vw, 72px); }
+.onboarding-options { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 36px; }
+.onboarding-options button { display: grid; gap: 20px; text-align: left; padding: 28px; border: 2px solid var(--ink); background: var(--paper-light); color: var(--ink); cursor: pointer; }
+.onboarding-options strong { font-size: 22px; }
+.onboarding-options span { line-height: 1.6; color: var(--ink-soft); }
+.onboarding-options b { font-family: var(--arena-mono); font-size: 11px; }
+.onboarding-options button:hover { box-shadow: 5px 5px 0 var(--ink); }
+.onboarding-panel { margin-top: 32px; padding: clamp(20px,4vw,36px); background: var(--paper-light); border: 2px solid var(--ink); }
+.onboarding-panel h2 { margin: 12px 0 20px; font-size: 28px; overflow-wrap: anywhere; }
+.onboarding-panel p, .onboarding-privacy, .onboarding-target { line-height: 1.65; color: var(--ink-soft); }
+.onboarding-panel textarea { display:block; width:100%; min-height:200px; padding:16px; border:1px solid var(--ink); background:var(--paper); color:var(--ink); font:12px/1.65 var(--arena-mono); resize:vertical; margin:14px 0; }
+.onboarding-file { position: relative; display: inline-flex; align-items:center; justify-content:center; min-height: 52px; padding: 14px 22px; background:var(--signal); color:var(--ink); border:2px solid var(--ink); font-weight:700; cursor:pointer; }
+.onboarding-file input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.onboarding-file:focus-within { outline: 3px solid var(--ink); outline-offset:4px; }
+.onboarding-panel details { margin: 20px 0; }
+.onboarding-panel summary { min-height:44px; padding:12px 0; cursor:pointer; font-family:var(--arena-mono); font-size:12px; }
+.onboarding-metadata { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:20px 0; border-block:1px solid var(--ink); }
+.onboarding-metadata dt { color:var(--ink-soft); font-size:12px; margin-bottom:8px; }
+.onboarding-metadata dd { margin:0; overflow-wrap:anywhere; }
+.onboarding-commitment { display:block; overflow-wrap:anywhere; font-size:12px; }
+.onboarding-actions { display:flex; flex-wrap:wrap; gap:12px; }
+.onboarding-panel > button { margin:6px 10px 6px 0; }
+.onboarding-privacy { max-width:720px; margin-top:28px; font-size:13px; }
+.onboarding-error { margin-top:24px; padding:20px; border:2px solid var(--ink); background:var(--paper-light); }
+.onboarding-error a { display:inline-flex; align-items:center; min-height:44px; margin-left:16px; text-decoration:underline; }
+.onboarding-target { margin-top:26px; }
+.onboarding-filename { overflow-wrap:anywhere; font-size:12px; }
+.onboarding-competition { display:flex; align-items:center; justify-content:space-between; gap:20px; border-top:1px solid var(--ink); padding:18px 0; }
+.onboarding-panel button:disabled, .onboarding-options button:disabled { opacity:.55; cursor:wait; }
+.profile-library-actions { display:flex; flex-wrap:wrap; gap:12px; grid-column:1/-1; }
+.profile-library-actions a, .profile-draft-row a { min-height:44px; display:inline-flex; align-items:center; text-decoration:underline; font-size:12px; }
+.profile-draft-row { border-top:1px solid var(--ink); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; padding:16px 0; }
+@media(max-width:640px) { .onboarding-options { grid-template-columns:1fr; } .onboarding-metadata { grid-template-columns:1fr; } .onboarding-competition { align-items:flex-start; flex-direction:column; } .onboarding-panel .profile-primary, .onboarding-panel .profile-secondary { max-width:100%; white-space:normal; text-align:center; } }
+
+.profile-page .hub-brand, .profile-page .hub-sign-in { min-height:44px; display:inline-flex; align-items:center; }
+.profile-agent-library > header a.profile-primary { color:var(--ink); }
+.onboarding-metadata code { font-family:var(--arena-mono); font-size:12px; }
+.profile-agent-library > p, .profile-draft-row { padding:18px 20px; }
+.profile-library-row > .profile-library-actions { display:flex; gap:16px; }
+
+.profile-page .hub-theme-toggle { min-height:44px; }

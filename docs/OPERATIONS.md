@@ -160,3 +160,15 @@ Worker HTTP calls have a 90-second default deadline below the lease. KMS describ
 Champion creation retries use the same client idempotency key, including after refresh. A failed automatic roster lock returns an error identifying that enrollment was saved; retry or operator lock must reconcile that entry instead of creating a replacement competition.
 
 Use the [multi-account testing checklist](PROMISE-REPAIRS-2026-09-04.md#multi-account-production-acceptance-checklist) before broad participant testing. Worker-kill, poison-job, key-rotation and restore exercises belong in staging first.
+
+## Agent library drafts, 2026-09-04
+
+Apply additive migration 0023_participant_agent_drafts.sql through the normal migration journal after staging review. It creates one table and owner/creation index; it does not rewrite saved agents or competition records. Arena readiness checks the draft table and critical columns. Rollback of application code can leave this additive table in place.
+
+The existing VEILAP_PARTICIPANT_VAULT_KEYS independent ring protects drafts as well as saved agents. Add no new session-secret fallback. Retain prior keys during rotation; an uploaded draft is decrypted with its recorded key ID and saved with the current key. Missing old keys return DRAFT_KEY_UNAVAILABLE without saving or consuming. No production keys were generated or rotated in this change.
+
+No new paid provider calls or worker are added. POST /api/profile/agent-drafts requires a wallet session and enforces five active drafts and twenty creations per rolling day atomically in PostgreSQL. It deletes this owner's records older than 24 hours before creating a new grant. Revocation and save clear draft ciphertext. Expired dormant records stay inaccessible but may remain physically stored until this cleanup. Review and save retries are available while the record is retained; the saved library agent survives draft cleanup.
+
+POST /api/agent-drafts/upload accepts the raw package JSON, up to 64 KB, with a bearer grant. Do not record Authorization headers or bodies in edge logs, tracing, or support tickets. Browser CORS remains restricted to the configured frontend; CLI callers need no Origin header. Use the existing proxy request/rate limits for abusive traffic. Grant creation caps are per wallet and do not constitute a global anti-Sybil or volumetric DDoS guarantee.
+
+Operator recovery: a missing or invalid current ring blocks upload/save; restore the ring then retry the same draft. A missing retained key blocks finalization while leaving the draft ready. A lost save response is reconciled by GET /api/profile/agent-drafts/:id or an identical save retry. No database editing is needed. A stale version conflict requires a fresh explicit Update from My agents. Never change a historical receipt or tournament entry to resolve a library conflict.

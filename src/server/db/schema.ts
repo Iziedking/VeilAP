@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   integer,
+  index,
   jsonb,
   pgTable,
   primaryKey,
@@ -293,6 +294,19 @@ export const participantXIdentities = pgTable(
     wallet: uniqueIndex("participant_x_identities_wallet_idx").on(table.walletFingerprint),
   }),
 );
+
+export const participantAgentDrafts = pgTable("participant_agent_drafts", {
+  id: text("id").primaryKey(),
+  ownerFingerprint: text("owner_fingerprint").notNull(),
+  status: text("status").notNull(),
+  targetAgentId: text("target_agent_id"),
+  baseVersion: integer("base_version"),
+  baseCommitment: text("base_commitment"),
+  agent: jsonb("agent"),
+  encryptedPackage: jsonb("encrypted_package"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => ({ owner: index("participant_agent_drafts_owner_idx").on(table.ownerFingerprint, table.createdAt) }));
 
 export const participantAgentPackages = pgTable(
   "participant_agent_packages",

@@ -59,6 +59,6 @@ describe("API CORS boundary", () => {
   it("builds the expected shared policy headers", () => {
     const headers = apiCorsHeaders("https://veila.xyz");
     expect(headers.get("Access-Control-Allow-Methods")).toBe("GET, POST, PUT, OPTIONS");
-    expect(headers.get("Access-Control-Allow-Headers")).toBe("Content-Type, Idempotency-Key");
+    expect(headers.get("Access-Control-Allow-Headers")).toBe("Content-Type, Idempotency-Key, Authorization");
   });
 });
