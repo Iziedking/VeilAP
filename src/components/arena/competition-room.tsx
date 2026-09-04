@@ -187,6 +187,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
           {view === "rules" ? (
             <div className="room-rules">
               <article><span>PAIRING</span><strong>{season.rules?.pairingMode.replaceAll("_", " ") ?? "fixed draw"}</strong><p>{season.rules?.handsPerMatch ?? 0} hands per match. Seats swap on every duplicate deal.</p></article>
+              <article><span>DUPLICATE STRATEGIES</span><strong>{season.rules?.duplicateStrategyPolicy === "reject_exact" ? "One active entry per exact strategy" : "Original entry rules"}</strong><p>{season.rules?.duplicateStrategyPolicy === "reject_exact" ? "Renaming a package does not make a different strategy. This rule does not verify a person’s identity." : "This competition keeps its original rules. Exact strategy matching was not required."}</p></article>
               <article><span>AGENT UPDATES</span><strong>{season.rules?.resubmissionPolicy.replaceAll("_", " ") ?? "fixed"}</strong><p>A replacement creates a new sealed version. Previous packages remain immutable.</p></article>
               <article><span>PUBLIC REVEAL</span><strong>losing action only</strong><p>The winner policy remains sealed. An authorized audit may reveal one committed losing action.</p></article>
               <article><span>RULES COMMITMENT</span><code>{shortCommitment(season.rulesCommitment)}</code><p>The draw is tied to this immutable tournament configuration.</p></article>

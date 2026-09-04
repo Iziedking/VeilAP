@@ -14,7 +14,7 @@ import { createPostgresXIdentityRepository } from "@/server/identity/x-identity-
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const address = (value: string) => `0x${value.padStart(64, "0")}`;
-const strategy = (displayName: string, action: "check" | "raise") => ({
+const strategy = (displayName: string, action: "check" | "raise" | "fold") => ({
   schemaVersion: 1 as const,
   displayName,
   rules: [{ minBoardCards: 0, action }],
@@ -211,7 +211,7 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
           seasonId,
           actorWalletAddress: address("4"),
           agentId: "ORBIT_PG",
-          policy: strategy("Orbit", "raise"),
+          policy: strategy("Orbit", "fold"),
           idempotencyKey: `join-orbit-${suffix}`,
         }),
       ]);

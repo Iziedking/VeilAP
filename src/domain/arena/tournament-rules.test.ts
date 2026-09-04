@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseTournamentRules,
   buildTournamentSchedule,
   estimateTournamentWorkload,
   resolveTournamentRules,
@@ -15,6 +16,19 @@ const entries = [
 ];
 
 describe("tournament rules", () => {
+  it("preserves version 1 commitments and requires an explicit rule on version 2", () => {
+    const rules = resolveTournamentRules({ templateId: "playground" });
+    expect(rules).toMatchObject({ templateVersion: 2, duplicateStrategyPolicy: "reject_exact" });
+    const old = { ...rules, templateVersion: 1 as const };
+    delete old.duplicateStrategyPolicy;
+    expect(parseTournamentRules(old)).toEqual(old);
+    expect(tournamentRulesCommitment(parseTournamentRules(old))).toBe(tournamentRulesCommitment(old));
+    expect(parseTournamentRules(old)).not.toHaveProperty("duplicateStrategyPolicy");
+    const incomplete = { ...rules };
+    delete incomplete.duplicateStrategyPolicy;
+    expect(() => parseTournamentRules(incomplete)).toThrow("TOURNAMENT_RULES_INVALID");
+  });
+
   it("resolves immutable privacy rules for every preset", () => {
     for (const templateId of ["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship"] as const) {
       const rules = resolveTournamentRules({ templateId });

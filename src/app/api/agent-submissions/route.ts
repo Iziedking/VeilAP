@@ -56,6 +56,7 @@ export async function GET() {
         seatsRemaining: Math.max(0, season.maxEntries - season.entryCount),
         acceptsNewEntries: season.entryCount < season.maxEntries,
         acceptsReplacement: season.rules?.resubmissionPolicy === "replace_until_lock",
+        duplicateStrategyPolicy: season.rules?.duplicateStrategyPolicy ?? "legacy",
         templateId: season.templateId ?? "legacy",
         pairingMode: season.rules?.pairingMode ?? "round_robin",
         handsPerMatch: season.rules?.handsPerMatch ?? 8,

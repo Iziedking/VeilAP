@@ -169,6 +169,13 @@
       "when": 1788470402000,
       "tag": "0023_participant_agent_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788470403000,
+      "tag": "0024_competition_strategy_uniqueness",
+      "breakpoints": true
     }
   ]
 }

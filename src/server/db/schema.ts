@@ -127,6 +127,7 @@ export const arenaSeasons = pgTable(
 export const arenaSeasonEntries = pgTable(
   "arena_season_entries",
   {
+    strategyFingerprint: text("strategy_fingerprint"),
     id: text("id").primaryKey(),
     seasonId: text("season_id").notNull(),
     projectId: text("project_id").notNull(),
@@ -141,6 +142,7 @@ export const arenaSeasonEntries = pgTable(
     requestDigest: text("request_digest"),
   },
   (table) => ({
+    seasonStrategy: uniqueIndex("arena_season_entries_season_strategy_idx").on(table.seasonId, table.strategyFingerprint),
     seasonAgent: uniqueIndex("arena_season_entries_season_agent_idx").on(table.seasonId, table.agentId),
     seasonOwner: uniqueIndex("arena_season_entries_season_owner_idx").on(table.seasonId, table.ownerFingerprint),
     seasonIdempotency: uniqueIndex("arena_season_entries_season_idempotency_idx").on(

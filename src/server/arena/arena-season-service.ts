@@ -27,7 +27,8 @@ import type {
   ProjectRepository,
 } from "@/server/db/repositories";
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
-import { openStrategyOwnerWallet } from "./strategy-artifacts";
+import { openStrategyArtifact, openStrategyOwnerWallet } from "./strategy-artifacts";
+import { strategyFingerprint } from "./strategy-fingerprint";
 
 export type ArenaSeasonServiceErrorCode =
   | "INVALID_INPUT"
@@ -38,6 +39,7 @@ export type ArenaSeasonServiceErrorCode =
   | "ARENA_SEASON_NOT_LOCKED"
   | "ARENA_SEASON_ALREADY_LOCKED"
   | "ARENA_SEASON_TOO_SMALL"
+  | "ARENA_DUPLICATE_STRATEGY"
   | "ARENA_SEASON_FULL"
   | "ARENA_PRIZE_POOL_NOT_FUNDED"
   | "ARENA_BENCHMARK_REQUIRED"
@@ -156,6 +158,7 @@ function mapAuthorizationCode(code: string): ArenaSeasonServiceErrorCode {
 
 function mapPersistenceError(error: unknown): ArenaSeasonServiceErrorCode {
   if (!(error instanceof Error)) return "PERSISTENCE_FAILED";
+  if (error.message === "ARENA_DUPLICATE_STRATEGY") return "ARENA_DUPLICATE_STRATEGY";
   if (error.message === "ARENA_SEASON_ENTRY_AGENT_ALREADY_EXISTS") return "ARENA_SEASON_ENTRY_ALREADY_EXISTS";
   if (error.message === "ARENA_SEASON_NOT_OPEN") return "ARENA_SEASON_ALREADY_LOCKED";
   if (error.message.includes("IDEMPOTENCY")) return "IDEMPOTENCY_KEY_REUSED";
@@ -411,13 +414,17 @@ export class ArenaSeasonService {
         : { ok: false, code: "ARENA_SEASON_ENTRY_ALREADY_EXISTS" };
 
       const entryId = this.idFactory();
-      const dataKey = ownerBoundEntry && artifact.encryptedOwnerWallet
+      const dataKey = (ownerBoundEntry && artifact.encryptedOwnerWallet) || season.rulesSnapshot?.duplicateStrategyPolicy === "reject_exact"
         ? await this.keyProvider.unwrap(project.wrappedDataKey, projectId)
         : undefined;
-      const ownerWallet = dataKey
+      const ownerWallet = ownerBoundEntry && dataKey
         ? openStrategyOwnerWallet({ record: artifact, keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey } })
         : undefined;
+      const fingerprint = dataKey && season.rulesSnapshot?.duplicateStrategyPolicy === "reject_exact"
+        ? strategyFingerprint({ projectId, seasonId, dataKey, rules: season.rulesSnapshot, policy: (await openStrategyArtifact({ record: artifact, keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey } })).policy })
+        : undefined;
       const record: ArenaSeasonEntryRecord = {
+        strategyFingerprint: fingerprint,
         id: entryId,
         seasonId,
         projectId,
@@ -494,6 +501,10 @@ export class ArenaSeasonService {
         });
       } catch {
         return { ok: false, code: "INVALID_INPUT" };
+      }
+      if (!season.rulesSnapshot) {
+        rules.templateVersion = 1;
+        delete rules.duplicateStrategyPolicy;
       }
       if (rules.rewardPolicy === "funded_before_start") {
         const prize = await this.repositories.getArenaPrizePool(projectId, seasonId);

@@ -2,6 +2,10 @@
 
 Build one private, deterministic poker agent for Veil Arena. The human player will review your package and approve its entry with their Starknet wallet. You must never request, store, or use the player's private key, seed phrase, wallet signature, browser session, or payout credentials.
 
+## Exact strategy competition rule
+
+New competitions publish `duplicateStrategyPolicy: "reject_exact"`. The server compares the validated engine and policy without the package name or agent ID. An active duplicate returns `ARENA_DUPLICATE_STRATEGY` (409) at entry; the saved library package remains intact. Renaming a copied policy is not a fix. The human can choose another competition or revise the policy. Upload grants and legacy claim links do not reserve a seat or preapprove a strategy. Historical competitions retain their original rules.
+
 ## Library draft workflow (preferred)
 
 When the human provides an upload grant from My agents → Add agent, build and upload independently of competition availability:

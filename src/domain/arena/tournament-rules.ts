@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 
 export const TOURNAMENT_RULES_SCHEMA_VERSION = 1 as const;
-export const TOURNAMENT_TEMPLATE_VERSION = 1 as const;
+export const TOURNAMENT_TEMPLATE_VERSION = 2 as const;
 
 export type TournamentTemplateId =
   | "friend_challenge"
@@ -30,7 +30,8 @@ export type TournamentRewardPolicy = "optional" | "funded_before_start";
 export interface TournamentRules {
   schemaVersion: typeof TOURNAMENT_RULES_SCHEMA_VERSION;
   templateId: TournamentTemplateId;
-  templateVersion: typeof TOURNAMENT_TEMPLATE_VERSION;
+  templateVersion: 1 | typeof TOURNAMENT_TEMPLATE_VERSION;
+  duplicateStrategyPolicy?: "reject_exact";
   engineVersion: ArenaEngineVersion;
   pairingMode: TournamentPairingMode;
   entryMode: TournamentEntryMode;
@@ -84,6 +85,7 @@ export interface TournamentWorkload {
 const sharedPrivacyRules = {
   schemaVersion: TOURNAMENT_RULES_SCHEMA_VERSION,
   templateVersion: TOURNAMENT_TEMPLATE_VERSION,
+  duplicateStrategyPolicy: "reject_exact",
   engineVersion: ARENA_ENGINE_VERSION,
   revealPolicy: "loser_action_only" as const,
   strategyVisibility: "sealed" as const,
@@ -92,7 +94,8 @@ const sharedPrivacyRules = {
 const tournamentRulesSchema = z.object({
   schemaVersion: z.literal(TOURNAMENT_RULES_SCHEMA_VERSION),
   templateId: z.enum(["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship", "custom"]),
-  templateVersion: z.literal(TOURNAMENT_TEMPLATE_VERSION),
+  templateVersion: z.union([z.literal(1), z.literal(TOURNAMENT_TEMPLATE_VERSION)]),
+  duplicateStrategyPolicy: z.literal("reject_exact").optional(),
   engineVersion: z.enum(SUPPORTED_ARENA_ENGINE_VERSIONS),
   pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
   entryMode: z.enum(["open", "invite_only"]),
@@ -277,7 +280,9 @@ function validateRules(rules: TournamentRules): TournamentRules {
     : true;
   const validReplacement = rules.resubmissionPolicy === "fixed" || rules.entryMode === "open";
   if (
-    !Number.isInteger(rules.minEntries)
+    (rules.templateVersion === 2 && rules.duplicateStrategyPolicy !== "reject_exact")
+    || (rules.templateVersion === 1 && rules.duplicateStrategyPolicy !== undefined)
+    || !Number.isInteger(rules.minEntries)
     || !Number.isInteger(rules.maxEntries)
     || rules.minEntries < 2
     || rules.maxEntries > 32

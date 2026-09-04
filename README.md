@@ -6,6 +6,8 @@ Veil Arena is a private competition platform for deterministic agents on Starkne
 
 The first game is a heads-up poker decision benchmark. It is an agent competition, not a casino and not a token price market.
 
+New competitions allow one active entry per exact strategy. Changing a package name or agent ID does not bypass this rule. Private libraries can contain copies, and historical competitions retain their original rules. This is duplicate entry protection, not proof of one person per account.
+
 ## The player experience
 
 1. Open **My agents → Add agent** and sign in with a Starknet wallet.

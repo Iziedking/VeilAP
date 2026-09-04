@@ -17,6 +17,7 @@ import type {
 import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 
 import { buildStrategyArtifact } from "./strategy-artifacts";
+import { strategyFingerprint } from "./strategy-fingerprint";
 
 export type ArenaEnrollmentErrorCode =
   | "INVALID_INPUT"
@@ -26,6 +27,7 @@ export type ArenaEnrollmentErrorCode =
   | "ARENA_SEASON_NOT_PUBLIC"
   | "ARENA_SEASON_NOT_STARTED"
   | "ARENA_SEASON_CLOSED"
+  | "ARENA_DUPLICATE_STRATEGY"
   | "ARENA_SEASON_FULL"
   | "ARENA_WALLET_ALREADY_ENTERED"
   | "ARENA_REPLACEMENT_CONFIRMATION_REQUIRED"
@@ -86,6 +88,7 @@ function mapError(error: unknown): ArenaEnrollmentErrorCode {
   if (error.message === "ARENA_SEASON_NOT_PUBLIC") return "ARENA_SEASON_NOT_PUBLIC";
   if (error.message === "ARENA_SEASON_NOT_STARTED") return "ARENA_SEASON_NOT_STARTED";
   if (error.message === "ARENA_SEASON_CLOSED") return "ARENA_SEASON_CLOSED";
+  if (error.message === "ARENA_DUPLICATE_STRATEGY") return "ARENA_DUPLICATE_STRATEGY";
   if (error.message === "ARENA_SEASON_FULL") return "ARENA_SEASON_FULL";
   if (error.message === "ARENA_WALLET_ALREADY_ENTERED") return "ARENA_WALLET_ALREADY_ENTERED";
   if (error.message === "ARENA_RESUBMISSION_FORBIDDEN") return "ARENA_RESUBMISSION_FORBIDDEN";
@@ -244,6 +247,7 @@ export class ArenaEnrollmentService {
 
         const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
         const keyMaterial = { dataKey, wrappedKey: project.wrappedDataKey };
+        const fingerprint = strategyFingerprint({ projectId, seasonId, dataKey, rules: season.rulesSnapshot, policy: parsedPolicy });
         const artifact = buildStrategyArtifact({
           projectId,
           agentId,
@@ -257,6 +261,7 @@ export class ArenaEnrollmentService {
         const nextVersion = existingOwner.version + 1;
         const entry: ArenaSeasonEntryRecord = {
           ...existingOwner,
+          strategyFingerprint: fingerprint,
           agentId,
           displayName: artifact.displayName,
           artifactCommitment: artifact.artifactCommitment,
@@ -332,6 +337,7 @@ export class ArenaEnrollmentService {
       });
       const entryId = this.idFactory();
       const entry: ArenaSeasonEntryRecord = {
+        strategyFingerprint: strategyFingerprint({ projectId, seasonId, dataKey, rules: season.rulesSnapshot, policy: parsedPolicy }),
         id: entryId,
         seasonId,
         projectId,
@@ -443,6 +449,7 @@ export class ArenaEnrollmentService {
       const actorFingerprint = commitment("veil-arena-system-agent");
       const requestDigest = commitment({ seasonId, agentId, artifactCommitment, admission: "system" });
       const entry: ArenaSeasonEntryRecord = {
+        strategyFingerprint: strategyFingerprint({ projectId, seasonId, dataKey, rules: season.rulesSnapshot, policy: parsedPolicy }),
         id: entryId,
         seasonId,
         projectId,

@@ -110,6 +110,18 @@ async function setup(
 }
 
 describe("ArenaEnrollmentService", () => {
+  it("rejects renamed copies from different owners atomically", async () => {
+    const { repositories, projectId, season, service } = await setup({ maxEntries: 8 });
+    const results = await Promise.all([playerOne, playerTwo].map((actorWalletAddress, index) => service.enroll({
+      projectId, seasonId: season.id, actorWalletAddress, agentId: `COPY_${index}`,
+      policy: agentPackage(`COPY_${index}`, `Name ${index}`), idempotencyKey: `copy-attempt-${index}`,
+    })));
+    expect(results.filter(result => result.ok)).toHaveLength(1);
+    expect(results.find(result => !result.ok)).toEqual({ ok: false, code: "ARENA_DUPLICATE_STRATEGY" });
+    expect(await repositories.projects.listArenaStrategyArtifacts(projectId)).toHaveLength(1);
+    expect(await repositories.projects.listArenaSeasonEntries(projectId, season.id)).toHaveLength(1);
+  });
+
   it("atomically seals a public strategy and binds its payout wallet", async () => {
     const { repositories, keyProvider, projectId, season, service } = await setup();
     const result = await service.enroll({
@@ -388,7 +400,7 @@ describe("ArenaEnrollmentService", () => {
       seasonId: season.id,
       actorWalletAddress,
       agentId,
-      policy: policy(`Player ${index + 1}`, "check"),
+      policy: policy(`Player ${index + 1}`, (["check", "raise", "fold"] as const)[index]),
       idempotencyKey,
     })));
     expect(results.filter((result) => result.ok)).toHaveLength(2);

@@ -30,6 +30,7 @@ export async function checkArenaDatabaseReadiness(
               ('arena_season_entries', 'idempotency_key'),
               ('arena_season_entries', 'request_digest'),
               ('arena_season_entries', 'version'),
+              ('arena_season_entries', 'strategy_fingerprint'),
               ('arena_entry_versions', 'entry_id'),
               ('arena_entry_versions', 'version'),
               ('arena_entry_versions', 'status'),
@@ -49,13 +50,16 @@ export async function checkArenaDatabaseReadiness(
               ('participant_agent_drafts', 'encrypted_package'),
               ('participant_agent_drafts', 'expires_at'),
               ('participant_agent_drafts', 'base_commitment')
-            )) as column_count
+            )) as column_count,
+        (select count(*)::int from pg_indexes where schemaname = 'public' and tablename = 'arena_season_entries' and indexname = 'arena_season_entries_season_strategy_idx') as strategy_index_count,
+        (select count(*)::int from pg_trigger where tgrelid = to_regclass('public.arena_season_entries') and tgname = 'arena_entry_strategy_required' and tgenabled in ('O', 'A')) as strategy_trigger_count
     `);
     const rows = "rows" in result && Array.isArray(result.rows) ? result.rows : [];
-    const row = rows[0] as { table_count?: number; column_count?: number } | undefined;
+    const row = rows[0] as { table_count?: number; column_count?: number; strategy_index_count?: number; strategy_trigger_count?: number } | undefined;
     return {
       database: true,
-      arenaSchema: Number(row?.table_count ?? 0) === 13 && Number(row?.column_count ?? 0) === 32,
+      arenaSchema: Number(row?.table_count ?? 0) === 13 && Number(row?.column_count ?? 0) === 33
+        && Number(row?.strategy_index_count ?? 0) === 1 && Number(row?.strategy_trigger_count ?? 0) === 1,
     };
   } catch {
     return { database: false, arenaSchema: false };

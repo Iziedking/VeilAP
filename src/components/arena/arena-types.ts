@@ -58,6 +58,7 @@ export type TournamentRules = {
   resubmissionPolicy: "replace_until_lock" | "fixed";
   rewardPolicy: "optional" | "funded_before_start";
   strategyVisibility: "sealed";
+  duplicateStrategyPolicy?: "reject_exact";
   revealPolicy: "loser_action_only";
 };
 

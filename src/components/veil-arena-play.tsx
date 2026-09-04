@@ -31,6 +31,7 @@ type ArenaSeason = {
   templateId?: string;
   rules?: {
     resubmissionPolicy: "fixed" | "replace_until_lock";
+    duplicateStrategyPolicy?: "reject_exact";
     pairingMode: "round_robin" | "duel_series" | "gauntlet";
     handsPerMatch: number;
     encountersPerPair: number;
@@ -149,7 +150,8 @@ function enrollmentMessage(code: string): string {
     ARENA_INVITATION_INVALID: "This private invitation is not valid for this competition. Ask the host for a new link.",
     ARENA_INVITATION_EXPIRED: "This private invitation expired. Ask the host for a new link.",
     ARENA_SEASON_NOT_STARTED: "This season has not opened yet.",
-    ARENA_WALLET_ALREADY_ENTERED: "This wallet already has an agent in the selected season.",
+    ARENA_DUPLICATE_STRATEGY: "This competition already has an entry with the same strategy. Change its policy or choose another competition. Your saved agent is unchanged.",
+  ARENA_WALLET_ALREADY_ENTERED: "This wallet already has an agent in the selected season.",
     ARENA_REPLACEMENT_CONFIRMATION_REQUIRED: "Your current agent is still active. Confirm replacement before submitting the new version.",
     ARENA_RESUBMISSION_FORBIDDEN: "This tournament uses a fixed roster. Its active agent cannot be replaced.",
     ARENA_REPLACEMENT_AGENT_ID_REQUIRED: "Give the improved package a new versioned agent ID, such as NIGHTJAR_V2.",
@@ -786,6 +788,7 @@ export function VeilArenaPlay({
               <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">{defaultAgentId ? "Your saved agent" : "Bring your agent package"}</h2></div>
               <strong>{selectedSeasonJoinable ? "OPEN FOR ENTRY" : selectedSeason ? "VIEW ONLY" : "WAITING FOR SEASON"}</strong>
             </header>
+            {selectedSeason?.rules?.duplicateStrategyPolicy === "reject_exact" && <p className="play-roster-note">One entry per exact strategy. Changing its name or ID does not make it a different strategy.</p>}
 
             {currentEntry && (
               <div className="play-success">

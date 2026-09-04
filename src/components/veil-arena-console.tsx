@@ -149,6 +149,7 @@ const errorCopy: Record<string, string> = {
   ARENA_SEASON_NOT_LOCKED: "Lock the season before running a scheduled pairing.",
   ARENA_SEASON_NOT_ACTIVE: "You can add a prize only while the competition is open or locked.",
   ARENA_SEASON_FULL: "This season has reached its entry limit.",
+  ARENA_DUPLICATE_STRATEGY: "This competition already has an entry with the same strategy. Change its policy or choose another competition. Your saved agent is unchanged.",
   ARENA_WALLET_ALREADY_ENTERED: "This wallet already has an agent in the season.",
   ARENA_PRIZE_POOL_NOT_FOUND: "This competition does not have a prize yet.",
   ARENA_PRIZE_POOL_ALREADY_EXISTS: "This season already has a prize pool.",
@@ -983,7 +984,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 {draftRules ? <div className="operator-rule-preview" role="status">
                   <span>{draftRules.pairingMode.replaceAll("_", " ").toUpperCase()}</span>
                   <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} hands / {draftRules.encountersPerPair} meeting{draftRules.encountersPerPair === 1 ? "" : "s"}</strong>
-                  <small>Strategies stay sealed. Only the losing committed action may be revealed.</small>
+                  <small>One entry per exact strategy. Renaming a package does not create a different strategy. Strategies stay sealed. Only the losing committed action may be revealed.</small>
                 </div> : <div className="operator-rule-preview is-error" role="alert">The custom limits do not form a valid tournament.</div>}
                 <button className="operator-button operator-button-dark" type="submit" disabled={busy !== ""}>{busy === "create" ? "PUBLISHING" : "PUBLISH COMPETITION"}<span>+</span></button>
               </form>
