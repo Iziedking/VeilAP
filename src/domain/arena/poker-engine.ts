@@ -64,6 +64,7 @@ export type HandResult = Readonly<{
 }>;
 
 export type PublicHandReceipt = Readonly<{
+  receiptVersion?: 2;
   actionCommitment: string;
   actionCommitments: Readonly<Record<AgentId, string>>;
   boardCommitment: string;
@@ -94,6 +95,7 @@ export type MatchResult = Readonly<{
 }>;
 
 export type PublicMatchReceipt = Readonly<{
+  receiptVersion?: 2;
   artifactCommitments: Readonly<Record<AgentId, string>>;
   engineVersion: string;
   matchId: string;
@@ -278,6 +280,7 @@ export function publicHandReceiptCommitment(
   receipt: PublicHandReceiptCommitmentInput,
 ): string {
   return commitment({
+    ...(receipt.receiptVersion ? { receiptVersion: receipt.receiptVersion } : {}),
     actionCommitment: receipt.actionCommitment,
     actionCommitments: receipt.actionCommitments,
     boardCommitment: receipt.boardCommitment,
@@ -424,15 +427,27 @@ function runHand(
   };
 }
 
+// Second consumer: authorized receipt reconstruction. Production seeds are private
+// randomBytes(32), never user input; fixture seeds provide no privacy guarantee.
+export function actionNonce(seed: string, matchId: string, handNumber: number, seatSwapped: boolean, agentId: string): string {
+  return commitment({ domain: "veil:action-nonce:v2", seed, matchId, handNumber, seatSwapped, agentId });
+}
+
+export function privateActionCommitment(input: { nonce: string; matchId: string; handNumber: number; seatSwapped: boolean; agentId: string; action: DecisionAction }): string {
+  return commitment({ domain: "veil:action:v2", ...input });
+}
+
 export function runMatch(input: Readonly<{
   agents: readonly [AgentDefinition, AgentDefinition];
   engineVersion?: ArenaEngineVersion;
+  receiptVersion?: 1 | 2;
   hands: number;
   matchId: string;
   seed: string;
 }>): MatchRunResult {
   const [firstAgent, secondAgent] = input.agents;
   const engineVersion = input.engineVersion ?? ARENA_ENGINE_VERSION;
+  const privateReceipts = (input.receiptVersion ?? 2) === 2;
   if (!input.matchId || !input.seed || !Number.isSafeInteger(input.hands) || input.hands < 1 || firstAgent.id === secondAgent.id) {
     throw new Error("POKER_MATCH_INPUT_INVALID");
   }
@@ -445,19 +460,25 @@ export function runMatch(input: Readonly<{
       if (!result.ok) return { ok: false, code: result.code, agentId: result.agentId, handNumber };
       handResults.push(result.value);
       for (const agent of input.agents) score[agent.id] += result.value.scoreDelta[agent.id] ?? 0;
-      const actionCommitment = commitment(result.value.outcomes.map((outcome) => ({ agentId: outcome.agentId, action: outcome.action })));
+      const legacyActionCommitment = commitment(result.value.outcomes.map((outcome) => ({ agentId: outcome.agentId, action: outcome.action })));
       const actionCommitments: Record<AgentId, string> = {};
       for (const outcome of result.value.outcomes) {
-        actionCommitments[outcome.agentId] = commitment({ agentId: outcome.agentId, action: outcome.action });
+        actionCommitments[outcome.agentId] = privateReceipts
+          ? privateActionCommitment({ nonce: actionNonce(input.seed, input.matchId, handNumber, seatSwapped, outcome.agentId), matchId: input.matchId, handNumber, seatSwapped, agentId: outcome.agentId, action: outcome.action })
+          : commitment({ agentId: outcome.agentId, action: outcome.action });
       }
-      const boardCommitment = commitment(result.value.board);
+      const actionCommitment = privateReceipts ? commitment({ domain: "veil:combined-actions:v2", actionCommitments }) : legacyActionCommitment;
+      const boardCommitment = privateReceipts
+        ? commitment({ domain: "veil:board:v2", nonce: actionNonce(input.seed, input.matchId, handNumber, seatSwapped, "board"), board: result.value.board })
+        : commitment(result.value.board);
       const publicHandContent = {
+        ...(privateReceipts ? { receiptVersion: 2 as const } : {}),
         actionCommitment,
         actionCommitments,
         boardCommitment,
         handNumber,
         seatSwapped,
-        ...(engineVersion === ARENA_ENGINE_VERSION ? { scoreDelta: result.value.scoreDelta } : {}),
+        ...(!privateReceipts && engineVersion === ARENA_ENGINE_VERSION ? { scoreDelta: result.value.scoreDelta } : {}),
         winner: result.value.winner,
       } satisfies PublicHandReceiptCommitmentInput;
       const publicHand = {
@@ -476,6 +497,7 @@ export function runMatch(input: Readonly<{
       matchId: input.matchId,
       publicHandReceipts: receiptLeaves,
       publicReceipt: {
+        ...(privateReceipts ? { receiptVersion: 2 as const } : {}),
         artifactCommitments: { [firstAgent.id]: firstAgent.artifactCommitment, [secondAgent.id]: secondAgent.artifactCommitment },
         engineVersion,
         matchId: input.matchId,

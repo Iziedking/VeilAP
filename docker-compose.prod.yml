@@ -47,6 +47,7 @@ services:
       STARKNET_RPC_URL: ${STARKNET_RPC_URL}
       VEILAP_APP_ORIGIN: ${VEILAP_APP_ORIGIN}
       VEILAP_SESSION_SECRET: ${VEILAP_SESSION_SECRET}
+      VEILAP_PARTICIPANT_VAULT_KEYS: ${VEILAP_PARTICIPANT_VAULT_KEYS:-}
       VEILAP_WALLET_HASH_PEPPER: ${VEILAP_WALLET_HASH_PEPPER}
       VEILAP_KMS_KEY_ID: ${VEILAP_KMS_KEY_ID}
       AWS_REGION: ${AWS_REGION}
@@ -88,6 +89,12 @@ services:
       app:
         condition: service_healthy
     command: ["node", "scripts/arena-worker.mjs"]
+    healthcheck:
+      test: ["CMD", "node", "scripts/arena-worker-health.mjs"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     stop_grace_period: 20s
     networks:
       - private

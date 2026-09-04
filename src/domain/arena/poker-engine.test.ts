@@ -179,6 +179,7 @@ describe("poker engine", () => {
       engineVersion: ARENA_ENGINE_VERSION,
       hands: 1,
       matchId: "M-CONVICTION",
+      receiptVersion: 1, // Historical v0.3 receipts retain their original public deltas.
       seed: "fixed-seed",
     });
     expect(result.ok).toBe(true);

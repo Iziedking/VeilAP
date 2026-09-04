@@ -38,6 +38,9 @@ export type ScheduledMatch = {
   leftAgentId: string;
   rightAgentId: string;
   status: "scheduled" | "running" | "completed" | "failed";
+  queueState?: "queued" | "waiting_for_capacity" | "running" | "recovering" | "retrying" | "failed" | "completed";
+  attempts?: number;
+  retryAt?: string;
   matchId?: string;
   createdAt: string;
   startsAt: string;
@@ -76,6 +79,8 @@ export type LeaderboardEntry = {
 };
 
 export type PublicHandReceipt = {
+  receiptVersion?: 2;
+  scoreDelta?: Record<string, number>;
   actionCommitment: string;
   actionCommitments: Record<string, string>;
   boardCommitment: string;
@@ -86,6 +91,7 @@ export type PublicHandReceipt = {
 };
 
 export type PublicMatch = {
+  receiptVersion?: 2;
   matchId: string;
   engineVersion: string;
   players: Array<{

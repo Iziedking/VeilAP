@@ -96,7 +96,7 @@ describe("ArenaPrizePoolService", () => {
       rightDisplayName: "Ember",
       publicReceipt: {
         artifactCommitments: { CINDER: "cinder-artifact", EMBER: "ember-artifact" },
-        engineVersion: "holdem.v1",
+        engineVersion: "holdem-sealed-v0.2", // Use a real historical receipt version; payout assertions are unchanged.
         matchId: "match-owner-bound",
         score: { CINDER: 2, EMBER: 0 },
         seedCommitment: "seed-commitment",

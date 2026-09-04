@@ -120,3 +120,13 @@ Small anonymity sets and distinctive timing can weaken practical privacy.
 Do not describe version one as fully anonymous, untraceable, trustless, private forever, operator-blind, zero knowledge, or end-to-end encrypted.
 
 The precise claim is: competitors and public APIs receive verifiable competition results without receiving submitted strategy policies or private reward fields. Authorized infrastructure can decrypt the minimum data required to run and settle the competition.
+
+## Receipt privacy and saved-agent keys (2026-09-04)
+
+New receipt format v2 binds unpredictable, context-specific nonces into both individual and combined action commitments and omits per-hand score deltas. The signed final score and each hand winner remain public. Those outputs can reveal behavior, especially in short matches: this is a hiding-commitment repair, not a guarantee of zero inference. An authorized losing-action disclosure includes its nonce so the opened commitment can be verified. Receipt format and engine scoring version are separate.
+
+Historical receipts remain byte-for-byte stored results. Legacy action commitments can be enumerated, and legacy v0.3 score deltas expose additional behavior. Their old privacy cannot be restored by changing today's code. New replays label intermediate scores private and show the canonical aggregate at completion; historical replays use their original engine scoring.
+
+Saved profile packages use a separate versioned AES-256-GCM key ring, VEILAP_PARTICIPANT_VAULT_KEYS, rather than deriving new encryption keys from session signing. The encrypted field stores a key ID. Untagged legacy packages remain readable with retained legacy session secrets and can be explicitly rewrapped by their owner. Rewrap does not change the agent ID, version, commitment, or timestamps. A missing old key or already-corrupt ciphertext requires recovery from a valid backup or the owner's original package; no repair invents the lost plaintext.
+
+Owner card views become available only after the entire paired match completes. Seat swapping lets an owner infer the opponent's cards from the paired leg at that point; colluding owners can combine their views. Do not claim permanent opponent-card secrecy from duplicate deals. Future incremental gameplay must gate disclosure across all affected legs and define collusion and operator trust explicitly. See [repair architecture and evidence](PROMISE-REPAIRS-2026-09-04.md).

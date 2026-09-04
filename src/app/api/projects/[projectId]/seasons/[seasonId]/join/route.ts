@@ -69,18 +69,20 @@ export async function POST(request: Request, context: JoinRouteContext) {
     if (enrollment.ok) {
       const seasonService = getArenaSeasonService();
       const schedule = await seasonService.getPublicSchedule(projectId, seasonId);
+      if (!schedule.ok) return serviceResponse(schedule, { stage: "roster-lock", enrollment: "saved" });
       if (
         schedule.ok
         && schedule.value.season.templateId === "champion_challenge"
         && schedule.value.season.status === "open"
         && schedule.value.entries.length === 2
       ) {
-        await seasonService.lockSeason({
+        const locked = await seasonService.lockSeason({
           projectId,
           seasonId,
           actorWalletAddress: actor.walletAddress,
           idempotencyKey: `champion-lock-${seasonId}`,
         });
+        if (!locked.ok) return serviceResponse(locked, { stage: "roster-lock", enrollment: "saved" });
       }
     }
     return serviceResponse(enrollment);

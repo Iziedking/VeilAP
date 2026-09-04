@@ -1,6 +1,6 @@
 import type { ArenaSeasonService } from "./arena-season-service";
 import type { ProjectRepository } from "@/server/db/repositories";
-import { arenaMatchStartsAt } from "@/domain/arena/match-schedule";
+import { eligibleMatch } from "@/domain/arena/queue-policy";
 
 export type ArenaWorkerTickResult = {
   status: "idle" | "completed" | "in_progress" | "failed";
@@ -46,20 +46,25 @@ export class ArenaWorkerService {
         (left.lockedAt?.getTime() ?? left.createdAt.getTime()) - (right.lockedAt?.getTime() ?? right.createdAt.getTime())
         || left.id.localeCompare(right.id)
       ));
+    const lastServed = new Map<string, number>();
+    for (const season of seasons) {
+      const matches = await this.repositories.listArenaScheduledMatches(season.projectId, season.id);
+      lastServed.set(season.id, Math.max(0, ...matches.map((match) => match.startedAt?.getTime() ?? 0)));
+    }
+    seasons.sort((a, b) => (lastServed.get(a.id) ?? 0) - (lastServed.get(b.id) ?? 0));
+    let lastFailure: ArenaWorkerTickResult | undefined;
     for (const season of seasons) {
       const result = await this.runNextForSeason(season.projectId, season.id);
-      if (result.status !== "idle") return result;
+      if (result.status === "completed" || result.status === "in_progress") return result;
+      if (result.status === "failed") lastFailure = result;
     }
-    return { status: "idle", projectId: "", seasonId: "" };
+    return lastFailure ?? { status: "idle", projectId: "", seasonId: "" };
   }
 
   private async runNextForSeason(projectId: string, seasonId: string): Promise<ArenaWorkerTickResult> {
     const scheduledMatches = await this.repositories.listArenaScheduledMatches(projectId, seasonId);
     const now = this.now();
-    const next = scheduledMatches.find((match) => (
-      match.status === "failed"
-      || (match.status === "scheduled" && arenaMatchStartsAt(match) <= now)
-    ));
+    const next = scheduledMatches.filter((match) => eligibleMatch(match, now)).sort((a, b) => (a.startedAt?.getTime() ?? 0) - (b.startedAt?.getTime() ?? 0) || a.sequence - b.sequence)[0];
     if (!next) return { status: "idle", projectId, seasonId };
 
     const result = await this.seasonService.runScheduledMatch({

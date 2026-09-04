@@ -148,6 +148,20 @@
       "when": 1788175200000,
       "tag": "0020_participant_agent_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788470400000,
+      "tag": "0021_receipt_disclosure_nonce",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788470401000,
+      "tag": "0022_worker_recovery",
+      "breakpoints": true
     }
   ]
 }

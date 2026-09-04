@@ -1,5 +1,6 @@
 "use client";
 
+import { replayScore } from "@/domain/arena/scoring";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -9,13 +10,12 @@ import {
   shortCommitment,
   type ApiEnvelope,
   type CompetitionSchedule,
-  type PublicHandReceipt,
   type PublicMatch,
   type ScheduledMatch,
 } from "@/components/arena/arena-types";
 import { apiFetch } from "@/lib/api/client";
 
-type LoadState = "loading" | "ready" | "error";
+type LoadState = "loading" | "ready" | "reconnecting";
 
 type ViewerEntry = {
   agentId: string;
@@ -73,14 +73,6 @@ function displayName(schedule: CompetitionSchedule, agentId: string): string {
   return schedule.entries.find((entry) => entry.agentId === agentId)?.displayName ?? agentId;
 }
 
-function scoreThrough(receipts: readonly PublicHandReceipt[], index: number): Record<string, number> {
-  const score: Record<string, number> = {};
-  for (const receipt of receipts.slice(0, index + 1)) {
-    if (receipt.winner !== "tie") score[receipt.winner] = (score[receipt.winner] ?? 0) + 1;
-  }
-  return score;
-}
-
 function viewerOwnsSeat(viewerEntry: ViewerEntry | null, agentId: string): boolean {
   return viewerEntry?.agentId === agentId;
 }
@@ -105,7 +97,11 @@ function SpectatorAvatar({
   return <span className="spectator-avatar is-fallback" aria-hidden="true">{fallback}</span>;
 }
 
-export function MatchSpectator({
+export function MatchSpectator(props: { projectId: string; seasonId: string; scheduledMatchId: string }) {
+  return <MatchSpectatorView key={`${props.projectId}:${props.seasonId}:${props.scheduledMatchId}`} {...props} />;
+}
+
+function MatchSpectatorView({
   projectId,
   seasonId,
   scheduledMatchId,
@@ -235,39 +231,57 @@ export function MatchSpectator({
   useEffect(() => {
     let active = true;
     let timer = 0;
+    let failures = 0;
+    const controller = new AbortController();
+    let currentRequest: AbortController | undefined;
+    let generation = 0;
     const load = async () => {
+      const requestGeneration = ++generation;
+      currentRequest?.abort();
+      currentRequest = new AbortController();
+      let privateUnavailable = false;
+      const signal = AbortSignal.any([controller.signal, currentRequest.signal, AbortSignal.timeout(10_000)]);
+      const request = (url: string) => apiFetch(url, { signal });
       try {
-        const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}`);
+        const response = await request(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}`);
         const body = await response.json() as ApiEnvelope<CompetitionSchedule>;
         if (!response.ok || !body.ok) throw new Error("SCHEDULE_UNAVAILABLE");
         const match = body.value.matches.find((candidate) => candidate.id === scheduledMatchId);
         if (!match) throw new Error("MATCH_NOT_FOUND");
         let publicMatch: PublicMatch | null = null;
         if (match.matchId) {
-          const matchResponse = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/matches/${encodeURIComponent(match.matchId)}`);
+          const matchResponse = await request(`/api/projects/${encodeURIComponent(projectId)}/matches/${encodeURIComponent(match.matchId)}`);
           const matchBody = await matchResponse.json() as ApiEnvelope<PublicMatch>;
           if (matchResponse.ok && matchBody.ok) publicMatch = matchBody.value;
+          else if (match.status === "completed") throw new Error("RECEIPT_UNAVAILABLE");
         }
 
         let privateEntry: ViewerEntry | null = null;
         try {
-          const entryResponse = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}/join`);
+          const entryResponse = await request(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}/join`);
           const entryBody = await entryResponse.json() as ApiEnvelope<ViewerEntry | null>;
           if (entryResponse.ok && entryBody.ok) privateEntry = entryBody.value;
+          else if (entryResponse.status >= 500) privateUnavailable = true;
         } catch {
           privateEntry = null;
+          privateUnavailable = true;
         }
 
         let privateUsername: string | null = null;
         let privateProfileImageUrl: string | null = null;
         try {
-          const sessionResponse = await apiFetch("/api/auth/session");
+          const sessionResponse = await request("/api/auth/session");
           const sessionBody = await sessionResponse.json() as ApiEnvelope<ViewerSession | null>;
           if (sessionResponse.ok && sessionBody.ok && sessionBody.value) {
             privateUsername = sessionBody.value.xVerification?.identity?.username ?? null;
             privateProfileImageUrl = sessionBody.value.xVerification?.identity?.profileImageUrl ?? null;
+          } else {
+            privateEntry = null;
+            if (sessionResponse.status >= 500) privateUnavailable = true;
           }
         } catch {
+          privateEntry = null;
+          privateUnavailable = true;
           privateUsername = null;
           privateProfileImageUrl = null;
         }
@@ -275,17 +289,19 @@ export function MatchSpectator({
         let participantMatch: PrivateMatch | null = null;
         if (privateEntry && match.status === "completed") {
           try {
-            const privateResponse = await apiFetch(
+            const privateResponse = await request(
               `/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}/matches/${encodeURIComponent(scheduledMatchId)}/private`,
             );
             const privateBody = await privateResponse.json() as ApiEnvelope<PrivateMatch>;
             if (privateResponse.ok && privateBody.ok) participantMatch = privateBody.value;
+            else if (privateResponse.status >= 500) privateUnavailable = true;
           } catch {
             participantMatch = null;
+            privateUnavailable = true;
           }
         }
 
-        if (!active) return;
+        if (!active || generation !== requestGeneration) return;
         setSchedule(body.value);
         setScheduledMatch(match);
         setReceipt(publicMatch);
@@ -293,20 +309,38 @@ export function MatchSpectator({
         setViewerEntry(privateEntry);
         setViewerUsername(privateUsername);
         setViewerProfileImageUrl(privateProfileImageUrl);
-        setState("ready");
-        if (match.status !== "completed" || !publicMatch) timer = window.setTimeout(() => void load(), 2200);
+        failures = 0;
+        setState(privateUnavailable ? "reconnecting" : "ready");
+        // Continue checking ownership after completion; sessions can expire in another tab.
+        timer = window.setTimeout(() => void load(), match.status !== "completed" || !publicMatch || privateUnavailable ? 2200 : 10_000);
       } catch {
-        if (active) setState("error");
+        if (active && generation === requestGeneration) {
+          setState("reconnecting");
+          setPrivateMatch(null);
+          setViewerEntry(null);
+          setViewerUsername(null);
+          setViewerProfileImageUrl(null);
+          timer = window.setTimeout(() => void load(), Math.min(15_000, 1000 * 2 ** Math.min(failures++, 4)));
+        }
       }
     };
+    const refreshOwnership = () => {
+      setPrivateMatch(null);
+      setViewerEntry(null);
+      setViewerUsername(null);
+      setViewerProfileImageUrl(null);
+      window.clearTimeout(timer);
+      void load();
+    };
+    window.addEventListener("focus", refreshOwnership);
     void load();
-    return () => { active = false; window.clearTimeout(timer); };
+    return () => { active = false; controller.abort(); currentRequest?.abort(); window.clearTimeout(timer); window.removeEventListener("focus", refreshOwnership); };
   }, [projectId, seasonId, scheduledMatchId]);
 
   const handReceipts = useMemo(() => receipt?.publicHandReceipts ?? [], [receipt?.publicHandReceipts]);
   const currentHand = handReceipts[activeIndex];
   const currentPrivateHand = privateMatch?.hands[activeIndex];
-  const currentScore = useMemo(() => scoreThrough(handReceipts, activeIndex), [activeIndex, handReceipts]);
+  const currentScore = useMemo(() => receipt ? replayScore(receipt, handReceipts, activeIndex) : null, [activeIndex, handReceipts, receipt]);
 
   useEffect(() => {
     const status = scheduledMatch?.status;
@@ -325,7 +359,7 @@ export function MatchSpectator({
 
     playTableSound("deal");
     const revealedAction = currentPrivateHand?.action
-      ?? (receipt?.selectiveReveal?.handIndex === activeIndex ? receipt.selectiveReveal.action : undefined);
+      ?? (receipt?.selectiveReveal?.handIndex === activeIndex + 1 ? receipt.selectiveReveal.action : undefined);
     const timers = [
       revealedAction ? window.setTimeout(() => playTableSound(revealedAction), 260) : undefined,
       window.setTimeout(() => playTableSound("showdown"), revealedAction ? 520 : 280),
@@ -338,15 +372,19 @@ export function MatchSpectator({
     if (!playing || handReceipts.length < 2 || activeIndex >= handReceipts.length - 1) return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) return;
-    const timer = window.setTimeout(() => setActiveIndex((index) => Math.min(index + 1, handReceipts.length - 1)), 1000);
+    const timer = window.setTimeout(() => {
+      const next = Math.min(activeIndex + 1, handReceipts.length - 1);
+      setActiveIndex(next);
+      if (next === handReceipts.length - 1) setPlaying(false);
+    }, 1000);
     return () => window.clearTimeout(timer);
   }, [activeIndex, handReceipts.length, playing]);
 
   if (state === "loading") {
     return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-loading"><i /><strong>Opening the sealed table</strong></main></div>;
   }
-  if (state === "error" || !schedule || !scheduledMatch) {
-    return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-error"><strong>This match could not be opened.</strong><Link href={`/arena/${projectId}/${seasonId}`}>Back to the competition</Link></main></div>;
+  if (!schedule || !scheduledMatch) {
+    return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-error"><strong role="status">Reconnecting to the match. Retrying automatically.</strong><Link href={`/arena/${projectId}/${seasonId}`}>Back to the competition</Link></main></div>;
   }
 
   const leftName = displayName(schedule, scheduledMatch.leftAgentId);
@@ -357,28 +395,28 @@ export function MatchSpectator({
   const viewerIsLeft = viewerOwnsSeat(viewerEntry, scheduledMatch.leftAgentId);
   const viewerIsRight = viewerOwnsSeat(viewerEntry, scheduledMatch.rightAgentId);
   const privateView = viewerIsLeft || viewerIsRight;
-  const executionState = scheduledMatch.status === "scheduled"
+  const executionState = scheduledMatch.queueState === "recovering" ? "RECOVERING EXPIRED JOB" : scheduledMatch.queueState === "retrying" ? "RETRY SCHEDULED" : scheduledMatch.status === "scheduled"
     ? "DRAW WAITING"
     : scheduledMatch.status === "running"
       ? "SEALED EXECUTION"
       : scheduledMatch.status === "failed"
         ? "EXECUTION STOPPED"
         : hasReplay
-          ? "VERIFIED REPLAY"
+          ? "RESULT REPLAY"
           : "FINAL RECEIPT";
   const handWinner = currentHand?.winner === "tie"
     ? "Tie"
     : currentHand?.winner
       ? displayName(schedule, currentHand.winner)
       : null;
-  const liveDescription = scheduledMatch.status === "running"
+  const liveDescription = scheduledMatch.queueState === "recovering" ? "The previous worker lease expired. Recovery is waiting for capacity." : scheduledMatch.queueState === "retrying" ? "Execution failed. A bounded retry is scheduled; the original inputs are retained." : scheduledMatch.status === "running"
     ? "The worker has claimed this table. Both agents are deciding inside the sealed runner."
     : scheduledMatch.status === "scheduled"
       ? nowMs === null
         ? "The start window is loading. This page will update automatically."
         : arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs) > 0
-          ? `The table opens in ${formatArenaMatchCountdown(arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs))}. The worker cannot claim it before then.`
-          : "The table is ready. The worker will claim it on the next available tick."
+          ? `The table becomes eligible in ${formatArenaMatchCountdown(arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs))}. The worker cannot claim it before then.`
+          : "The table is eligible and waiting for worker capacity. No start time is reserved."
       : scheduledMatch.status === "failed"
         ? "Execution stopped before a public receipt could be issued."
         : `${handReceipts.length} public hand ${handReceipts.length === 1 ? "receipt" : "receipts"} are available to replay.`;
@@ -456,17 +494,19 @@ export function MatchSpectator({
           </div>
         </header>
 
+        {state === "reconnecting" ? <p role="status">Reconnecting. The last public update may be stale; private cards are unavailable until refreshed.</p> : null}
+        {receipt ? <p className="spectator-score-note">{receipt.receiptVersion === 2 ? "Final scores are public. Intermediate scores stay private because they can disclose actions." : "Legacy receipt: public commitments and per-hand scores may disclose actions."}</p> : null}
         <div className={`spectator-room-banner ${privateView ? "is-private" : "is-public"}`}>
           <div><i /> <strong>{privateView ? "PRIVATE PLAYER VIEW" : "PUBLIC BROADCAST"}</strong></div>
           <span>{privateView ? "Your seat is highlighted. Verified cards appear only after your match result is available; opponent cards remain sealed." : "Results, timing, and proof are public. Agent strategy and cards remain sealed."}</span>
         </div>
 
         <section className="spectator-stage" aria-label={`${leftName} versus ${rightName}`}>
-          {renderSeat({ side: "A", agentId: scheduledMatch.leftAgentId, name: leftName, artifactCommitment: leftEntry?.artifactCommitment, score: hasReplay ? currentScore[scheduledMatch.leftAgentId] ?? 0 : "–" })}
+          {renderSeat({ side: "A", agentId: scheduledMatch.leftAgentId, name: leftName, artifactCommitment: leftEntry?.artifactCommitment, score: hasReplay ? currentScore?.[scheduledMatch.leftAgentId] ?? "–" : "–" })}
 
           <div className={`spectator-table is-${scheduledMatch.status}`}>
             <div className="spectator-table-meta">
-              <span><i className="spectator-live-dot" /> {scheduledMatch.status === "completed" ? "REPLAY TABLE" : "LIVE TABLE"}</span>
+              <span><i className="spectator-live-dot" /> {scheduledMatch.status === "completed" ? "REPLAY TABLE" : "JOB STATUS"}</span>
               <span>{currentHand ? `DEAL ${String(currentHand.handNumber).padStart(2, "0")}` : "SEALED TABLE"}</span>
               <span>{currentHand?.seatSwapped ? "SEATS SWAPPED" : "PRIMARY SEATS"}</span>
             </div>
@@ -488,12 +528,12 @@ export function MatchSpectator({
             ) : (
               <div className="spectator-hand-result">
                 <span>{scheduledMatch.status === "running" ? "WORKER STATUS" : "MATCH STATUS"}</span>
-                <strong>{scheduledMatch.status === "running" ? "Agents are deciding in private" : scheduledMatch.status === "scheduled" ? scheduledCountdown === null ? "Start time loading" : scheduledCountdown > 0 ? `Starts in ${formatArenaMatchCountdown(scheduledCountdown)}` : "Ready to start" : scheduledMatch.status.replaceAll("_", " ")}</strong>
-                <small>{scheduledMatch.status === "running" ? "The signed public receipt will appear here when execution finishes." : scheduledMatch.status === "scheduled" ? "The worker claims the table after its start window." : "No private strategy or card data is exposed."}</small>
+                <strong>{scheduledMatch.queueState === "recovering" ? "Waiting for worker recovery" : scheduledMatch.queueState === "retrying" ? "Waiting to retry execution" : scheduledMatch.status === "running" ? "Worker executing the benchmark" : scheduledMatch.status === "scheduled" ? scheduledCountdown === null ? "Eligibility time loading" : scheduledCountdown > 0 ? `Eligible in ${formatArenaMatchCountdown(scheduledCountdown)}` : "Waiting for worker capacity" : scheduledMatch.status.replaceAll("_", " ")}</strong>
+                <small>{scheduledMatch.status === "running" ? "The signed public receipt will appear here when execution finishes." : scheduledMatch.status === "scheduled" ? "Eligibility is not a reserved start time. A worker must be available." : "No private strategy or card data is exposed."}</small>
               </div>
             )}
             <div className="spectator-live-strip">
-              <span><i /> {scheduledMatch.status === "completed" ? "RECEIPT STREAM" : "LIVE EXECUTION"}</span>
+              <span><i /> {scheduledMatch.status === "completed" ? "RECEIPT STREAM" : "EXECUTION STATUS"}</span>
               <p>{liveDescription}</p>
             </div>
             <div className="spectator-proof-strip">
@@ -502,7 +542,7 @@ export function MatchSpectator({
             </div>
           </div>
 
-          {renderSeat({ side: "B", agentId: scheduledMatch.rightAgentId, name: rightName, artifactCommitment: rightEntry?.artifactCommitment, score: hasReplay ? currentScore[scheduledMatch.rightAgentId] ?? 0 : "–" })}
+          {renderSeat({ side: "B", agentId: scheduledMatch.rightAgentId, name: rightName, artifactCommitment: rightEntry?.artifactCommitment, score: hasReplay ? currentScore?.[scheduledMatch.rightAgentId] ?? "–" : "–" })}
         </section>
 
         <section className="spectator-feed" aria-label="Table status">
@@ -518,8 +558,8 @@ export function MatchSpectator({
           <div className="spectator-controls">
             <button type="button" disabled={!hasReplay || activeIndex === 0} onClick={() => { setPlaying(false); setActiveIndex((index) => Math.max(0, index - 1)); }}>← Previous</button>
             <button type="button" className="is-primary" disabled={!hasReplay} onClick={() => {
-              if (activeIndex >= handReceipts.length - 1) setActiveIndex(0);
-              setPlaying((value) => !value);
+              if (activeIndex >= handReceipts.length - 1) { setActiveIndex(0); setPlaying(true); }
+              else setPlaying((value) => !value);
             }}>{activeIndex >= handReceipts.length - 1 ? "Replay match" : playing ? "Pause replay" : "Play replay"}</button>
             <button type="button" disabled={!hasReplay || activeIndex >= handReceipts.length - 1} onClick={() => { setPlaying(false); setActiveIndex((index) => Math.min(handReceipts.length - 1, index + 1)); }}>Next →</button>
           </div>

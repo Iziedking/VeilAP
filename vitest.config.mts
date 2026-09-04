@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Bound process contention; concurrency probes still race requests inside each test.
+    maxWorkers: 4,
     setupFiles: ["src/test/setup.ts"],
     exclude: [...configDefaults.exclude, "tests/e2e/**"],
     passWithNoTests: true,

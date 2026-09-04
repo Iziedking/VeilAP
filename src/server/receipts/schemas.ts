@@ -58,6 +58,7 @@ export const auditorReceiptPayloadSchema = z.object({
 }).strict();
 
 export const arenaMatchReceiptPayloadSchema = z.object({
+  receiptVersion: z.literal(2).optional(),
   schemaVersion: z.literal(1),
   audience: z.literal("arena"),
   matchId: z.string().min(1).max(160),

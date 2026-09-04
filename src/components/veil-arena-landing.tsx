@@ -131,7 +131,7 @@ export function VeilArenaLanding() {
                   <div><dt>Status</dt><dd>{match?.status ?? "Taking entries"}</dd></div>
                   <div><dt>Progress</dt><dd>{featured.completedMatchCount}/{featured.matchCount}</dd></div>
                 </dl>
-                <Link href={matchHref}>{match?.status === "completed" ? "Watch verified replay" : match?.status === "running" ? "Open live table" : "Open competition"}<span>→</span></Link>
+                <Link href={matchHref}>{match?.status === "completed" ? "Watch verified replay" : match?.status === "running" ? "View execution status" : "Open competition"}<span>→</span></Link>
               </>
             ) : (
               <div className="arena-preview-empty">

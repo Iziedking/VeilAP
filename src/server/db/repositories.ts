@@ -1,3 +1,4 @@
+import { eligibleMatch, MAX_MATCH_ATTEMPTS } from "@/domain/arena/queue-policy";
 import { and, asc, count, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { AuthChallenge } from "@/server/auth/challenge";
@@ -72,6 +73,7 @@ export interface ProjectKeyRecord {
 
 export interface ProjectKeyRepository {
   saveProject(record: ProjectKeyRecord): Promise<void>;
+  ensureProject(input: { project: ProjectKeyRecord; members: ProjectMemberRecord[]; audit: AuditEventRecord }): Promise<ProjectKeyRecord>;
   getProject(id: string): Promise<ProjectKeyRecord | undefined>;
 }
 
@@ -224,7 +226,7 @@ export interface ParticipantAgentPackageRecord {
   engineVersion: string;
   ruleCount: number;
   artifactCommitment: string;
-  encryptedPackage: EncryptedField;
+  encryptedPackage: EncryptedField & { keyId?: string };
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -257,6 +259,7 @@ export type ArenaMatchRevealRecord = {
   handNumber: number;
   position: "button" | "big_blind";
   action: "fold" | "check" | "call" | "raise";
+  nonce?: string;
   seatSwapped: boolean;
   actionCommitment: string;
   handCommitment: string;
@@ -341,6 +344,8 @@ export interface ArenaScheduledMatchRecord {
   status: ArenaScheduledMatchStatus;
   matchId?: string;
   attempts: number;
+  encryptedSeed?: EncryptedField;
+  retryAt?: Date;
   executionIdempotencyKey?: string;
   executionRequestDigest?: string;
   leaseExpiresAt?: Date;
@@ -427,9 +432,10 @@ export interface ProjectRepository extends ProjectKeyRepository {
   getArenaStrategyArtifact(projectId: string, agentId: string): Promise<ArenaStrategyArtifactRecord | undefined>;
   listArenaStrategyArtifacts(projectId: string): Promise<ArenaStrategyArtifactRecord[]>;
   saveParticipantAgentPackage(record: ParticipantAgentPackageRecord): Promise<void>;
+  updateParticipantAgentPackage(ownerFingerprint: string, agentId: string, build: (existing: ParticipantAgentPackageRecord | undefined) => ParticipantAgentPackageRecord): Promise<ParticipantAgentPackageRecord>;
   getParticipantAgentPackage(ownerFingerprint: string, agentId: string): Promise<ParticipantAgentPackageRecord | undefined>;
   listParticipantAgentPackages(ownerFingerprint: string): Promise<ParticipantAgentPackageRecord[]>;
-  saveArenaMatchReceipt(record: ArenaMatchReceiptRecord): Promise<void>;
+  saveArenaMatchReceipt(record: ArenaMatchReceiptRecord, lease?: { scheduledMatchId: string; attempts: number; now: Date }): Promise<void>;
   getArenaMatchReceipt(projectId: string, matchId: string): Promise<ArenaMatchReceiptRecord | undefined>;
   getArenaMatchReceiptByIdempotencyKey(projectId: string, idempotencyKey: string): Promise<ArenaMatchReceiptRecord | undefined>;
   listArenaMatchReceipts(projectId: string): Promise<ArenaMatchReceiptRecord[]>;
@@ -474,6 +480,7 @@ export interface ProjectRepository extends ProjectKeyRepository {
     scheduledMatchId: string;
     now: Date;
     leaseMs: number;
+    encryptedSeed?: EncryptedField;
     executionIdempotencyKey: string;
     executionRequestDigest: string;
   }): Promise<ArenaScheduledMatchRecord | "IN_PROGRESS" | undefined>;
@@ -576,6 +583,7 @@ function toArenaMatchRevealRecord(row: typeof arenaMatchReveals.$inferSelect): A
     handNumber: row.handNumber,
     position: revealPosition(row.position),
     action: revealAction(row.action),
+    nonce: row.nonce ?? undefined,
     seatSwapped: row.seatSwapped,
     actionCommitment: row.actionCommitment,
     handCommitment: row.handCommitment,
@@ -681,6 +689,8 @@ function toArenaScheduledMatchRecord(row: typeof arenaScheduledMatches.$inferSel
     status: arenaScheduledMatchStatus(row.status),
     matchId: row.matchId ?? undefined,
     attempts: row.attempts,
+    encryptedSeed: row.encryptedSeed as EncryptedField | undefined,
+    retryAt: row.retryAt ?? undefined,
     executionIdempotencyKey: row.executionIdempotencyKey ?? undefined,
     executionRequestDigest: row.executionRequestDigest ?? undefined,
     leaseExpiresAt: row.leaseExpiresAt ?? undefined,
@@ -985,6 +995,20 @@ export function createPostgresRepositories(db: VeilapDatabase): {
       },
     },
     projects: {
+      async ensureProject(input) {
+        return db.transaction(async (tx) => {
+          const inserted = await tx.insert(projects).values(input.project).onConflictDoNothing().returning();
+          if (!inserted[0]) {
+            const rows = await tx.select().from(projects).where(eq(projects.id, input.project.id)).limit(1);
+            const existing = rows[0];
+            if (!existing || existing.ownerFingerprint !== input.project.ownerFingerprint || existing.name !== input.project.name) throw new Error("PROJECT_IDEMPOTENCY_CONFLICT");
+            return existing;
+          }
+          await tx.insert(projectMembers).values(input.members);
+          await tx.insert(auditEvents).values(input.audit);
+          return inserted[0];
+        });
+      },
       async saveProject(record) {
         await db.insert(projects).values(record);
       },
@@ -1194,26 +1218,27 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(asc(arenaStrategyArtifacts.createdAt));
         return rows.map(toArenaStrategyArtifactRecord);
       },
+      async updateParticipantAgentPackage(ownerFingerprint, agentId, build) {
+        // Drizzle 0.45.2 transaction API; PostgreSQL 16 advisory xact locks,
+        // docs/16/explicit-locking.html, reviewed 2026-09-04. Lock absent rows too.
+        return db.transaction(async (tx) => {
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["participant-vault", ownerFingerprint, agentId])}, 0))`);
+          const rows = await tx.select().from(participantAgentPackages).where(and(
+            eq(participantAgentPackages.ownerFingerprint, ownerFingerprint), eq(participantAgentPackages.agentId, agentId),
+          )).limit(1);
+          const existing = rows[0] ? toParticipantAgentPackageRecord(rows[0]) : undefined;
+          const record = build(existing);
+          if (record.ownerFingerprint !== ownerFingerprint || record.agentId !== agentId || (existing && record.id !== existing.id)) throw new Error("PARTICIPANT_AGENT_PACKAGE_CONFLICT");
+          const updates = { ...record, id: existing?.id ?? record.id, createdAt: existing?.createdAt ?? record.createdAt };
+          const committed = await tx.insert(participantAgentPackages).values(record).onConflictDoUpdate({ target: [participantAgentPackages.ownerFingerprint, participantAgentPackages.agentId], set: updates }).returning();
+          return toParticipantAgentPackageRecord(committed[0]!);
+        });
+      },
       async saveParticipantAgentPackage(record) {
-        await db
-          .insert(participantAgentPackages)
-          .values({
-            ...record,
-            encryptedPackage: record.encryptedPackage,
-          })
-          .onConflictDoUpdate({
-            target: [participantAgentPackages.ownerFingerprint, participantAgentPackages.agentId],
-            set: {
-              displayName: record.displayName,
-              protocolVersion: record.protocolVersion,
-              engineVersion: record.engineVersion,
-              ruleCount: record.ruleCount,
-              artifactCommitment: record.artifactCommitment,
-              encryptedPackage: record.encryptedPackage,
-              version: record.version,
-              updatedAt: record.updatedAt,
-            },
-          });
+        await this.updateParticipantAgentPackage(record.ownerFingerprint, record.agentId, (existing) => {
+          if (existing && (existing.id !== record.id || existing.version > record.version)) throw new Error("PARTICIPANT_AGENT_PACKAGE_CONFLICT");
+          return record;
+        });
       },
       async getParticipantAgentPackage(ownerFingerprint, agentId) {
         const rows = await db
@@ -1234,8 +1259,14 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .orderBy(desc(participantAgentPackages.updatedAt));
         return rows.map(toParticipantAgentPackageRecord);
       },
-      async saveArenaMatchReceipt(record) {
-        await db.insert(arenaMatchReceipts).values({
+      async saveArenaMatchReceipt(record, lease) {
+        await db.transaction(async (tx) => {
+          if (lease) {
+            const rows = await tx.select().from(arenaScheduledMatches).where(and(eq(arenaScheduledMatches.id, lease.scheduledMatchId), eq(arenaScheduledMatches.projectId, record.projectId))).for("update");
+            const current = rows[0];
+            if (!current || current.status !== "running" || current.attempts !== lease.attempts || !current.leaseExpiresAt || current.leaseExpiresAt <= lease.now) throw new Error("ARENA_MATCH_LEASE_LOST");
+          }
+        await tx.insert(arenaMatchReceipts).values({
           id: record.id,
           projectId: record.projectId,
           leftAgentId: record.leftAgentId,
@@ -1251,6 +1282,7 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           requestDigest: record.requestDigest ?? null,
           status: record.status,
           createdAt: record.createdAt,
+        });
         });
       },
       async getArenaMatchReceipt(projectId, matchId) {
@@ -1287,6 +1319,7 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           handNumber: record.handNumber,
           position: record.position,
           action: record.action,
+          nonce: record.nonce ?? null,
           seatSwapped: record.seatSwapped,
           actionCommitment: record.actionCommitment,
           handCommitment: record.handCommitment,
@@ -1665,6 +1698,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
           .set({
             status: "running",
             attempts: sql`${arenaScheduledMatches.attempts} + 1`,
+            encryptedSeed: sql`coalesce(nullif(${arenaScheduledMatches.encryptedSeed}, 'null'::jsonb), ${JSON.stringify(input.encryptedSeed ?? null)}::jsonb)`,
+            retryAt: null,
             executionIdempotencyKey: input.executionIdempotencyKey,
             executionRequestDigest: input.executionRequestDigest,
             leaseExpiresAt,
@@ -1675,10 +1710,11 @@ export function createPostgresRepositories(db: VeilapDatabase): {
             eq(arenaScheduledMatches.projectId, input.projectId),
             eq(arenaScheduledMatches.seasonId, input.seasonId),
             eq(arenaScheduledMatches.id, input.scheduledMatchId),
+            lt(arenaScheduledMatches.attempts, MAX_MATCH_ATTEMPTS),
             or(
-              eq(arenaScheduledMatches.status, "scheduled"),
-              eq(arenaScheduledMatches.status, "failed"),
-              and(eq(arenaScheduledMatches.status, "running"), lt(arenaScheduledMatches.leaseExpiresAt, input.now)),
+              and(eq(arenaScheduledMatches.status, "scheduled"), sql`${arenaScheduledMatches.createdAt} + greatest(1, ${arenaScheduledMatches.sequence}) * interval '10 seconds' <= ${input.now}`),
+              and(eq(arenaScheduledMatches.status, "failed"), sql`(${arenaScheduledMatches.retryAt} is null or ${arenaScheduledMatches.retryAt} <= ${input.now})`),
+              and(eq(arenaScheduledMatches.status, "running"), sql`(${arenaScheduledMatches.leaseExpiresAt} is null or ${arenaScheduledMatches.leaseExpiresAt} <= ${input.now})`),
             ),
           ))
           .returning();
@@ -1689,10 +1725,11 @@ export function createPostgresRepositories(db: VeilapDatabase): {
         return undefined;
       },
       async updateArenaScheduledMatch(record) {
-        await db
+        const updated = await db
           .update(arenaScheduledMatches)
           .set({
             status: record.status,
+            retryAt: record.retryAt ?? null,
             matchId: record.matchId ?? null,
             attempts: record.attempts,
             executionIdempotencyKey: record.executionIdempotencyKey ?? null,
@@ -1702,7 +1739,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
             completedAt: record.completedAt ?? null,
             lastError: record.lastError ?? null,
           })
-          .where(and(eq(arenaScheduledMatches.projectId, record.projectId), eq(arenaScheduledMatches.id, record.id)));
+          .where(and(eq(arenaScheduledMatches.projectId, record.projectId), eq(arenaScheduledMatches.id, record.id), eq(arenaScheduledMatches.status, "running"), eq(arenaScheduledMatches.attempts, record.attempts))).returning({ id: arenaScheduledMatches.id });
+        if (!updated[0]) throw new Error("ARENA_MATCH_LEASE_LOST");
       },
       async saveArenaSeasonSchedule(input) {
         await db.transaction(async (tx) => {
@@ -1909,6 +1947,18 @@ export function createMemoryRepositories(): {
       },
     },
     projects: {
+      async ensureProject(input) {
+        const existing = projectRows.get(input.project.id);
+        if (existing) {
+          if (existing.ownerFingerprint !== input.project.ownerFingerprint || existing.name !== input.project.name) throw new Error("PROJECT_IDEMPOTENCY_CONFLICT");
+          return structuredClone(existing);
+        }
+        if (auditRows.some((row) => row.id === input.audit.id)) throw new Error("AUDIT_EVENT_ALREADY_EXISTS");
+        projectRows.set(input.project.id, structuredClone(input.project));
+        for (const member of input.members) memberRows.set(`${member.projectId}:${member.walletFingerprint}:${member.role}`, structuredClone(member));
+        auditRows.push(structuredClone(input.audit));
+        return structuredClone(input.project);
+      },
       async saveProject(record) {
         if (projectRows.has(record.id)) throw new Error("PROJECT_ALREADY_EXISTS");
         projectRows.set(record.id, structuredClone(record));
@@ -2095,6 +2145,14 @@ export function createMemoryRepositories(): {
           .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
           .map((record) => structuredClone(record));
       },
+      async updateParticipantAgentPackage(ownerFingerprint, agentId, build) {
+        // The callback is synchronous, so this memory operation cannot interleave.
+        const existing = [...participantAgentPackageRows.values()].find((item) => item.ownerFingerprint === ownerFingerprint && item.agentId === agentId);
+        const record = build(existing ? structuredClone(existing) : undefined);
+        if (record.ownerFingerprint !== ownerFingerprint || record.agentId !== agentId || (existing && record.id !== existing.id)) throw new Error("PARTICIPANT_AGENT_PACKAGE_CONFLICT");
+        participantAgentPackageRows.set(record.id, structuredClone(record));
+        return structuredClone(record);
+      },
       async saveParticipantAgentPackage(record) {
         const existing = [...participantAgentPackageRows.values()].find((item) => (
           item.ownerFingerprint === record.ownerFingerprint && item.agentId === record.agentId
@@ -2114,7 +2172,11 @@ export function createMemoryRepositories(): {
           .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
           .map((record) => structuredClone(record));
       },
-      async saveArenaMatchReceipt(record) {
+      async saveArenaMatchReceipt(record, lease) {
+        if (lease) {
+          const current = arenaScheduledMatchRows.get(lease.scheduledMatchId);
+          if (!current || current.projectId !== record.projectId || current.status !== "running" || current.attempts !== lease.attempts || !current.leaseExpiresAt || current.leaseExpiresAt <= lease.now) throw new Error("ARENA_MATCH_LEASE_LOST");
+        }
         if (arenaMatchReceiptRows.has(record.id)) throw new Error("ARENA_MATCH_ALREADY_EXISTS");
         if (record.idempotencyKey && [...arenaMatchReceiptRows.values()].some((row) => row.projectId === record.projectId && row.idempotencyKey === record.idempotencyKey)) {
           throw new Error("ARENA_MATCH_IDEMPOTENCY_ALREADY_EXISTS");
@@ -2343,14 +2405,14 @@ export function createMemoryRepositories(): {
       async claimArenaScheduledMatch(input) {
         const current = arenaScheduledMatchRows.get(input.scheduledMatchId);
         if (!current || current.projectId !== input.projectId || current.seasonId !== input.seasonId) return undefined;
-        const reclaimable = current.status === "scheduled"
-          || current.status === "failed"
-          || (current.status === "running" && !!current.leaseExpiresAt && current.leaseExpiresAt < input.now);
+        const reclaimable = current.attempts < MAX_MATCH_ATTEMPTS && eligibleMatch(current, input.now);
         if (!reclaimable) return current.status === "completed" ? structuredClone(current) : "IN_PROGRESS";
         const claimed: ArenaScheduledMatchRecord = {
           ...current,
           status: "running",
           attempts: current.attempts + 1,
+          encryptedSeed: current.encryptedSeed ?? input.encryptedSeed,
+          retryAt: undefined,
           executionIdempotencyKey: input.executionIdempotencyKey,
           executionRequestDigest: input.executionRequestDigest,
           leaseExpiresAt: new Date(input.now.getTime() + input.leaseMs),
@@ -2361,7 +2423,8 @@ export function createMemoryRepositories(): {
         return structuredClone(claimed);
       },
       async updateArenaScheduledMatch(record) {
-        if (!arenaScheduledMatchRows.has(record.id)) throw new Error("ARENA_SCHEDULED_MATCH_NOT_FOUND");
+        const current = arenaScheduledMatchRows.get(record.id);
+        if (!current || current.projectId !== record.projectId || current.status !== "running" || current.attempts !== record.attempts) throw new Error("ARENA_MATCH_LEASE_LOST");
         arenaScheduledMatchRows.set(record.id, structuredClone(record));
       },
       async saveArenaSeasonSchedule(input) {

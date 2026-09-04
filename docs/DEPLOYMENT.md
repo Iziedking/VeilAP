@@ -89,6 +89,7 @@ chmod 600 /opt/veil-arena/config/veil-arena.env
 | `STARKNET_RPC_URL` | Server-only Mainnet RPC |
 | `VEILAP_APP_ORIGIN` | Exact browser origin, `https://veilap.xyz` |
 | `VEILAP_SESSION_SECRET` | At least 64 random characters |
+| `VEILAP_PARTICIPANT_VAULT_KEYS` | Server-only versioned saved-package key ring; independent 32-byte hex keys, retained legacy readers; see OPERATIONS.md |
 | `VEILAP_WALLET_HASH_PEPPER` | At least 64 independent random characters |
 | `VEILAP_KMS_KEY_ID` | Full customer-managed KMS key ARN |
 | `AWS_REGION` | KMS and EC2 region |

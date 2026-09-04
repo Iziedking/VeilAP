@@ -7,6 +7,7 @@ import { createProjectKeyMaterial, type KeyProvider } from "@/server/crypto/key-
 import type {
   AgreementVersionRecord,
   ProjectRepository,
+  ProjectMemberRecord,
   ProjectRole,
 } from "@/server/db/repositories";
 import { authorizeProject } from "@/server/authorization/authorize";
@@ -101,44 +102,32 @@ export class ProjectService {
   async createProject(input: {
     name: string;
     walletAddress: string;
+    idempotencyKey?: string;
   }): Promise<ProjectServiceResult<ProjectView>> {
     const name = input.name.trim();
+    if (input.idempotencyKey && !/^[\x21-\x7e]{8,200}$/.test(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
     if (name.length < 1 || name.length > 120) return { ok: false, code: "INVALID_INPUT" };
 
     try {
       const ownerFingerprint = actorFingerprint(input.walletAddress, this.walletHashPepper);
-      const id = this.idFactory();
+      const id = input.idempotencyKey ? commitment({ domain: "project-create:v1", ownerFingerprint, key: input.idempotencyKey }) : this.idFactory();
+      const existing = input.idempotencyKey ? await this.repositories.getProject(id) : undefined;
+      if (existing) {
+        if (existing.ownerFingerprint !== ownerFingerprint || existing.name !== name) return { ok: false, code: "INVALID_INPUT" };
+        return { ok: true, value: { id, name, createdAt: existing.createdAt.toISOString(), roles: ["company"] } };
+      }
       const createdAt = this.now();
       const keyMaterial = await createProjectKeyMaterial(this.keyProvider, id);
-      await this.repositories.saveProject({
-        id,
-        name,
-        ownerFingerprint,
-        wrappedDataKey: keyMaterial.wrappedKey,
-        createdAt,
-      });
-      await this.repositories.saveMember({
-        projectId: id,
-        walletFingerprint: ownerFingerprint,
-        role: "company",
-        createdAt,
-      });
+      const members: ProjectMemberRecord[] = [{ projectId: id, walletFingerprint: ownerFingerprint, role: "company", createdAt }];
       if (this.systemWorkerWalletAddress) {
         const workerFingerprint = actorFingerprint(this.systemWorkerWalletAddress, this.walletHashPepper);
-        if (workerFingerprint !== ownerFingerprint) {
-          await this.repositories.saveMember({
-            projectId: id,
-            walletFingerprint: workerFingerprint,
-            role: "reviewer",
-            createdAt,
-          });
-        }
+        if (workerFingerprint !== ownerFingerprint) members.push({ projectId: id, walletFingerprint: workerFingerprint, role: "reviewer", createdAt });
       }
-      await this.writeAudit(id, ownerFingerprint, "project_created", commitment({ projectId: id, nameDigest: commitment(name) }));
-      return {
-        ok: true,
-        value: { id, name, createdAt: createdAt.toISOString(), roles: ["company"] },
-      };
+      const committed = await this.repositories.ensureProject({
+        project: { id, name, ownerFingerprint, wrappedDataKey: keyMaterial.wrappedKey, createdAt }, members,
+        audit: { id: this.idFactory(), projectId: id, actorFingerprint: ownerFingerprint, eventType: "project_created", payloadDigest: commitment({ projectId: id, nameDigest: commitment(name) }), createdAt },
+      });
+      return { ok: true, value: { id, name, createdAt: committed.createdAt.toISOString(), roles: ["company"] } };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
     }

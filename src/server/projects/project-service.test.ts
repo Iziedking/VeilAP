@@ -75,3 +75,15 @@ describe("ProjectService", () => {
     await expect(service.getProject({ projectId, walletAddress: address("5") })).resolves.toEqual({ ok: false, code: "PROJECT_ACCESS_REQUIRED" });
   });
 });
+
+
+it("concurrent retries create one complete project with stable owner and timestamp", async () => {
+  const repositories = createMemoryRepositories();
+  const service = new ProjectService({ repositories: repositories.projects, keyProvider: createTestKeyProvider(), walletHashPepper: "test-pepper".repeat(6) });
+  const results = await Promise.all([1, 2].map(() => service.createProject({ name: "Retry challenge", walletAddress: "0x1", idempotencyKey: "same-challenge-request" })));
+  expect(results[0]).toEqual(results[1]);
+  if (!results[0].ok) throw new Error(results[0].code);
+  expect((await service.getProject({ projectId: results[0].value.id, walletAddress: "0x1" })).ok).toBe(true);
+  const other = await service.createProject({ name: "Retry challenge", walletAddress: "0x2", idempotencyKey: "same-challenge-request" });
+  expect(other.ok && other.value.id).not.toBe(results[0].value.id);
+});

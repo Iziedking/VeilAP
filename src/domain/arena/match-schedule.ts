@@ -1,7 +1,7 @@
 export const ARENA_MATCH_START_INTERVAL_MS = 10_000;
 
 export function arenaMatchStartsAt(input: { createdAt: Date; sequence: number }): Date {
-  const sequenceOffset = Math.max(0, input.sequence - 1);
+  const sequenceOffset = Math.max(1, input.sequence);
   return new Date(input.createdAt.getTime() + sequenceOffset * ARENA_MATCH_START_INTERVAL_MS);
 }
 

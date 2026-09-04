@@ -1,3 +1,4 @@
+import { seasonStandings } from "@/domain/arena/scoring";
 import { randomUUID } from "node:crypto";
 
 import { validateAndParseAddress } from "starknet";
@@ -220,23 +221,16 @@ function publicReceipt(record: { publicReceipt: unknown }): PublicMatchReceipt {
 function winnerFromMatches(
   matches: Array<{ leftAgentId: string; rightAgentId: string; publicReceipt: unknown }>,
 ): ArenaPrizePoolResult<string> {
-  const points = new Map<string, number>();
-  for (const match of matches) {
-    const receipt = publicReceipt(match);
-    const score = receipt.score;
-    const entries = Object.entries(score);
-    if (entries.length !== 2) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
-    const highest = Math.max(...entries.map(([, value]) => value));
-    const leaders = entries.filter(([, value]) => value === highest);
-    if (leaders.length !== 1) return { ok: false, code: "ARENA_WINNER_TIE" };
-    points.set(leaders[0]![0], (points.get(leaders[0]![0]) ?? 0) + 3);
-    const loser = entries.find(([agentId]) => agentId !== leaders[0]![0])?.[0];
-    if (loser) points.set(loser, points.get(loser) ?? 0);
-  }
-  const ranked = [...points.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
-  if (ranked.length === 0) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
-  if (ranked.length > 1 && ranked[0]![1] === ranked[1]![1]) return { ok: false, code: "ARENA_WINNER_TIE" };
-  return { ok: true, value: ranked[0]![0] };
+  try {
+    for (const match of matches) {
+      const receipt = publicReceipt(match);
+      if (!receipt.score || Object.keys(receipt.score).sort().join(",") !== [match.leftAgentId, match.rightAgentId].sort().join(",")) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
+    }
+    const ranked = seasonStandings(matches.map(publicReceipt));
+    if (!ranked.length) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
+    if (ranked[1]?.points === ranked[0]!.points) return { ok: false, code: "ARENA_WINNER_TIE" };
+    return { ok: true, value: ranked[0]!.agentId };
+  } catch { return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" }; }
 }
 
 export class ArenaPrizePoolService {

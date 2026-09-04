@@ -1,7 +1,7 @@
 import type { KMSClient } from "@aws-sdk/client-kms";
 import { describe, expect, it, vi } from "vitest";
 
-import { checkKmsKeyAccess } from "./kms-key-provider";
+import { checkKmsKeyAccess, KmsKeyProvider } from "./kms-key-provider";
 
 function clientWith(result: unknown): KMSClient {
   return {
@@ -34,4 +34,18 @@ describe("checkKmsKeyAccess", () => {
       client,
     })).resolves.toBe(false);
   });
+});
+
+it("aborts an unavailable KMS unwrap instead of retaining a blocked worker call", async () => {
+  const controller = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+  try {
+    const client = { send: (_command: unknown, options: { abortSignal: AbortSignal }) => new Promise((_resolve, reject) => { options.abortSignal.addEventListener("abort", () => reject(new Error("KMS_ABORTED")), { once: true }); }) } as unknown as KMSClient;
+    const provider = new KmsKeyProvider({ keyId: "test-key", region: "us-east-1", client });
+    const result = provider.unwrap("test-wrapped-key", "test-project");
+    const rejected = expect(result).rejects.toThrow("KMS_ABORTED");
+    controller.abort();
+    await rejected;
+    expect(timeout).toHaveBeenCalledWith(10_000);
+  } finally { timeout.mockRestore(); }
 });

@@ -21,6 +21,7 @@ import { ArenaPrizePoolService } from "@/server/arena/arena-prize-pool-service";
 import { ArenaWorkerService } from "@/server/arena/arena-worker-service";
 import { ArenaReadinessService } from "@/server/arena/arena-readiness-service";
 import { ParticipantAgentService } from "@/server/arena/participant-agent-service";
+import { readParticipantVaultKeys } from "@/server/crypto/participant-vault-config";
 import { checkArenaDatabaseReadiness } from "@/server/arena/arena-readiness-database";
 
 const previewKeyProvider = createPreviewKeyProvider();
@@ -83,6 +84,7 @@ export function getParticipantAgentService(): ParticipantAgentService {
     repositories: getAuthRepositories().projects,
     walletHashPepper: dependencies().walletHashPepper,
     sessionSecret: getSessionSecret(),
+    vaultKeys: readParticipantVaultKeys(),
   });
 }
 

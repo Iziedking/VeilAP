@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { ArenaNav } from "@/components/arena/arena-nav";
 import type { ApiEnvelope } from "@/components/arena/arena-types";
@@ -17,6 +17,7 @@ type ChampionChallengeResponse = {
 
 export function ChampionChallenge() {
   const router = useRouter();
+  const requestKey = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,7 +25,9 @@ export function ChampionChallenge() {
     setBusy(true);
     setError("");
     try {
-      const response = await apiFetch("/api/champion/challenges", { method: "POST" });
+      requestKey.current ??= window.sessionStorage.getItem("veil-champion-request") ?? crypto.randomUUID();
+      window.sessionStorage.setItem("veil-champion-request", requestKey.current);
+      const response = await apiFetch("/api/champion/challenges", { method: "POST", headers: { "idempotency-key": requestKey.current } });
       const body = await response.json() as ApiEnvelope<ChampionChallengeResponse> & ChampionChallengeFailure;
       if (response.status === 401 || (!body.ok && body.code === "AUTH_REQUIRED")) {
         router.push("/sign-in?returnTo=%2Fchampion");
@@ -38,6 +41,7 @@ export function ChampionChallenge() {
         }));
       }
       const destination = new URL(body.value.joinUrl, window.location.origin);
+      window.sessionStorage.removeItem("veil-champion-request");
       router.push(`${destination.pathname}${destination.search}`);
     } catch (error) {
       setError(error instanceof Error

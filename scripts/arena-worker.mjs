@@ -1,9 +1,12 @@
+import { writeFile } from "node:fs/promises";
 import { parseWorkerTickResult } from "./arena-worker-response.mjs";
 
 const apiUrl = (process.env.VEILAP_ARENA_WORKER_API_URL || "http://app:3000").replace(/\/$/, "");
 const workerSecret = process.env.VEILAP_ARENA_WORKER_SECRET || "";
 const pollMs = boundedInteger(process.env.VEILAP_ARENA_WORKER_POLL_MS, 1000, 250, 10000);
 const idlePollMs = boundedInteger(process.env.VEILAP_ARENA_WORKER_IDLE_POLL_MS, 2500, 500, 30000);
+const requestTimeoutMs = boundedInteger(process.env.VEILAP_ARENA_WORKER_REQUEST_TIMEOUT_MS, 90_000, 250, 110_000);
+const healthFile = process.env.VEILAP_ARENA_WORKER_HEALTH_FILE || "/tmp/veil-arena-worker-health.json";
 const errorBackoffMs = boundedInteger(process.env.VEILAP_ARENA_WORKER_ERROR_BACKOFF_MS, 5000, 1000, 60000);
 
 if (workerSecret.length < 64) {
@@ -31,6 +34,7 @@ while (!stopping) {
   let delay = idlePollMs;
   try {
     const result = await tick();
+    await writeFile(healthFile, JSON.stringify({ lastResponseAt: Date.now(), status: result.status }));
     if (result.status === "completed") {
       console.log(`[arena-worker] completed ${result.scheduledMatchId || "scheduled match"}`);
       delay = pollMs;
@@ -56,6 +60,7 @@ console.log("[arena-worker] shutdown complete");
 
 async function tick() {
   activeRequest = new AbortController();
+  const deadline = setTimeout(() => activeRequest?.abort(), requestTimeoutMs);
   try {
     const response = await fetch(`${apiUrl}/api/internal/arena/worker/tick`, {
       method: "POST",
@@ -70,6 +75,7 @@ async function tick() {
     if (!response.ok) throw new Error(`HTTP_${response.status}_${body.code || "WORKER_TICK_FAILED"}`);
     return parseWorkerTickResult(body);
   } finally {
+    clearTimeout(deadline);
     activeRequest = undefined;
   }
 }

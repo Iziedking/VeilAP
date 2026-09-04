@@ -1,3 +1,5 @@
+import { readParticipantVaultKeys } from "@/server/crypto/participant-vault-config";
+
 export type ServerMode = "preview" | "persisted";
 
 export interface VeilapServerConfig {
@@ -5,6 +7,7 @@ export interface VeilapServerConfig {
   databaseUrl?: string;
   starknetRpcUrl: string;
   sessionSecret?: string;
+  participantVaultReady?: boolean;
   walletHashPepper?: string;
   kmsKeyId?: string;
   awsRegion?: string;
@@ -58,7 +61,10 @@ export function readServerConfig(
         return false;
       });
 
+  let participantVaultReady = false;
+  try { participantVaultReady = Boolean(readParticipantVaultKeys(env)); } catch { /* Report capability failure without returning key material. */ }
   return {
+    participantVaultReady,
     mode: preview ? "preview" : "persisted",
     databaseUrl: env.DATABASE_URL,
     starknetRpcUrl: env.STARKNET_RPC_URL ?? "",

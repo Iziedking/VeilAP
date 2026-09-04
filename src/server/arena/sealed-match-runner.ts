@@ -1,6 +1,8 @@
 import { commitment } from "@/domain/canonical";
 import {
   runMatch,
+  actionNonce,
+  privateActionCommitment,
   transcriptProof,
   verifyTranscriptProof,
   type DecisionAction,
@@ -33,6 +35,7 @@ export type SealedMatchRunResult =
 
 export type SealedLosingActionReveal = Readonly<{
   action: DecisionAction;
+  nonce?: string;
   actionCommitment: string;
   agentId: string;
   handCommitment: string;
@@ -68,6 +71,7 @@ export async function runSealedMatch(input: {
   rightAgentId: string;
   matchId: string;
   engineVersion?: ArenaEngineVersion;
+  receiptVersion?: 1 | 2;
   seed: string;
   hands: number;
   keyMaterial: ProjectKeyMaterial;
@@ -99,6 +103,7 @@ export async function runSealedMatch(input: {
   const result = runMatch({
     agents: [left.agent, right.agent],
     engineVersion,
+    receiptVersion: input.receiptVersion,
     hands: input.hands,
     matchId: input.matchId,
     seed: input.seed,
@@ -129,6 +134,7 @@ export async function revealSealedLosingAction(input: {
   rightAgentId: string;
   matchId: string;
   engineVersion?: ArenaEngineVersion;
+  receiptVersion?: 1 | 2;
   seed: string;
   hands: number;
   handIndex: number;
@@ -161,6 +167,7 @@ export async function revealSealedLosingAction(input: {
   const result = runMatch({
     agents: [left.agent, right.agent],
     engineVersion,
+    receiptVersion: input.receiptVersion,
     hands: input.hands,
     matchId: input.matchId,
     seed: input.seed,
@@ -190,7 +197,10 @@ export async function revealSealedLosingAction(input: {
   const hand = result.value.hands[receiptIndex]!;
   const outcome = hand.outcomes.find((candidate) => candidate.agentId === loser);
   if (!outcome) return { ok: false, code: "NO_LOSING_AGENT" };
-  const actionCommitment = commitment({ agentId: outcome.agentId, action: outcome.action });
+  const nonce = publicHandReceipt.receiptVersion === 2 ? actionNonce(input.seed, input.matchId, hand.handNumber, hand.seatSwapped, loser) : undefined;
+  const actionCommitment = nonce
+    ? privateActionCommitment({ nonce, matchId: input.matchId, handNumber: hand.handNumber, seatSwapped: hand.seatSwapped, agentId: loser, action: outcome.action })
+    : commitment({ agentId: outcome.agentId, action: outcome.action });
   if (publicHandReceipt.actionCommitments[loser] !== actionCommitment) {
     return { ok: false, code: "TRANSCRIPT_PROOF_INVALID" };
   }
@@ -203,6 +213,7 @@ export async function revealSealedLosingAction(input: {
     ok: true,
     value: {
       action: outcome.action,
+      ...(nonce ? { nonce } : {}),
       actionCommitment,
       agentId: outcome.agentId,
       handCommitment: publicHandReceipt.handCommitment,

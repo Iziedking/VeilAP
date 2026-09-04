@@ -1,5 +1,6 @@
 "use client";
 
+import { seasonStandings } from "@/domain/arena/scoring";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -32,23 +33,11 @@ function buildLeaderboard(schedule: CompetitionSchedule, matches: PublicMatch[])
     matches: 0,
     ties: 0,
   }]));
-  for (const match of matches) {
-    for (const player of match.players) {
-      const row = rows.get(player.agentId);
-      if (!row) continue;
-      row.matches += 1;
-      if (match.winner === "tie") {
-        row.ties += 1;
-        row.points += 1;
-      } else if (match.winner === player.agentId) {
-        row.wins += 1;
-        row.points += 3;
-      } else {
-        row.losses += 1;
-      }
-    }
+  for (const standing of seasonStandings(matches)) {
+    const row = rows.get(standing.agentId);
+    if (row) Object.assign(row, standing);
   }
-  return [...rows.values()].sort((left, right) => right.points - left.points || right.wins - left.wins || left.displayName.localeCompare(right.displayName));
+  return [...rows.values()].sort((left, right) => right.points - left.points || left.agentId.localeCompare(right.agentId));
 }
 
 export function CompetitionRoom({ projectId, seasonId }: { projectId: string; seasonId: string }) {
@@ -110,7 +99,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
   const season = schedule.season;
   const completed = schedule.matches.filter((match) => match.status === "completed").length;
   const running = schedule.matches.some((match) => match.status === "running");
-  const phase = season.status === "open" ? "open for agents" : completed === schedule.matches.length && schedule.matches.length > 0 ? "complete" : running ? "live now" : "draw locked";
+  const phase = season.status === "open" ? "open for agents" : completed === schedule.matches.length && schedule.matches.length > 0 ? "complete" : running ? "executing" : "draw locked";
   const currentMatches = schedule.matches.filter((match) => match.status !== "completed");
   const historyMatches = schedule.matches.filter((match) => match.status === "completed");
 
@@ -119,9 +108,9 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
     const countdown = match.status === "scheduled" && nowMs !== null
       ? arenaMatchCountdownMs(match.startsAt, nowMs)
       : null;
-    const statusLabel = match.status === "scheduled"
-      ? countdown === null ? "START TIME" : countdown > 0 ? `STARTS IN ${formatArenaMatchCountdown(countdown)}` : "READY TO START"
-      : match.status === "failed" ? "STOPPED" : match.status === "running" ? "LIVE" : undefined;
+    const statusLabel = match.queueState === "recovering" ? "RECOVERING" : match.queueState === "retrying" ? "RETRY SCHEDULED" : match.status === "scheduled"
+      ? countdown === null ? "ELIGIBILITY" : countdown > 0 ? `ELIGIBLE IN ${formatArenaMatchCountdown(countdown)}` : "WAITING FOR CAPACITY"
+      : match.status === "failed" ? "STOPPED" : match.status === "running" ? "EXECUTING" : undefined;
     return (
       <Link className={`room-match is-${match.status}`} href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(match.id)}`} key={match.id}>
         <span className="room-match-index">{String(match.sequence).padStart(2, "0")}</span>
@@ -134,7 +123,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
           {receipt ? <b>{receipt.score[match.leftAgentId] ?? 0} : {receipt.score[match.rightAgentId] ?? 0}</b> : <b>{statusLabel}</b>}
           <small>{match.status === "completed" ? `${match.hands} duplicate deals · verified replay` : match.status === "failed" ? "Execution stopped · inspect the table" : match.status === "scheduled" && countdown === 0 ? "The worker can claim this table now" : `${match.hands} duplicate deals · worker queue`}</small>
         </div>
-        <span className="room-match-open">{match.status === "completed" ? "Watch replay" : match.status === "running" ? "Watch live" : match.status === "failed" ? "View status" : "Open table"} →</span>
+        <span className="room-match-open">{match.status === "completed" ? "Watch replay" : match.status === "running" ? "View execution" : match.status === "failed" ? "View status" : "Open table"} →</span>
       </Link>
     );
   };
@@ -152,7 +141,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
               <p>{season.entryCount} sealed agents. {completed} of {schedule.matches.length} matches complete. The scoreboard is public while every policy stays sealed.</p>
               <div className="room-actions">
                 {season.status === "open" && season.entryMode === "open" ? <Link className="room-primary" href={`/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Enter this competition</Link> : null}
-                {watchMatch ? <Link className="room-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(watchMatch.id)}`}>{watchMatch.status === "running" ? "Watch the live table" : watchMatch.status === "completed" ? "Watch latest replay" : "Open the first table"}</Link> : null}
+                {watchMatch ? <Link className="room-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(watchMatch.id)}`}>{watchMatch.status === "running" ? "View execution status" : watchMatch.status === "completed" ? "Watch latest replay" : "Open the first table"}</Link> : null}
                 <Link className="room-secondary" href={`/arena-console?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Operator desk</Link>
               </div>
             </div>

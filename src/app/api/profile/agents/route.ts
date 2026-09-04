@@ -1,5 +1,3 @@
-import { NextResponse } from "next/server";
-
 import { readRequestActor } from "@/server/auth/request-actor";
 import { serviceResponse } from "@/server/http/service-response";
 import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
@@ -32,9 +30,8 @@ export async function POST(request: Request) {
   } catch (error) {
     const bodyError = jsonBodyErrorResponse(error);
     if (bodyError) return bodyError;
-    return NextResponse.json({ ok: false, code: error instanceof Error && error.message === "AGENT_PACKAGE_INVALID" ? "INVALID_INPUT" : "PERSISTENCE_FAILED" }, {
-      status: 400,
-      headers: { "Cache-Control": "no-store" },
-    });
+    const code = error instanceof Error && error.message === "AGENT_PACKAGE_INVALID" ? "INVALID_INPUT"
+      : error instanceof Error && error.message.startsWith("PARTICIPANT_VAULT_KEY_") ? "CONFIGURATION_MISSING" : "PERSISTENCE_FAILED";
+    return serviceResponse({ ok: false, code });
   }
 }

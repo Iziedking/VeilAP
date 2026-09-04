@@ -13,7 +13,7 @@ export async function checkArenaDatabaseReadiness(
       select
         (select count(*)::int from information_schema.tables
           where table_schema = 'public'
-            and table_name in ('projects', 'arena_strategy_artifacts', 'arena_match_receipts', 'arena_match_reveals', 'arena_seasons', 'arena_season_entries', 'arena_entry_versions', 'arena_scheduled_matches', 'arena_prize_pools', 'arena_prize_transactions', 'participant_x_identities')) as table_count,
+            and table_name in ('projects', 'arena_strategy_artifacts', 'arena_match_receipts', 'arena_match_reveals', 'arena_seasons', 'arena_season_entries', 'arena_entry_versions', 'arena_scheduled_matches', 'arena_prize_pools', 'arena_prize_transactions', 'participant_x_identities', 'participant_agent_packages')) as table_count,
         (select count(*)::int from information_schema.columns
           where table_schema = 'public'
             and (table_name, column_name) in (
@@ -42,14 +42,17 @@ export async function checkArenaDatabaseReadiness(
               ('participant_x_identities', 'username'),
               ('participant_x_identities', 'profile_image_url'),
               ('participant_x_identities', 'connected_at'),
-              ('participant_x_identities', 'last_verified_at')
+              ('participant_x_identities', 'last_verified_at'),
+              ('arena_scheduled_matches', 'encrypted_seed'),
+              ('arena_scheduled_matches', 'retry_at'),
+              ('arena_match_reveals', 'nonce')
             )) as column_count
     `);
     const rows = "rows" in result && Array.isArray(result.rows) ? result.rows : [];
     const row = rows[0] as { table_count?: number; column_count?: number } | undefined;
     return {
       database: true,
-      arenaSchema: Number(row?.table_count ?? 0) === 11 && Number(row?.column_count ?? 0) === 26,
+      arenaSchema: Number(row?.table_count ?? 0) === 12 && Number(row?.column_count ?? 0) === 29,
     };
   } catch {
     return { database: false, arenaSchema: false };

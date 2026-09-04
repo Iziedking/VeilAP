@@ -21,6 +21,7 @@ describe("ParticipantAgentService", () => {
       repositories,
       walletHashPepper: "p".repeat(32),
       sessionSecret: "s".repeat(32),
+      vaultKeys: { currentKeyId: "test-v1", keys: { "test-v1": "ab".repeat(32) } },
       idFactory: () => "saved-agent-1",
       now: () => new Date("2026-09-02T12:00:00.000Z"),
     });
@@ -40,6 +41,7 @@ describe("ParticipantAgentService", () => {
       repositories,
       walletHashPepper: "p".repeat(32),
       sessionSecret: "s".repeat(32),
+      vaultKeys: { currentKeyId: "test-v1", keys: { "test-v1": "ab".repeat(32) } },
       idFactory: () => "saved-agent-1",
     });
 
@@ -51,4 +53,34 @@ describe("ParticipantAgentService", () => {
     expect(updated.version).toBe(2);
     expect((await service.list("0x123"))[0]?.displayName).toBe("Test Bot Updated");
   });
+});
+
+
+it("rewraps retained keys without changing identity, version, timestamps or package", async () => {
+  const repositories = createMemoryRepositories().projects;
+  const base = { repositories, walletHashPepper: "p".repeat(32), sessionSecret: "s".repeat(64) };
+  const first = new ParticipantAgentService({ ...base, vaultKeys: { currentKeyId: "old", keys: { old: "ab".repeat(32) } } });
+  const saved = await first.save({ actorWalletAddress: "0x123", agentPackage: PACKAGE });
+  const rotating = new ParticipantAgentService({ ...base, sessionSecret: "r".repeat(64), vaultKeys: { currentKeyId: "new", keys: { old: "ab".repeat(32), new: "cd".repeat(32) } } });
+  expect((await rotating.open({ actorWalletAddress: "0x123", agentId: "TEST_BOT" }))?.agentPackage).toEqual(PACKAGE);
+  expect(await rotating.rewrap({ actorWalletAddress: "0x123", agentId: "TEST_BOT" })).toEqual(saved);
+  const after = new ParticipantAgentService({ ...base, sessionSecret: "r".repeat(64), vaultKeys: { currentKeyId: "new", keys: { new: "cd".repeat(32) } } });
+  expect((await after.open({ actorWalletAddress: "0x123", agentId: "TEST_BOT" }))?.agentPackage).toEqual(PACKAGE);
+  expect(await after.open({ actorWalletAddress: "0x999", agentId: "TEST_BOT" })).toBeNull();
+});
+
+it("can read and explicitly rewrap a legacy session-encrypted package", async () => {
+  const { createHash } = await import("node:crypto");
+  const { encryptField } = await import("@/server/crypto/envelope");
+  const repositories = createMemoryRepositories().projects;
+  const first = new ParticipantAgentService({ repositories, walletHashPepper: "p".repeat(32), sessionSecret: "s".repeat(64), vaultKeys: { currentKeyId: "new", keys: { new: "cd".repeat(32) } } });
+  await first.save({ actorWalletAddress: "0x123", agentPackage: PACKAGE });
+  const { fingerprintWallet } = await import("@/server/privacy/wallet-fingerprint");
+  const owner = fingerprintWallet("0x123", "p".repeat(32));
+  const record = (await repositories.getParticipantAgentPackage(owner, "TEST_BOT"))!;
+  const key = createHash("sha256").update("veilap:participant-agent-vault:v1:").update("s".repeat(64)).digest();
+  await repositories.saveParticipantAgentPackage({ ...record, encryptedPackage: encryptField(JSON.stringify(PACKAGE), { projectId: "participant-agent-vault", recordType: "participant_agent_package", recordId: record.id, fieldName: "package" }, key) });
+  const rotated = new ParticipantAgentService({ repositories, walletHashPepper: "p".repeat(32), sessionSecret: "r".repeat(64), vaultKeys: { currentKeyId: "new", keys: { new: "cd".repeat(32) }, legacySessionSecrets: ["s".repeat(64)] } });
+  await rotated.rewrap({ actorWalletAddress: "0x123", agentId: "TEST_BOT" });
+  expect((await first.open({ actorWalletAddress: "0x123", agentId: "TEST_BOT" }))?.agentPackage).toEqual(PACKAGE);
 });

@@ -4,6 +4,7 @@ import { ArenaReadinessService } from "./arena-readiness-service";
 
 const completeConfig = {
   mode: "persisted" as const,
+  participantVaultReady: true,
   databaseUrl: "postgresql://example.invalid/veilap",
   starknetRpcUrl: "https://rpc.example.invalid",
   sessionSecret: "s".repeat(64),
@@ -33,7 +34,7 @@ describe("ArenaReadinessService", () => {
     await expect(service.check()).resolves.toEqual({
       ready: true,
       mode: "persisted",
-      checks: { database: true, arenaSchema: true, kms: true, receiptSigning: true, pool: true, worker: true, xVerification: true },
+      checks: { database: true, arenaSchema: true, kms: true, receiptSigning: true, pool: true, worker: true, xVerification: true, participantVault: true },
       blockers: [],
     });
   });
@@ -56,6 +57,7 @@ describe("ArenaReadinessService", () => {
       "STRK20_POOL_NOT_CONFIGURED",
       "ARENA_WORKER_NOT_CONFIGURED",
       "X_VERIFICATION_NOT_CONFIGURED",
+      "PARTICIPANT_VAULT_NOT_CONFIGURED",
     ]);
     expect(JSON.stringify(report)).not.toContain("example.invalid");
   });

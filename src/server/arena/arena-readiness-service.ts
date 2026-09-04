@@ -12,6 +12,7 @@ export type ArenaReadinessReport = {
     pool: boolean;
     worker: boolean;
     xVerification: boolean;
+    participantVault: boolean;
   };
   blockers: string[];
 };
@@ -51,6 +52,7 @@ export class ArenaReadinessService {
       receiptSigning = false;
     }
     const checks = {
+      participantVault: this.config.participantVaultReady === true,
       database: database.database,
       arenaSchema: database.arenaSchema,
       kms,
@@ -77,6 +79,7 @@ export class ArenaReadinessService {
     if (!checks.pool) blockers.push("STRK20_POOL_NOT_CONFIGURED");
     if (!checks.worker) blockers.push("ARENA_WORKER_NOT_CONFIGURED");
     if (!checks.xVerification) blockers.push("X_VERIFICATION_NOT_CONFIGURED");
+    if (!checks.participantVault) blockers.push("PARTICIPANT_VAULT_NOT_CONFIGURED");
     return { ready: blockers.length === 0, mode: this.config.mode, checks, blockers };
   }
 }

@@ -144,3 +144,19 @@ Stop reward actions immediately. Do not change the sponsor wallet inside an acti
 Stop the worker before rollback. Use a known release directory and the deployment script described in [DEPLOYMENT.md](DEPLOYMENT.md). Verify health, readiness, and one read-only public route before restarting the worker.
 
 Application rollback is safe only while the database migration remains backward compatible.
+
+## Promise-repair rollout and recovery
+
+The 2026-09-04 repair adds migrations 0021 (selective-disclosure nonce) and 0022 (durable scheduled seed and retry time). Existing receipts, results and agent artifacts must remain unchanged. Apply these only through the owner's reviewed rollout after backup and staging restoration; the repair session applies them only to a disposable local database. Readiness now checks the saved-package table, these columns and participant vault configuration.
+
+Configure VEILAP_PARTICIPANT_VAULT_KEYS as server-only JSON with currentKeyId, a keys map of ID to independently generated 32-byte hex key, and optional legacySessionSecrets. Keep it in the protected deployment secret store; never put real values in source, logs or client configuration. Docker Compose passes this variable to the app. Existing session signing and wallet fingerprint secrets are separate concerns.
+
+For staging rotation: back up database and retained keys together; add the new key without removing old keys; switch currentKeyId; verify a fresh service can open old and new packages; have an authenticated owner POST /api/profile/agents/:agentId/rewrap for each saved package; verify IDs, versions and commitments are unchanged. Retain the old data keys and legacy session secrets until all relevant packages and retained backups have a verified recovery path. Rewrap is owner-scoped and atomic, not an automatic destructive bulk migration. No production secret rotation was performed.
+
+A match becomes eligible ten seconds after creation for sequence one, then at ten-second sequence intervals. This is not a worker reservation. The UI distinguishes eligibility, waiting for capacity, execution, recovery, retry and final failure. Leases last 120 seconds; a job receives at most three claims with 5- and 10-second retry delays after ordinary failures. Running jobs with expired leases can be reclaimed; stale attempts cannot publish receipts or overwrite a newer attempt. A receipt saved before a crash is reconciled even if the final attempt has been used. Durable seeds prevent retries from changing the game.
+
+Worker HTTP calls have a 90-second default deadline below the lease. KMS describe, wrap and unwrap requests also receive a ten-second cancellation signal. Request abortion does not cancel synchronous server computation; publication fencing prevents an expired computation from becoming authoritative. The health file proves recent valid tick responses and marks failures unhealthy after the configured threshold; it does not prove useful match throughput. Monitor oldest eligible job age, attempt counts, exhausted failures and completion progress as well as container health. A persistently oversized computation can exhaust its retries and needs operator investigation, not deletion of historical results.
+
+Champion creation retries use the same client idempotency key, including after refresh. A failed automatic roster lock returns an error identifying that enrollment was saved; retry or operator lock must reconcile that entry instead of creating a replacement competition.
+
+Use the [multi-account testing checklist](PROMISE-REPAIRS-2026-09-04.md#multi-account-production-acceptance-checklist) before broad participant testing. Worker-kill, poison-job, key-rotation and restore exercises belong in staging first.

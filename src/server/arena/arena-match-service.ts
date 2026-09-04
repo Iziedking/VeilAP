@@ -1,3 +1,4 @@
+import { matchWinner, seasonStandings } from "@/domain/arena/scoring";
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { commitment } from "@/domain/canonical";
@@ -50,6 +51,7 @@ export type ArenaMatchServiceResult<T> =
 export interface PublicArenaMatchView {
   matchId: string;
   engineVersion: string;
+  receiptVersion?: 2;
   players: Array<{
     agentId: string;
     displayName: string;
@@ -88,6 +90,7 @@ export interface PrivateArenaMatchView {
 export interface PublicArenaRevealView {
   id: string;
   action: SealedLosingActionReveal["action"];
+  nonce?: string;
   actionCommitment: string;
   agentId: string;
   handCommitment: string;
@@ -182,17 +185,12 @@ function revealRequestDigest(input: {
   return commitment(input);
 }
 
-function winnerFor(score: Readonly<Record<string, number>>): string | "tie" {
-  const entries = Object.entries(score);
-  const highest = Math.max(...entries.map(([, points]) => points));
-  const leaders = entries.filter(([, points]) => points === highest);
-  return leaders.length === 1 ? leaders[0]![0] : "tie";
-}
 
 function publicReveal(record: ArenaMatchRevealRecord): PublicArenaRevealView {
   return {
     id: record.id,
     action: record.action,
+    nonce: record.nonce,
     actionCommitment: record.actionCommitment,
     agentId: record.agentId,
     handCommitment: record.handCommitment,
@@ -212,6 +210,7 @@ function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRe
   return {
     matchId: receipt.matchId,
     engineVersion: receipt.engineVersion,
+    ...(receipt.receiptVersion ? { receiptVersion: receipt.receiptVersion } : {}),
     players: [
       {
         agentId: record.leftAgentId,
@@ -225,7 +224,7 @@ function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRe
       },
     ],
     score: { ...receipt.score },
-    winner: winnerFor(receipt.score),
+    winner: matchWinner(receipt.score),
     seedCommitment: receipt.seedCommitment,
     transcriptRoot: receipt.transcriptRoot,
     handCount: record.handCount ?? null,
@@ -264,6 +263,7 @@ export class ArenaMatchService {
     engineVersion?: ArenaEngineVersion;
     idempotencyKey: string;
     matchId?: string;
+    execution?: { seed: string; scheduledMatchId: string; attempts: number };
   }): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
     const projectId = input.projectId.trim();
     const leftAgentId = input.leftAgentId.trim();
@@ -312,7 +312,7 @@ export class ArenaMatchService {
 
       const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
       const matchId = input.matchId?.trim() || this.idFactory();
-      const seed = this.seedFactory();
+      const seed = input.execution?.seed ?? this.seedFactory();
       const result = await runSealedMatch({
         projectId,
         leftAgentId,
@@ -334,12 +334,13 @@ export class ArenaMatchService {
       const createdAt = this.now();
       const signedReceipt = this.signer.signArenaMatchReceipt(arenaMatchReceiptPayloadSchema.parse({
         schemaVersion: 1,
+        receiptVersion: result.value.publicReceipt.receiptVersion,
         audience: "arena",
         matchId: result.value.publicReceipt.matchId,
         engineVersion: result.value.publicReceipt.engineVersion,
         artifactCommitments: result.value.publicReceipt.artifactCommitments,
         score: result.value.publicReceipt.score,
-        winner: winnerFor(result.value.publicReceipt.score),
+        winner: matchWinner(result.value.publicReceipt.score),
         seedCommitment: result.value.publicReceipt.seedCommitment,
         transcriptRoot: result.value.publicReceipt.transcriptRoot,
         handCount: input.hands,
@@ -371,7 +372,7 @@ export class ArenaMatchService {
         createdAt,
       };
       try {
-        await this.repositories.saveArenaMatchReceipt(record);
+        await this.repositories.saveArenaMatchReceipt(record, input.execution ? { scheduledMatchId: input.execution.scheduledMatchId, attempts: input.execution.attempts, now: this.now() } : undefined);
       } catch (error) {
         if (error instanceof Error && error.message === "ARENA_MATCH_IDEMPOTENCY_ALREADY_EXISTS") {
           const concurrent = await this.repositories.getArenaMatchReceiptByIdempotencyKey(projectId, idempotencyKey);
@@ -456,6 +457,7 @@ export class ArenaMatchService {
           : undefined,
         seed,
         hands: match.handCount,
+        receiptVersion: (match.publicReceipt as PublicMatchReceipt).receiptVersion ?? 1,
         handIndex: input.handIndex,
         keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
         store: {
@@ -477,6 +479,7 @@ export class ArenaMatchService {
         handNumber: result.value.handNumber,
         position: result.value.position,
         action: result.value.action,
+        nonce: result.value.nonce,
         seatSwapped: result.value.seatSwapped,
         actionCommitment: result.value.actionCommitment,
         handCommitment: result.value.handCommitment,
@@ -545,30 +548,16 @@ export class ArenaMatchService {
           points: 0,
         }]),
       );
-      for (const record of matches) {
-        const view = publicView(record, revealByMatchId.get(record.id));
-        const winner = view.winner;
-        for (const player of view.players) {
-          const entry = leaderboard.get(player.agentId);
-          if (!entry) continue;
-          entry.matches += 1;
-          if (winner === "tie") {
-            entry.ties += 1;
-            entry.points += 1;
-          } else if (winner === player.agentId) {
-            entry.wins += 1;
-            entry.points += 3;
-          } else {
-            entry.losses += 1;
-          }
-        }
+      for (const row of seasonStandings(matches.map((record) => record.publicReceipt as PublicMatchReceipt))) {
+        const entry = leaderboard.get(row.agentId);
+        if (entry) Object.assign(entry, row);
       }
       return {
         ok: true,
         value: {
           matches: matches.map((match) => publicView(match, revealByMatchId.get(match.id))).reverse(),
           leaderboard: [...leaderboard.values()].sort(
-            (left, right) => right.points - left.points || right.wins - left.wins || left.displayName.localeCompare(right.displayName),
+            (left, right) => right.points - left.points || left.agentId.localeCompare(right.agentId),
           ),
         },
       };
@@ -639,6 +628,7 @@ export class ArenaMatchService {
           : undefined,
         seed,
         hands: match.handCount,
+        receiptVersion: (match.publicReceipt as PublicMatchReceipt).receiptVersion ?? 1,
         keyMaterial: { dataKey, wrappedKey: project.wrappedDataKey },
         store: {
           get: (requestedProjectId, agentId) => this.repositories.getArenaStrategyArtifact(requestedProjectId, agentId),

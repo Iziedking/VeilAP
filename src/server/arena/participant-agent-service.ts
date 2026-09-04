@@ -58,9 +58,42 @@ export class ParticipantAgentService {
     repositories: ProjectRepository;
     walletHashPepper: string;
     sessionSecret: string;
+    vaultKeys?: { currentKeyId: string; keys: Readonly<Record<string, string>>; legacySessionSecrets?: readonly string[] };
     now?: () => Date;
     idFactory?: () => string;
   }) {}
+
+  private seal(plaintext: string, id: string): ParticipantAgentPackageRecord["encryptedPackage"] {
+    const ring = this.dependencies.vaultKeys;
+    if (!ring) throw new Error("PARTICIPANT_VAULT_KEY_REQUIRED");
+    const key = ring.keys[ring.currentKeyId];
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(ring.currentKeyId) || !key || !/^[a-f0-9]{64}$/i.test(key)) throw new Error("PARTICIPANT_VAULT_KEY_INVALID");
+    return { ...encryptField(plaintext, context(id), Buffer.from(key, "hex")), keyId: ring.currentKeyId };
+  }
+
+  private decrypt(record: ParticipantAgentPackageRecord): AgentPackage {
+    const ring = this.dependencies.vaultKeys;
+    const keyId = record.encryptedPackage.keyId;
+    const keys = keyId
+      ? (ring?.keys[keyId] ? [Buffer.from(ring.keys[keyId], "hex")] : [])
+      : [this.dependencies.sessionSecret, ...(ring?.legacySessionSecrets ?? [])].map(vaultKey);
+    for (const key of keys) {
+      try { return parseAgentPackage(JSON.parse(decryptField(record.encryptedPackage, context(record.id), key))); }
+      catch { /* Try retained legacy keys; never change a record on failed decryption. */ }
+    }
+    throw new Error("PARTICIPANT_AGENT_PACKAGE_INVALID");
+  }
+
+  async rewrap(input: { actorWalletAddress: string; agentId: string }): Promise<ParticipantAgentView> {
+    const owner = fingerprintWallet(input.actorWalletAddress, this.dependencies.walletHashPepper);
+    const record = await this.dependencies.repositories.updateParticipantAgentPackage(owner, input.agentId.trim().toUpperCase(), (existing) => {
+      if (!existing) throw new Error("PARTICIPANT_AGENT_NOT_FOUND");
+      const plaintext = this.decrypt(existing);
+      if (agentPackageCommitment(plaintext) !== existing.artifactCommitment) throw new Error("PARTICIPANT_AGENT_COMMITMENT_MISMATCH");
+      return { ...existing, encryptedPackage: this.seal(JSON.stringify(plaintext), existing.id) };
+    });
+    return view(record);
+  }
 
   async list(actorWalletAddress: string): Promise<ParticipantAgentView[]> {
     const ownerFingerprint = fingerprintWallet(actorWalletAddress, this.dependencies.walletHashPepper);
@@ -71,7 +104,7 @@ export class ParticipantAgentService {
   async save(input: { actorWalletAddress: string; agentPackage: unknown }): Promise<ParticipantAgentView> {
     const agentPackage = parseAgentPackage(input.agentPackage);
     const ownerFingerprint = fingerprintWallet(input.actorWalletAddress, this.dependencies.walletHashPepper);
-    const existing = await this.dependencies.repositories.getParticipantAgentPackage(ownerFingerprint, agentPackage.agentId);
+    const record = await this.dependencies.repositories.updateParticipantAgentPackage(ownerFingerprint, agentPackage.agentId, (existing) => {
     const now = this.dependencies.now?.() ?? new Date();
     const id = existing?.id ?? this.dependencies.idFactory?.() ?? randomUUID();
     const record: ParticipantAgentPackageRecord = {
@@ -83,16 +116,13 @@ export class ParticipantAgentService {
       engineVersion: agentPackage.engineVersion,
       ruleCount: agentPackage.policy.rules.length,
       artifactCommitment: agentPackageCommitment(agentPackage),
-      encryptedPackage: encryptField(
-        JSON.stringify(agentPackage),
-        context(id),
-        vaultKey(this.dependencies.sessionSecret),
-      ),
+      encryptedPackage: this.seal(JSON.stringify(agentPackage), id),
       version: (existing?.version ?? 0) + (existing?.artifactCommitment === agentPackageCommitment(agentPackage) ? 0 : 1),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
-    await this.dependencies.repositories.saveParticipantAgentPackage(record);
+    return record;
+    });
     return view(record);
   }
 
@@ -102,11 +132,7 @@ export class ParticipantAgentService {
     if (!record) return null;
     let agentPackage: AgentPackage;
     try {
-      agentPackage = parseAgentPackage(JSON.parse(decryptField(
-        record.encryptedPackage,
-        context(record.id),
-        vaultKey(this.dependencies.sessionSecret),
-      )));
+      agentPackage = this.decrypt(record);
     } catch {
       throw new Error("PARTICIPANT_AGENT_PACKAGE_INVALID");
     }

@@ -19,19 +19,23 @@ export async function POST(request: Request) {
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor, { requestId, stage: "authentication" });
 
-    const now = new Date();
-    const locksAt = new Date(now.getTime() + 24 * 60 * 60_000);
-    const endsAt = new Date(now.getTime() + 48 * 60 * 60_000);
+    const key = request.headers.get("idempotency-key")?.trim();
+    if (!key || !/^[\x21-\x7e]{8,120}$/.test(key)) return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     const project = await getProjectService().createProject({
       name: "Null Jack challenge",
+      idempotencyKey: `champion-${key}`,
       walletAddress: actor.walletAddress,
     });
     if (!project.ok) return serviceResponse(project, { requestId, stage: "project" });
 
+    const now = new Date(project.value.createdAt);
+    const locksAt = new Date(now.getTime() + 24 * 60 * 60_000);
+    const endsAt = new Date(now.getTime() + 48 * 60 * 60_000);
+    if (locksAt <= new Date()) return serviceResponse({ ok: false, code: "ARENA_INVITATION_EXPIRED" });
     const season = await getArenaSeasonService().createSeason({
       projectId: project.value.id,
       actorWalletAddress: actor.walletAddress,
-      idempotencyKey: `champion-season-${requestId}`,
+      idempotencyKey: `champion-season-${key}`,
       name: "Challenge Null Jack",
       startsAt: new Date(now.getTime() - 30_000).toISOString(),
       locksAt: locksAt.toISOString(),
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
       seasonId: season.value.id,
       agentId: VEIL_ARENA_CHAMPION_AGENT_ID,
       policy: VEIL_ARENA_CHAMPION,
-      idempotencyKey: `champion-entry-${requestId}`,
+      idempotencyKey: `champion-entry-${key}`,
     });
     if (!champion.ok) return serviceResponse(champion, { requestId, stage: "champion" });
 

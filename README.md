@@ -252,3 +252,9 @@ Official configured STRK20 pool:
 ## License
 
 MIT
+
+## September 2026 promise repairs
+
+The current game is a completed heads-up decision benchmark with execution status and result replay. It does not run street-by-street live poker. New privacy receipts hide enumerable action commitments and withhold per-hand score deltas; final scores and winners remain public and can permit inference. Historical results are preserved.
+
+Saved profile packages require an independent versioned participant vault key ring. Worker recovery uses durable execution seeds, bounded retries, fair season selection and attempt fences. Replay, leaderboard and reward preparation share the same version-aware score projection. [Repair evidence and multi-account acceptance checklist](docs/PROMISE-REPAIRS-2026-09-04.md) covers all audit findings, local verification, production configuration prerequisites and the remaining live-game boundary.

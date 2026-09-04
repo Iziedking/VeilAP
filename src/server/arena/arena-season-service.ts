@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { eligibleMatch, queueState, MAX_MATCH_ATTEMPTS, MATCH_LEASE_MS, retryAt } from "@/domain/arena/queue-policy";
 import { arenaMatchStartsAt } from "@/domain/arena/match-schedule";
 
 import { commitment } from "@/domain/canonical";
@@ -14,7 +15,7 @@ import {
   type TournamentWorkload,
 } from "@/domain/arena/tournament-rules";
 import { authorizeProject } from "@/server/authorization/authorize";
-import { encryptField } from "@/server/crypto/envelope";
+import { decryptField, encryptField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
 import type { ArenaMatchService, ArenaMatchServiceErrorCode, PublicArenaMatchView } from "@/server/arena/arena-match-service";
 import type {
@@ -95,6 +96,9 @@ export interface ArenaScheduledMatchView {
   matchId?: string;
   createdAt: string;
   startsAt: string;
+  queueState: ReturnType<typeof queueState>;
+  attempts: number;
+  retryAt?: string;
 }
 
 export interface ArenaSeasonScheduleView {
@@ -217,6 +221,9 @@ function normalizeSchedule(
       matchId: match.matchId,
       createdAt: match.createdAt.toISOString(),
       startsAt: arenaMatchStartsAt(match).toISOString(),
+      queueState: queueState(match, new Date()),
+      attempts: match.attempts,
+      retryAt: match.retryAt?.toISOString(),
     })),
   };
 }
@@ -613,6 +620,29 @@ export class ArenaSeasonService {
       };
       if (scheduled.status === "completed") return existingMatch();
 
+      const executionNow = this.now();
+      // A crash after receipt publication must reconcile even on the final attempt.
+      if (scheduled.status === "running" && eligibleMatch(scheduled, executionNow)) {
+        const published = await this.repositories.getArenaMatchReceiptByIdempotencyKey(projectId, `scheduled-${scheduled.id}`);
+        if (published) {
+          const arena = await this.matchService.getPublicArena(projectId);
+          if (!arena.ok) return { ok: false, code: arena.code };
+          const match = arena.value.matches.find((candidate) => candidate.matchId === published.id);
+          if (!match) return { ok: false, code: "PERSISTENCE_FAILED" };
+          await this.repositories.updateArenaScheduledMatch({ ...scheduled, status: "completed", matchId: published.id, completedAt: published.createdAt, leaseExpiresAt: undefined, retryAt: undefined, lastError: undefined });
+          return { ok: true, value: match };
+        }
+      }
+      if (scheduled.attempts >= MAX_MATCH_ATTEMPTS) {
+        if (scheduled.status === "running" && eligibleMatch(scheduled, executionNow)) {
+          await this.repositories.updateArenaScheduledMatch({ ...scheduled, status: "failed", lastError: "RETRY_BUDGET_EXHAUSTED", leaseExpiresAt: undefined });
+        }
+        return { ok: false, code: "PERSISTENCE_FAILED" };
+      }
+      if (!eligibleMatch(scheduled, executionNow)) return { ok: false, code: "ARENA_SCHEDULED_MATCH_IN_PROGRESS" };
+      const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, projectId);
+      const seedContext = { projectId, recordType: "arena_scheduled_match", recordId: scheduled.id, fieldName: "seed" };
+      const encryptedSeed = scheduled.encryptedSeed ?? encryptField(randomBytes(32).toString("hex"), seedContext, dataKey);
       const executionRequestDigest = commitment({
         actorFingerprint,
         seasonId,
@@ -626,7 +656,8 @@ export class ArenaSeasonService {
         seasonId,
         scheduledMatchId,
         now: this.now(),
-        leaseMs: 120_000,
+        leaseMs: MATCH_LEASE_MS,
+        encryptedSeed,
         executionIdempotencyKey: input.idempotencyKey,
         executionRequestDigest,
       });
@@ -641,7 +672,8 @@ export class ArenaSeasonService {
         rightAgentId: claimed.rightAgentId,
         hands: claimed.hands,
         engineVersion: season.rulesSnapshot?.engineVersion,
-        matchId: claimed.matchId,
+        matchId: claimed.matchId ?? `scheduled-${claimed.id}`,
+        execution: { seed: decryptField(claimed.encryptedSeed ?? encryptedSeed, seedContext, dataKey), scheduledMatchId: claimed.id, attempts: claimed.attempts },
         idempotencyKey: executionKey,
       });
       if (!result.ok) {
@@ -650,6 +682,7 @@ export class ArenaSeasonService {
           status: "failed",
           leaseExpiresAt: undefined,
           lastError: result.code,
+          retryAt: claimed.attempts < MAX_MATCH_ATTEMPTS ? retryAt(this.now(), claimed.attempts) : undefined,
         });
         return { ok: false, code: result.code };
       }

@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createPreviewKeyProvider } from "@/server/crypto/preview-key-provider";
 import { createMemoryRepositories } from "@/server/db/repositories";
@@ -25,11 +25,12 @@ async function setup() {
   const repositories = createMemoryRepositories();
   const keyProvider = createPreviewKeyProvider();
   let nextId = 0;
+  let clock = new Date("2026-08-30T00:00:00.000Z");
   const dependencies = {
     repositories: repositories.projects,
     keyProvider,
     walletHashPepper: "test-wallet-pepper-0123456789012345",
-    now: () => new Date("2026-08-30T00:00:00.000Z"),
+    now: () => clock,
     idFactory: () => `id-${++nextId}`,
   };
   const projects = new ProjectService(dependencies);
@@ -64,6 +65,7 @@ async function setup() {
     repositories,
     projectId: project.value.id,
     service: new ArenaSeasonService({ ...dependencies, matchService }),
+    advance: (ms = 10_000) => { clock = new Date(clock.getTime() + ms); },
   };
 }
 
@@ -190,7 +192,7 @@ describe("ArenaSeasonService", () => {
   });
 
   it("claims, executes, and safely retries a scheduled pairing", async () => {
-    const { repositories, projectId, service } = await setup();
+    const { repositories, projectId, service, advance } = await setup();
     const created = await service.createSeason({
       projectId,
       actorWalletAddress: company,
@@ -228,6 +230,8 @@ describe("ArenaSeasonService", () => {
     const scheduledMatchId = locked.value.matches[0]?.id;
     if (!scheduledMatchId) throw new Error("TEST_SCHEDULE_MISSING");
 
+    await expect(service.runScheduledMatch({ projectId, seasonId: created.value.id, scheduledMatchId, actorWalletAddress: company, idempotencyKey: "scheduled-run-3" })).resolves.toMatchObject({ ok: false, code: "ARENA_SCHEDULED_MATCH_IN_PROGRESS" });
+    advance();
     const run = await service.runScheduledMatch({
       projectId,
       seasonId: created.value.id,
@@ -242,6 +246,7 @@ describe("ArenaSeasonService", () => {
     expect(stored?.status).toBe("completed");
     expect(stored?.attempts).toBe(1);
 
+
     await expect(service.runScheduledMatch({
       projectId,
       seasonId: created.value.id,
@@ -249,5 +254,37 @@ describe("ArenaSeasonService", () => {
       actorWalletAddress: company,
       idempotencyKey: "scheduled-run-3",
     })).resolves.toEqual(run);
+    expect(await repositories.projects.getArenaScheduledMatch(projectId, created.value.id, scheduledMatchId)).toMatchObject({ status: "completed", attempts: 1 });
+    expect(await repositories.projects.listArenaMatchReceipts(projectId)).toHaveLength(1);
   });
+});
+
+it("reconciles a final-attempt receipt after a crash before terminal queue persistence", async () => {
+  const { repositories, projectId, service, advance } = await setup();
+  const created = await service.createSeason({ projectId, actorWalletAddress: company, idempotencyKey: "crash-season-create", templateId: "friend_challenge", ...seasonInput });
+  if (!created.ok) throw new Error(created.code);
+  for (const agentId of ["CINDER", "EMBER"]) {
+    const entered = await service.registerEntry({ projectId, seasonId: created.value.id, actorWalletAddress: contributor, agentId, idempotencyKey: "crash-entry-" + agentId });
+    if (!entered.ok) throw new Error(entered.code);
+  }
+  const locked = await service.lockSeason({ projectId, seasonId: created.value.id, actorWalletAddress: company, idempotencyKey: "crash-season-lock" });
+  if (!locked.ok) throw new Error(locked.code);
+  const scheduledMatchId = locked.value.matches[0]!.id;
+  const claimInput = { projectId, seasonId: created.value.id, scheduledMatchId, leaseMs: 1000, executionIdempotencyKey: "crash-claim", executionRequestDigest: "crash-digest" };
+  advance();
+  for (let index = 0; index < 2; index++) {
+    const claim = await repositories.projects.claimArenaScheduledMatch({ ...claimInput, now: new Date(`2026-08-30T00:00:${10 + index}.000Z`) });
+    expect(typeof claim).toBe("object");
+    advance(1000);
+  }
+  const persist = vi.spyOn(repositories.projects, "updateArenaScheduledMatch").mockRejectedValueOnce(new Error("SIMULATED_WORKER_EXIT"));
+  const input = { projectId, seasonId: created.value.id, scheduledMatchId, actorWalletAddress: company, idempotencyKey: "crash-run-last" };
+  expect((await service.runScheduledMatch(input)).ok).toBe(false);
+  persist.mockRestore();
+  const receiptBefore = await repositories.projects.listArenaMatchReceipts(projectId);
+  expect(receiptBefore).toHaveLength(1);
+  advance(120_000);
+  expect((await service.runScheduledMatch(input)).ok).toBe(true);
+  expect(await repositories.projects.getArenaScheduledMatch(projectId, created.value.id, scheduledMatchId)).toMatchObject({ status: "completed", attempts: 3 });
+  expect(await repositories.projects.listArenaMatchReceipts(projectId)).toEqual(receiptBefore);
 });

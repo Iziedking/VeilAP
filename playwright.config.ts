@@ -13,6 +13,8 @@ export default defineConfig({
     reuseExistingServer: false,
   },
   projects: [
+    { name: "audit-desktop", testDir: "tests/audit", testMatch: "*.audit.ts", use: { viewport: { width: 1440, height: 900 } } },
+    { name: "audit-mobile", testDir: "tests/audit", testMatch: "*.audit.ts", use: { ...devices["Pixel 7"] } },
     {
       name: "desktop",
       use: {

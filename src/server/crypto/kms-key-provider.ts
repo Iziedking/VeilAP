@@ -17,7 +17,7 @@ export async function checkKmsKeyAccess(options: KmsKeyProviderOptions): Promise
   if (!options.keyId.trim() || !options.region.trim()) return false;
   const client = options.client ?? new KMSClient({ region: options.region });
   try {
-    const result = await client.send(new DescribeKeyCommand({ KeyId: options.keyId }));
+    const result = await client.send(new DescribeKeyCommand({ KeyId: options.keyId }), { abortSignal: AbortSignal.timeout(10_000) });
     return result.KeyMetadata?.Enabled === true
       && result.KeyMetadata.KeyUsage === "ENCRYPT_DECRYPT";
   } catch {
@@ -42,6 +42,8 @@ export class KmsKeyProvider implements KeyProvider {
         Plaintext: dataKey,
         EncryptionContext: { projectId },
       }),
+      // AWS SDK v3 send httpOptions abortSignal, reviewed 2026-09-04.
+      { abortSignal: AbortSignal.timeout(10_000) },
     );
     if (!result.CiphertextBlob) throw new Error("KMS_WRAP_FAILED");
     return Buffer.from(result.CiphertextBlob).toString("base64url");
@@ -55,6 +57,8 @@ export class KmsKeyProvider implements KeyProvider {
         EncryptionContext: { projectId },
         KeyId: this.keyId,
       }),
+      // AWS SDK v3 send httpOptions abortSignal, reviewed 2026-09-04.
+      { abortSignal: AbortSignal.timeout(10_000) },
     );
     if (!result.Plaintext) throw new Error("KMS_UNWRAP_FAILED");
     const dataKey = new Uint8Array(result.Plaintext);
