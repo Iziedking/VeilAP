@@ -47,7 +47,7 @@ const agentPackage = (agentId: string, displayName: string) => ({
 async function setup(
   overrides: Partial<ArenaSeasonRecord> = {},
   keyProvider: KeyProvider = createPreviewKeyProvider(),
-  prizeStatus: ArenaPrizePoolStatus | "missing" = "funded",
+  prizeStatus: ArenaPrizePoolStatus | "missing" = "missing",
 ) {
   const repositories = createMemoryRepositories();
   let nextId = 0;
@@ -231,6 +231,20 @@ describe("ArenaEnrollmentService", () => {
     expect(result).toMatchObject({ ok: true, value: { agentId: "EMBER_23" } });
   });
 
+  it("requires verified X account control for a funded competition", async () => {
+    const { projectId, season, service } = await setup({}, createPreviewKeyProvider(), "funded");
+    const input = {
+      projectId,
+      seasonId: season.id,
+      actorWalletAddress: playerOne,
+      agentId: "FUNDED_X_1",
+      policy: agentPackage("FUNDED_X_1", "Funded X"),
+      idempotencyKey: "join-funded-x-001",
+    };
+    await expect(service.enroll(input)).resolves.toEqual({ ok: false, code: "X_VERIFICATION_REQUIRED" });
+    await expect(service.enroll({ ...input, xVerified: true })).resolves.toMatchObject({ ok: true, value: { agentId: "FUNDED_X_1" } });
+  });
+
   it("rejects a package whose internal agent id differs from the submitted id", async () => {
     const { projectId, season, service } = await setup();
     await expect(service.enroll({
@@ -377,6 +391,7 @@ describe("ArenaEnrollmentService", () => {
       agentId: "EMBER_FIXED_1",
       policy: agentPackage("EMBER_FIXED_1", "Ember fixed"),
       idempotencyKey: "join-ember-fixed-001",
+      xVerified: true,
     });
     await expect(service.enroll({
       projectId,
@@ -386,6 +401,7 @@ describe("ArenaEnrollmentService", () => {
       policy: agentPackage("EMBER_FIXED_2", "Ember fixed two"),
       idempotencyKey: "join-ember-fixed-002",
       replaceExisting: true,
+      xVerified: true,
     })).resolves.toEqual({ ok: false, code: "ARENA_RESUBMISSION_FORBIDDEN" });
   });
 

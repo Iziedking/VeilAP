@@ -10,6 +10,7 @@ import { serviceResponse } from "@/server/http/service-response";
 import { getArenaEnrollmentService, getArenaSeasonService } from "@/server/projects/runtime";
 import { hasXOAuthConfig } from "@/server/env";
 import { getXIdentityRepository, walletFingerprint } from "@/server/identity/runtime";
+import { requiresXVerification } from "@/domain/arena/x-verification-policy";
 
 export const runtime = "nodejs";
 
@@ -31,13 +32,20 @@ export async function POST(request: Request, context: JoinRouteContext) {
   try {
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
-    if (!hasXOAuthConfig()) return serviceResponse({ ok: false, code: "X_VERIFICATION_UNAVAILABLE" });
-    const xIdentity = await getXIdentityRepository().getByWalletFingerprint(walletFingerprint(actor.walletAddress));
-    if (!xIdentity) return serviceResponse({ ok: false, code: "X_VERIFICATION_REQUIRED" });
     const idempotencyKey = request.headers.get("idempotency-key")?.trim();
     if (!idempotencyKey) return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     const { projectId, seasonId } = await context.params;
     const input = requestSchema.parse(await readJsonBody(request));
+    const seasonService = getArenaSeasonService();
+    const schedule = await seasonService.getPublicSchedule(projectId, seasonId);
+    if (!schedule.ok) return serviceResponse(schedule);
+    const needsXVerification = requiresXVerification(schedule.value.season);
+    let xVerified = true;
+    if (needsXVerification) {
+      if (!hasXOAuthConfig()) return serviceResponse({ ok: false, code: "X_VERIFICATION_UNAVAILABLE" });
+      const xIdentity = await getXIdentityRepository().getByWalletFingerprint(walletFingerprint(actor.walletAddress));
+      xVerified = Boolean(xIdentity);
+    }
     let policy = input.policy;
     if (input.submissionToken) {
       const submission = openAgentSubmission({ token: input.submissionToken, secret: getSessionSecret() });
@@ -65,9 +73,9 @@ export async function POST(request: Request, context: JoinRouteContext) {
       idempotencyKey,
       replaceExisting: input.replaceExisting,
       admission,
+      xVerified,
     });
     if (enrollment.ok) {
-      const seasonService = getArenaSeasonService();
       const schedule = await seasonService.getPublicSchedule(projectId, seasonId);
       if (!schedule.ok) return serviceResponse(schedule, { stage: "roster-lock", enrollment: "saved" });
       if (

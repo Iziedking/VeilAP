@@ -18,6 +18,7 @@ import { fingerprintWallet } from "@/server/privacy/wallet-fingerprint";
 
 import { buildStrategyArtifact } from "./strategy-artifacts";
 import { strategyFingerprint } from "./strategy-fingerprint";
+import { requiresXVerification } from "@/domain/arena/x-verification-policy";
 
 export type ArenaEnrollmentErrorCode =
   | "INVALID_INPUT"
@@ -38,7 +39,8 @@ export type ArenaEnrollmentErrorCode =
   | "STRATEGY_ARTIFACT_ALREADY_EXISTS"
   | "IDEMPOTENCY_KEY_REUSED"
   | "ENCRYPTION_FAILED"
-  | "PERSISTENCE_FAILED";
+  | "PERSISTENCE_FAILED"
+  | "X_VERIFICATION_REQUIRED";
 
 export type ArenaEnrollmentResult<T> =
   | { ok: true; value: T }
@@ -166,6 +168,7 @@ export class ArenaEnrollmentService {
     idempotencyKey: string;
     replaceExisting?: boolean;
     admission?: "public" | "invite" | "system";
+    xVerified?: boolean;
   }): Promise<ArenaEnrollmentResult<ArenaEnrollmentView>> {
     const projectId = input.projectId.trim();
     const seasonId = input.seasonId.trim();
@@ -187,6 +190,10 @@ export class ArenaEnrollmentService {
       if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
       const season = await this.repositories.getArenaSeason(projectId, seasonId);
       if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      const prizePool = await this.repositories.getArenaPrizePool(projectId, seasonId);
+      if (requiresXVerification({ rules: season.rulesSnapshot, prizeStatus: prizePool?.status }) && !input.xVerified) {
+        return { ok: false, code: "X_VERIFICATION_REQUIRED" };
+      }
       const now = this.now();
       actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
       const parsedPolicy = parseStrategyArtifactPayload(input.policy);

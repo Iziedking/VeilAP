@@ -11,6 +11,7 @@ import { sealAgentSubmission } from "@/server/arena/agent-submission-token";
 import { getSessionSecret } from "@/server/auth/runtime";
 import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { getArenaSeasonService } from "@/server/projects/runtime";
+import { requiresXVerification } from "@/domain/arena/x-verification-policy";
 
 export const runtime = "nodejs";
 
@@ -68,6 +69,8 @@ export async function GET() {
           : season.prizeStatus === "funding_pending"
             ? "pledged"
             : "exhibition",
+        rewardPolicy: season.rules?.rewardPolicy ?? "optional",
+        requiresXVerification: requiresXVerification(season),
       }));
     return NextResponse.json({
       ok: true,

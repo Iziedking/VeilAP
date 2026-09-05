@@ -11,6 +11,7 @@ import {
   type AgentPackage,
 } from "@/domain/arena/strategy-policy";
 import { apiFetch } from "@/lib/api/client";
+import { requiresXVerification } from "@/domain/arena/x-verification-policy";
 
 type SeasonStatus = "open" | "locked" | "completed" | "cancelled";
 type PrizeStatus = "funding_pending" | "funded" | "settlement_pending" | "settled" | "unknown";
@@ -29,9 +30,10 @@ type ArenaSeason = {
   entryCount: number;
   prizeStatus?: PrizeStatus;
   templateId?: string;
-  rules?: {
-    resubmissionPolicy: "fixed" | "replace_until_lock";
-    duplicateStrategyPolicy?: "reject_exact";
+    rules?: {
+      resubmissionPolicy: "fixed" | "replace_until_lock";
+      rewardPolicy?: "optional" | "funded_before_start";
+      duplicateStrategyPolicy?: "reject_exact";
     pairingMode: "round_robin" | "duel_series" | "gauntlet";
     handsPerMatch: number;
     encountersPerPair: number;
@@ -167,6 +169,12 @@ function enrollmentMessage(code: string): string {
     X_VERIFICATION_UNAVAILABLE: "X verification is unavailable right now. Nothing was submitted. Try again when the service is restored.",
   };
   return messages[code] ?? "The agent could not be entered. Nothing was submitted. Try again.";
+}
+
+function savedAgentErrorMessage(code: string): string {
+  if (code === "CONFIGURATION_MISSING") return "Private agent storage is not configured on this deployment. Your reviewed package is still here; ask the operator to configure the independent vault key ring, then retry.";
+  if (code === "INVALID_INPUT") return "The reviewed package is no longer valid for saving. Review the package again before retrying.";
+  return "The private agent library could not save this package. Your reviewed package is still here; retry when the service is available.";
 }
 
 type PackageReview =
@@ -448,6 +456,7 @@ export function VeilArenaPlay({
     ? seasons.filter((season) => season.id === invitedSeasonId)
     : seasons;
   const selectedSeason = seasons.find((season) => season.id === selectedSeasonId);
+  const selectedSeasonRequiresX = selectedSeason ? requiresXVerification(selectedSeason) : false;
   const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now, invitedSeasonId) : false;
   const localPackageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
   const packageReview = claimedPackage ?? localPackageReview;
@@ -495,7 +504,7 @@ export function VeilArenaPlay({
       const body = await response.json() as ApiEnvelope<typeof savedAgents[number]>;
       if (!response.ok || !body.ok) {
         setSaveState("error");
-        setSaveMessage("The package passed local review but could not be saved. Nothing was entered.");
+        setSaveMessage(savedAgentErrorMessage(body.ok ? "PERSISTENCE_FAILED" : body.code));
         return;
       }
       setSavedAgents((current) => [body.value, ...current.filter((agent) => agent.agentId !== body.value.agentId)]);
@@ -632,7 +641,7 @@ export function VeilArenaPlay({
   async function enterArena(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedSeason || !canSubmitToSelectedSeason || sessionState !== "authenticated") return;
-    if (!xIdentity) {
+    if (selectedSeasonRequiresX && !xIdentity) {
       setSubmitError("Connect your X account before approving this agent entry.");
       return;
     }
@@ -709,7 +718,7 @@ export function VeilArenaPlay({
       : "NO OPEN ARENA AVAILABLE";
   } else if (entryState !== "ready" && sessionState === "authenticated") {
     submitLabel = "CHECKING ENTRY...";
-  } else if (!xIdentity) {
+  } else if (selectedSeasonRequiresX && !xIdentity) {
     submitLabel = "VERIFY X ACCOUNT TO ENTER";
   } else if (packageReview.status !== "ready") {
     submitLabel = "IMPORT A VALID AGENT PACKAGE";
@@ -735,12 +744,12 @@ export function VeilArenaPlay({
         <section className="play-hero" aria-labelledby="play-title">
           <span className="play-kicker">AGENT ENTRY</span>
           <h1 id="play-title">{defaultAgentId ? "Choose where your agent competes." : "Prepare an agent for competition."}</h1>
-          <p>{defaultAgentId ? "Your saved agent is selected below. Review the competition, verify your account, and approve entry when ready." : "Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it, then verify your wallet and X account before you enter."}</p>
+          <p>{defaultAgentId ? "Your saved agent is selected below. Review the competition, then approve entry when ready." : "Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it, then verify your wallet. Funded competitions also verify X account control before entry."}</p>
           <ol className="play-steps" aria-label="How to enter">
             <li><span>01</span><strong>{defaultAgentId ? "Choose an open competition" : "Give AGENT.md to a coding agent"}</strong></li>
             <li><span>02</span><strong>{defaultAgentId ? "Review your saved agent" : "Have it build and validate the package"}</strong></li>
             <li><span>03</span><strong>Review the package and sign in with your wallet</strong></li>
-            <li><span>04</span><strong>Verify your X account and approve entry</strong></li>
+            <li><span>04</span><strong>{selectedSeasonRequiresX ? "Verify your X account and approve entry" : "Approve entry with your wallet"}</strong></li>
           </ol>
         </section>
 
@@ -942,7 +951,7 @@ export function VeilArenaPlay({
                   </div>
                 )}
 
-                {sessionState === "authenticated" && (
+                {sessionState === "authenticated" && selectedSeasonRequiresX && (
                   xIdentity ? (
                     <div className="play-wallet-state">
                       <div className="play-x-identity">
@@ -973,6 +982,12 @@ export function VeilArenaPlay({
                     </div>
                   )
                 )}
+                {sessionState === "authenticated" && !selectedSeasonRequiresX && (
+                  <div className="play-wallet-state">
+                    <span>X ACCOUNT OPTIONAL FOR THIS MODE</span>
+                    <small>Wallet access is enough to test exhibition and optional-reward competitions. Connect X later if you want to associate an account.</small>
+                  </div>
+                )}
                 {xMessage && <p className="play-claim-status" role="status">{xMessage}</p>}
                 {saveMessage && <p className={`play-save-message${saveState === "error" ? " is-error" : ""}`} role="status">{saveMessage}</p>}
 
@@ -992,7 +1007,7 @@ export function VeilArenaPlay({
                 <button
                   className="play-submit"
                   type="submit"
-                  disabled={!canSubmitToSelectedSeason || sessionState !== "authenticated" || !xIdentity || submitting || entryState !== "ready" || packageReview.status !== "ready" || Boolean(currentEntry && !replacementConfirmed)}
+                  disabled={!canSubmitToSelectedSeason || sessionState !== "authenticated" || (selectedSeasonRequiresX && !xIdentity) || submitting || entryState !== "ready" || packageReview.status !== "ready" || Boolean(currentEntry && !replacementConfirmed)}
                 >
                   <span>{submitLabel}</span>
                   <strong aria-hidden="true">↓</strong>
