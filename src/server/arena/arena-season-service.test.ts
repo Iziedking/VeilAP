@@ -165,6 +165,42 @@ describe("ArenaSeasonService", () => {
     })).resolves.toEqual({ ok: false, code: "ARENA_SEASON_TOO_SMALL" });
   });
 
+  it("allows the deadline worker to lock a non-gauntlet season", async () => {
+    const { projectId, service } = await setup();
+    const created = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-create-auto-lock",
+      templateId: "custom",
+      customRules: {
+        pairingMode: "round_robin",
+        entryMode: "invite_only",
+        maxEntries: 2,
+        handsPerMatch: 2,
+        encountersPerPair: 1,
+        resubmissionPolicy: "fixed",
+        rewardPolicy: "optional",
+      },
+      ...seasonInput,
+    });
+    if (!created.ok) throw new Error(created.code);
+    for (const [agentId, key] of [["CINDER", "auto-entry-cinder"], ["EMBER", "auto-entry-ember"]] as const) {
+      const entry = await service.registerEntry({ projectId, seasonId: created.value.id, actorWalletAddress: contributor, agentId, idempotencyKey: key });
+      if (!entry.ok) throw new Error(entry.code);
+    }
+    const locked = await service.lockSeason({
+      projectId,
+      seasonId: created.value.id,
+      actorWalletAddress: company,
+      idempotencyKey: "auto-lock-season-service",
+      automatic: true,
+    });
+    expect(locked.ok).toBe(true);
+    if (!locked.ok) throw new Error(locked.code);
+    expect(locked.value.season.status).toBe("locked");
+    expect(locked.value.matches).toHaveLength(1);
+  });
+
   it("keeps private friend challenges out of the public competition lobby", async () => {
     const { projectId, service } = await setup();
     const publicSeason = await service.createSeason({

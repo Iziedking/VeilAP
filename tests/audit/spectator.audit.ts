@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { runMatch } from "../../src/domain/arena/poker-engine";
+import { matchWinner } from "../../src/domain/arena/scoring";
 import { compileAgentPackage, parseAgentPackage } from "../../src/domain/arena/strategy-policy";
 
 const player = (agentId: string, action: "raise" | "call") => compileAgentPackage(parseAgentPackage({
@@ -22,6 +23,7 @@ const schedule = {
 };
 const receipt = {
   ...played.publicReceipt, handCount: 2, publicHandReceipts: played.publicHandReceipts, createdAt: date,
+  winner: matchWinner(played.score),
   players: ["LEFT", "RIGHT"].map((agentId) => ({ agentId, displayName: agentId, artifactCommitment: agentId })),
 };
 const url = "/arena/audit-project/audit-season/match/audit-match";
@@ -47,6 +49,33 @@ test("replay scoreboard equals the engine score after the final hand", async ({ 
   await page.getByRole("button", { name: `Open receipt ${played.publicHandReceipts.length}`, exact: true }).click();
   await expect(page.locator(".spectator-seat.is-left .spectator-seat-score")).toHaveText(String(played.score.LEFT));
   await expect(page.locator(".spectator-seat.is-right .spectator-seat-score")).toHaveText(String(played.score.RIGHT));
+});
+
+test("replay distinguishes a decision outcome from the final match result", async ({ page }) => {
+  await fixtures(page);
+  await page.goto(url);
+  const finalReceipt = played.publicHandReceipts.length;
+  await page.getByRole("button", { name: `Open receipt ${finalReceipt}`, exact: true }).click();
+
+  const winner = receipt.winner === "tie" ? "MATCH TIED" : `MATCH WINNER ${receipt.winner}`;
+  await expect(page.getByRole("region", { name: "Final match result" })).toContainText(winner);
+  await expect(page.getByRole("region", { name: "Final match result" })).toContainText(`FINAL SCORE LEFT ${played.score.LEFT} · RIGHT ${played.score.RIGHT}`);
+  await expect(page.locator(".spectator-hand-result")).toContainText(`DECISION ${finalReceipt} OF ${finalReceipt}`);
+  await expect(page.locator(".spectator-table-meta")).toContainText("DEAL 02");
+  await expect(page.locator(".spectator-table-meta")).toContainText("SECOND SEAT RUN");
+});
+
+test("owner sees an action profile without exposing the opponent action", async ({ page }) => {
+  await fixtures(page);
+  await page.route("**/api/projects/audit-project/seasons/audit-season/join", route => route.fulfill({ json: { ok: true, value: { agentId: "LEFT", displayName: "LEFT", artifactCommitment: "LEFT", version: 1 } } }));
+  await page.route("**/api/auth/session", route => route.fulfill({ json: { ok: true, value: {} } }));
+  await page.route("**/api/projects/audit-project/seasons/audit-season/matches/audit-match/private", route => route.fulfill({ json: { ok: true, value: { matchId: "audit-receipt", agentId: "LEFT", displayName: "LEFT", handCount: 2, hands: played.publicHandReceipts.map((hand, index) => ({ ...hand, board: [], holeCards: [{ rank: 14, suit: "spades" }, { rank: 13, suit: "hearts" }], action: index % 2 ? "raise" : "fold", position: "button" })) } } }));
+
+  await page.goto(url);
+  const profile = page.getByRole("region", { name: "Your private action profile" });
+  await expect(profile.getByText("Fold", { exact: true }).locator("..")).toContainText("2");
+  await expect(profile.getByText("Raise", { exact: true }).locator("..")).toContainText("2");
+  await expect(profile).toContainText("Opponent actions remain sealed");
 });
 
 test("one click on replay at natural completion restarts playback", async ({ page }) => {

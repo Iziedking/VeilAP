@@ -519,9 +519,9 @@ export class ArenaSeasonService {
         const prize = await this.repositories.getArenaPrizePool(projectId, seasonId);
         if (prize?.status !== "funded") return { ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" };
       }
-      if (input.automatic && (rules.pairingMode !== "duel_series" || rules.minEntries !== 2 || rules.maxEntries !== 2 || entries.length !== 2)) {
-        return { ok: false, code: "INVALID_INPUT" };
-      }
+      // The worker may lock any format when its deadline arrives. Formats
+      // that need an operator-selected benchmark still fail closed below
+      // with ARENA_BENCHMARK_REQUIRED rather than inventing a benchmark.
       const rulesCommitment = season.rulesCommitment ?? tournamentRulesCommitment(rules);
       const benchmarkAgentId = input.benchmarkAgentId?.trim() || undefined;
       const requestDigest = commitment({

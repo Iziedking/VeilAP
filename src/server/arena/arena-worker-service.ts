@@ -13,7 +13,7 @@ export type ArenaWorkerTickResult = {
 
 export interface ArenaWorkerServiceDependencies {
   repositories: Pick<ProjectRepository, "listAllArenaSeasons" | "listArenaScheduledMatches">;
-  seasonService: Pick<ArenaSeasonService, "runScheduledMatch">;
+  seasonService: Pick<ArenaSeasonService, "runScheduledMatch"> & Partial<Pick<ArenaSeasonService, "lockSeason">>;
   workerWalletAddress: string;
   now?: () => Date;
 }
@@ -38,10 +38,23 @@ export class ArenaWorkerService {
       return { status: "failed", projectId, seasonId, errorCode: "INVALID_INPUT" };
     }
 
-    if (projectId && seasonId) return this.runNextForSeason(projectId, seasonId);
+    if (projectId && seasonId) {
+      const lockFailure = await this.lockDueSeason(projectId, seasonId);
+      if (lockFailure) return lockFailure;
+      return this.runNextForSeason(projectId, seasonId);
+    }
 
-    const seasons = (await this.repositories.listAllArenaSeasons())
-      .filter((season) => season.status === "locked")
+    const allSeasons = await this.repositories.listAllArenaSeasons();
+    const autoLockedSeasonIds = new Set<string>();
+    let lastFailure: ArenaWorkerTickResult | undefined;
+    for (const season of allSeasons.filter((candidate) => candidate.status === "open" && (candidate.locksAt?.getTime() ?? Number.POSITIVE_INFINITY) <= this.now().getTime())) {
+      const lockFailure = await this.lockDueSeason(season.projectId, season.id);
+      if (lockFailure) lastFailure = lockFailure;
+      else if (this.seasonService.lockSeason) autoLockedSeasonIds.add(`${season.projectId}:${season.id}`);
+    }
+
+    const seasons = allSeasons
+      .filter((season) => season.status === "locked" || autoLockedSeasonIds.has(`${season.projectId}:${season.id}`))
       .sort((left, right) => (
         (left.lockedAt?.getTime() ?? left.createdAt.getTime()) - (right.lockedAt?.getTime() ?? right.createdAt.getTime())
         || left.id.localeCompare(right.id)
@@ -52,13 +65,28 @@ export class ArenaWorkerService {
       lastServed.set(season.id, Math.max(0, ...matches.map((match) => match.startedAt?.getTime() ?? 0)));
     }
     seasons.sort((a, b) => (lastServed.get(a.id) ?? 0) - (lastServed.get(b.id) ?? 0));
-    let lastFailure: ArenaWorkerTickResult | undefined;
     for (const season of seasons) {
       const result = await this.runNextForSeason(season.projectId, season.id);
       if (result.status === "completed" || result.status === "in_progress") return result;
       if (result.status === "failed") lastFailure = result;
     }
     return lastFailure ?? { status: "idle", projectId: "", seasonId: "" };
+  }
+
+  private async lockDueSeason(projectId: string, seasonId: string): Promise<ArenaWorkerTickResult | undefined> {
+    const season = (await this.repositories.listAllArenaSeasons()).find((candidate) => candidate.projectId === projectId && candidate.id === seasonId);
+    if (!season || season.status !== "open" || (season.locksAt?.getTime() ?? Number.POSITIVE_INFINITY) > this.now().getTime()) return undefined;
+    if (!this.seasonService.lockSeason) {
+      return { status: "failed", projectId, seasonId, errorCode: "ARENA_AUTO_LOCK_UNAVAILABLE" };
+    }
+    const result = await this.seasonService.lockSeason({
+      projectId,
+      seasonId,
+      actorWalletAddress: this.workerWalletAddress,
+      idempotencyKey: `auto-lock-${seasonId}`,
+      automatic: true,
+    });
+    return result.ok ? undefined : { status: "failed", projectId, seasonId, errorCode: result.code };
   }
 
   private async runNextForSeason(projectId: string, seasonId: string): Promise<ArenaWorkerTickResult> {

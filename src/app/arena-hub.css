@@ -28,6 +28,11 @@
 .arena-notification-panel li span, .arena-notification-panel > p { color: var(--ink-soft); font-size: 9px; line-height: 1.45; }
 .arena-notification-panel > p { margin: 0; padding: 18px 13px; }
 .arena-notification-panel li.is-read { opacity: .62; }
+
+@media (max-width: 760px) {
+  .arena-notification-panel { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 72px); right: 14px; left: 14px; width: auto; max-height: calc(100dvh - 92px - env(safe-area-inset-bottom, 0px)); overflow: hidden; }
+  .arena-notification-panel ol { max-height: calc(100dvh - 158px - env(safe-area-inset-bottom, 0px)); }
+}
 .hub-theme-toggle { min-height: 40px; padding: 0 11px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; cursor: pointer; }
 .hub-theme-toggle:hover { background: var(--signal); color: var(--signal-ink); }
 .hub-theme-toggle-icon { width: 11px; height: 11px; display: inline-block; border: 2px solid currentColor; border-radius: 50%; }
@@ -305,6 +310,21 @@
 .spectator-room-banner > span { color: var(--ink-soft); line-height: 1.5; text-align: right; }
 .spectator-room-banner.is-private { background: color-mix(in srgb, var(--signal) 19%, var(--paper-light)); }
 .spectator-room-banner.is-private > div strong { color: var(--signal-dark); }
+.spectator-match-summary { margin-top: 22px; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 8px 8px 0 var(--signal); }
+.spectator-match-verdict { min-height: 112px; padding: 22px; display: grid; align-content: center; gap: 9px; border-bottom: 1px solid var(--ink); }
+.spectator-match-verdict > span { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 8px; }
+.spectator-match-verdict > strong { font-family: var(--arena-display); font-size: clamp(21px, 3vw, 38px); text-transform: uppercase; }
+.spectator-match-verdict > small { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; }
+.spectator-match-summary > dl, .spectator-private-profile dl { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+.spectator-match-summary > dl div, .spectator-private-profile dl div { min-width: 0; padding: 16px 20px; border-right: 1px solid var(--rule); }
+.spectator-match-summary > dl div:last-child, .spectator-private-profile dl div:last-child { border-right: 0; }
+.spectator-match-summary dt, .spectator-private-profile dt { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 7px; text-transform: uppercase; }
+.spectator-match-summary dd, .spectator-private-profile dd { margin: 8px 0 0; font-family: var(--arena-display); font-size: 24px; }
+.spectator-match-summary > p { margin: 0; padding: 16px 20px; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
+.spectator-private-profile { border-top: 1px solid var(--ink); background: color-mix(in srgb, var(--signal) 16%, var(--paper-light)); }
+.spectator-private-profile header { min-height: 46px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--rule); font-family: var(--arena-mono); font-size: 8px; }
+.spectator-private-profile header span { color: var(--ink-soft); font-size: 7px; text-align: right; text-transform: uppercase; }
+.spectator-private-profile dl { grid-template-columns: repeat(4, 1fr); }
 .spectator-stage { min-height: 610px; padding-top: clamp(42px, 6vw, 82px); }
 .spectator-seat { position: relative; min-height: 300px; padding: 20px; display: flex; flex-direction: column; align-items: stretch; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 7px 7px 0 var(--ink); }
 .spectator-seat.is-right { box-shadow: 7px 7px 0 var(--signal); }
@@ -367,6 +387,14 @@
 }
 
 @media (max-width: 620px) {
+  .spectator-match-summary > dl { grid-template-columns: 1fr; }
+  .spectator-match-summary > dl div { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .spectator-match-summary > dl div:last-child { border-bottom: 0; }
+  .spectator-private-profile header { align-items: flex-start; flex-direction: column; padding-block: 13px; }
+  .spectator-private-profile header span { text-align: left; }
+  .spectator-private-profile dl { grid-template-columns: 1fr 1fr; }
+  .spectator-private-profile dl div:nth-child(2) { border-right: 0; }
+  .spectator-private-profile dl div:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
   .spectator-stage { padding-top: 32px; }
   .spectator-stage::before { inset: 20% 0; }
   .spectator-seat { min-height: 188px; padding: 14px; }

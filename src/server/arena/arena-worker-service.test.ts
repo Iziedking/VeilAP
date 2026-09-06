@@ -26,7 +26,7 @@ describe("ArenaWorkerService", () => {
         listArenaScheduledMatches: async () => [scheduled("match-1", "scheduled"), scheduled("match-2", "failed")],
       },
       seasonService: {
-        runScheduledMatch: async (input) => {
+        runScheduledMatch: async (input: { scheduledMatchId: string; actorWalletAddress: string; idempotencyKey: string }) => {
           calls.push({ scheduledMatchId: input.scheduledMatchId, actorWalletAddress: input.actorWalletAddress, idempotencyKey: input.idempotencyKey });
           return { ok: true, value: { matchId: "receipt-1" } as never };
         },
@@ -93,7 +93,7 @@ describe("ArenaWorkerService", () => {
           : [{ ...scheduled("match-2", "scheduled"), projectId: "project-two", seasonId: "season-two" }],
       },
       seasonService: {
-        runScheduledMatch: async (input) => {
+        runScheduledMatch: async (input: { projectId: string; seasonId: string; scheduledMatchId: string }) => {
           calls.push(`${input.projectId}:${input.seasonId}:${input.scheduledMatchId}`);
           return { ok: true, value: { matchId: "receipt-two" } as never };
         },
@@ -108,5 +108,49 @@ describe("ArenaWorkerService", () => {
       scheduledMatchId: "match-2",
     });
     expect(calls).toEqual(["project-two:season-two:match-2"]);
+  });
+
+  it("locks a due open competition before running its first match", async () => {
+    const lockCalls: Array<{ projectId: string; seasonId: string; actorWalletAddress: string; idempotencyKey: string; automatic: boolean }> = [];
+    const runCalls: string[] = [];
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [{
+          projectId: "project-1",
+          id: "season-1",
+          status: "open",
+          locksAt: new Date("2026-08-30T12:00:00.000Z"),
+          createdAt: new Date("2026-08-30T00:00:00.000Z"),
+        }] as never,
+        listArenaScheduledMatches: async () => [scheduled("match-1", "scheduled")],
+      },
+      seasonService: {
+        lockSeason: async (input: { projectId: string; seasonId: string; actorWalletAddress: string; idempotencyKey: string; automatic: boolean }) => {
+          lockCalls.push(input);
+          return { ok: true, value: {} as never };
+        },
+        runScheduledMatch: async (input: { scheduledMatchId: string }) => {
+          runCalls.push(input.scheduledMatchId);
+          return { ok: true, value: { matchId: "receipt-1" } as never };
+        },
+      } as never,
+      workerWalletAddress: "0xworker",
+      now: () => new Date("2026-08-30T13:00:00.000Z"),
+    });
+
+    await expect(service.runNext()).resolves.toMatchObject({
+      status: "completed",
+      projectId: "project-1",
+      seasonId: "season-1",
+      scheduledMatchId: "match-1",
+    });
+    expect(lockCalls).toEqual([{
+      projectId: "project-1",
+      seasonId: "season-1",
+      actorWalletAddress: "0xworker",
+      idempotencyKey: "auto-lock-season-1",
+      automatic: true,
+    }]);
+    expect(runCalls).toEqual(["match-1"]);
   });
 });

@@ -341,6 +341,10 @@ function MatchSpectatorView({
   const currentHand = handReceipts[activeIndex];
   const currentPrivateHand = privateMatch?.hands[activeIndex];
   const currentScore = useMemo(() => receipt ? replayScore(receipt, handReceipts, activeIndex) : null, [activeIndex, handReceipts, receipt]);
+  const privateActionCounts = useMemo(() => privateMatch?.hands.reduce((counts, hand) => {
+    counts[hand.action] += 1;
+    return counts;
+  }, { fold: 0, check: 0, call: 0, raise: 0 }) ?? null, [privateMatch]);
 
   useEffect(() => {
     const status = scheduledMatch?.status;
@@ -409,6 +413,17 @@ function MatchSpectatorView({
     : currentHand?.winner
       ? displayName(schedule, currentHand.winner)
       : null;
+  const matchWinner = receipt?.winner === "tie"
+    ? null
+    : receipt?.winner
+      ? displayName(schedule, receipt.winner)
+      : null;
+  const outcomeCounts = handReceipts.reduce((counts, hand) => {
+    if (hand.winner === "tie") counts.ties += 1;
+    else if (hand.winner === scheduledMatch.leftAgentId) counts.left += 1;
+    else if (hand.winner === scheduledMatch.rightAgentId) counts.right += 1;
+    return counts;
+  }, { left: 0, right: 0, ties: 0 });
   const liveDescription = scheduledMatch.queueState === "recovering" ? "The previous worker lease expired. Recovery is waiting for capacity." : scheduledMatch.queueState === "retrying" ? "Execution failed. A bounded retry is scheduled; the original inputs are retained." : scheduledMatch.status === "running"
     ? "The worker has claimed this table. Both agents are deciding inside the sealed runner."
     : scheduledMatch.status === "scheduled"
@@ -501,6 +516,33 @@ function MatchSpectatorView({
           <span>{privateView ? "Your seat is highlighted. Verified cards appear only after your match result is available; opponent cards remain sealed." : "Results, timing, and proof are public. Agent strategy and cards remain sealed."}</span>
         </div>
 
+        {receipt ? (
+          <section className="spectator-match-summary" aria-label="Final match result">
+            <div className="spectator-match-verdict">
+              <span>FINAL MATCH RESULT</span>
+              <strong>{matchWinner ? `MATCH WINNER ${matchWinner}` : "MATCH TIED"}</strong>
+              <small>FINAL SCORE {leftName} {receipt.score[scheduledMatch.leftAgentId] ?? 0} · {rightName} {receipt.score[scheduledMatch.rightAgentId] ?? 0}</small>
+            </div>
+            <dl aria-label="Public decision outcomes">
+              <div><dt>{leftName} decision wins</dt><dd>{outcomeCounts.left}</dd></div>
+              <div><dt>Tied decisions</dt><dd>{outcomeCounts.ties}</dd></div>
+              <div><dt>{rightName} decision wins</dt><dd>{outcomeCounts.right}</dd></div>
+            </dl>
+            <p>Each deal runs twice with seats swapped. The sealed engine scores recorded policy decisions across the pair; a decision tie does not make the match a tie.</p>
+            {privateActionCounts ? (
+              <div className="spectator-private-profile" role="region" aria-label="Your private action profile">
+                <header><strong>YOUR PRIVATE ACTION PROFILE</strong><span>Opponent actions remain sealed</span></header>
+                <dl>
+                  <div><dt>Fold</dt><dd>{privateActionCounts.fold}</dd></div>
+                  <div><dt>Check</dt><dd>{privateActionCounts.check}</dd></div>
+                  <div><dt>Call</dt><dd>{privateActionCounts.call}</dd></div>
+                  <div><dt>Raise</dt><dd>{privateActionCounts.raise}</dd></div>
+                </dl>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <section className="spectator-stage" aria-label={`${leftName} versus ${rightName}`}>
           {renderSeat({ side: "A", agentId: scheduledMatch.leftAgentId, name: leftName, artifactCommitment: leftEntry?.artifactCommitment, score: hasReplay ? currentScore?.[scheduledMatch.leftAgentId] ?? "–" : "–" })}
 
@@ -508,7 +550,7 @@ function MatchSpectatorView({
             <div className="spectator-table-meta">
               <span><i className="spectator-live-dot" /> {scheduledMatch.status === "completed" ? "REPLAY TABLE" : "JOB STATUS"}</span>
               <span>{currentHand ? `DEAL ${String(currentHand.handNumber).padStart(2, "0")}` : "SEALED TABLE"}</span>
-              <span>{currentHand?.seatSwapped ? "SEATS SWAPPED" : "PRIMARY SEATS"}</span>
+              <span>{currentHand?.seatSwapped ? "SECOND SEAT RUN" : "FIRST SEAT RUN"}</span>
             </div>
             <div className="spectator-board" aria-label={currentPrivateHand ? "Verified board cards" : "Board cards remain sealed"}>
               <span className="spectator-board-mark">V</span>
@@ -521,8 +563,8 @@ function MatchSpectatorView({
             </div>
             {currentHand ? (
               <div className="spectator-hand-result">
-                <span>HAND RESULT</span>
-                <strong>{handWinner}</strong>
+                <span>DECISION {activeIndex + 1} OF {handReceipts.length}</span>
+                <strong>{currentHand.winner === "tie" ? "THIS DECISION TIED" : `${handWinner} WON THIS DECISION`}</strong>
                 <small>{currentPrivateHand ? `Your ${currentPrivateHand.action} was recorded · board verified for your private view` : `Board commitment ${shortCommitment(currentHand.boardCommitment)}`}</small>
               </div>
             ) : (
@@ -537,7 +579,7 @@ function MatchSpectatorView({
               <p>{liveDescription}</p>
             </div>
             <div className="spectator-proof-strip">
-              <span>HAND COMMITMENT</span>
+              <span>DECISION COMMITMENT</span>
               <code>{shortCommitment(currentHand?.handCommitment ?? receipt?.transcriptRoot)}</code>
             </div>
           </div>
@@ -550,7 +592,7 @@ function MatchSpectatorView({
           <ol>
             <li className="is-done"><i /> <span>Agent packages sealed</span><small>Commitments visible</small></li>
             <li className={scheduledMatch.status === "scheduled" ? "is-current" : "is-done"}><i /> <span>{scheduledMatch.status === "scheduled" ? "Table waiting for worker" : "Worker claimed table"}</span><small>{scheduledMatch.status === "scheduled" ? "No cards or actions are shown" : "Decisions stay private"}</small></li>
-            <li className={hasReplay ? "is-done" : "is-current"}><i /> <span>{hasReplay ? `${handReceipts.length} hand receipts published` : "Public receipt pending"}</span><small>{hasReplay ? "Replay is available below" : "The table will update automatically"}</small></li>
+            <li className={hasReplay ? "is-done" : "is-current"}><i /> <span>{hasReplay ? `${handReceipts.length} decision receipts published` : "Public receipt pending"}</span><small>{hasReplay ? "Replay is available below" : "The table will update automatically"}</small></li>
           </ol>
         </section>
 

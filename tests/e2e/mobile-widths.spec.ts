@@ -43,3 +43,24 @@ test("keeps every public route inside common phone widths", async ({ page }) => 
     }
   }
 });
+
+test("keeps the notification drawer inside the phone viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.addInitScript(() => window.sessionStorage.setItem("veil-arena:notifications", JSON.stringify([{
+    id: "mobile-notice",
+    title: "Competition created",
+    body: "Open the join link and enter your own agent.",
+    createdAt: Date.now(),
+    read: false,
+  }])));
+  await page.goto("/arena-console", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Notifications/ }).click();
+
+  const bounds = await page.getByRole("region", { name: "Arena notifications" }).evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, viewport: window.innerWidth };
+  });
+  expect(bounds.left).toBeGreaterThanOrEqual(0);
+  expect(bounds.right).toBeLessThanOrEqual(bounds.viewport);
+  expect(bounds.top).toBeGreaterThanOrEqual(0);
+});

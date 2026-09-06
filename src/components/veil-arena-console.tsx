@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import QRCode from "qrcode";
+import Image from "next/image";
 import type { TypedData } from "starknet";
 
 import { VeilLogo } from "@/components/veil-logo";
@@ -24,6 +25,7 @@ import {
   type TournamentTemplateId,
   type TournamentWorkload,
 } from "@/domain/arena/tournament-rules";
+import { formatTokenAmountFromMinor, parseTokenAmountToMinor } from "@/domain/arena/token-amount";
 import { apiFetch } from "@/lib/api/client";
 import {
   createPrivateTransferActions,
@@ -253,6 +255,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
   const [tokenAddress, setTokenAddress] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("USDC");
+  const [tokenDecimals, setTokenDecimals] = useState("6");
   const [prizeAmount, setPrizeAmount] = useState("");
   const [fundingHash, setFundingHash] = useState("");
   const [settlementHash, setSettlementHash] = useState("");
@@ -624,6 +627,12 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   async function createPrizePool(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!schedule) return;
+    const decimals = Number(tokenDecimals);
+    const amountMinor = parseTokenAmountToMinor(prizeAmount, decimals);
+    if (!amountMinor) {
+      setError("Enter a positive token amount with no more decimal places than the token supports. USDC uses 6 decimals.");
+      return;
+    }
     setBusy("pool-create");
     setError("");
     setNotice("");
@@ -631,7 +640,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(schedule.season.id)}/prize-pool`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": freshKey("pool") },
-        body: JSON.stringify({ tokenAddress: tokenAddress.trim(), tokenSymbol: tokenSymbol.trim(), amountMinor: prizeAmount.trim() }),
+        body: JSON.stringify({ tokenAddress: tokenAddress.trim(), tokenSymbol: tokenSymbol.trim(), amountMinor }),
       });
       const body = await readEnvelope<PrizePool>(response);
       if (!response.ok || !body.ok) {
@@ -1056,7 +1065,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 <button type="button" className="operator-button operator-button-signal" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : privateInvitation ? "COPY A FRESH LINK" : "COPY PRIVATE JOIN LINK"}<span>↗</span></button>
                 {privateInvitation ? <div className="operator-invite-share">
                   <div className="operator-invite-qr">
-                    {privateInvitationQr?.invitation === privateInvitation ? <img src={privateInvitationQr.dataUrl} alt="QR code for the private competition join link" /> : <span>PREPARING QR</span>}
+                    {privateInvitationQr?.invitation === privateInvitation ? <Image src={privateInvitationQr.dataUrl} alt="QR code for the private competition join link" width={220} height={220} unoptimized /> : <span>PREPARING QR</span>}
                   </div>
                   <div className="operator-invite-link">
                     <label htmlFor="private-join-link">PRIVATE JOIN LINK</label>
@@ -1071,7 +1080,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
               </aside> : null}
               {schedule.season.status === "open" ? <div className="operator-lock-bar">
                 {schedule.season.rules?.pairingMode === "gauntlet" ? <label htmlFor="benchmark-agent">SEALED BENCHMARK<select id="benchmark-agent" value={benchmarkAgentId} onChange={(event) => setBenchmarkAgentId(event.target.value)}><option value="">CHOOSE AN ENROLLED AGENT</option>{schedule.entries.map((entry) => <option value={entry.agentId} key={entry.id}>{entry.displayName.toUpperCase()}</option>)}</select></label> : null}
-                <p>Locking freezes the roster and committed rules, then creates the exact match list. Strategies remain sealed.</p>
+                <p>Locking freezes the roster and committed rules, then creates the exact match list. The worker locks automatically when the deadline arrives; this button is available if you want to lock early. Strategies remain sealed.</p>
                 <button type="button" className="operator-button operator-button-dark" onClick={() => void lockSeason()} disabled={busy !== "" || schedule.entries.length < (schedule.season.rules?.minEntries ?? 2) || (schedule.season.rules?.pairingMode === "gauntlet" && !benchmarkAgentId)}>{busy === "lock" ? "LOCKING" : "LOCK DRAW"}<span>→</span></button>
               </div> : null}
               <div className="operator-match-list">
@@ -1085,13 +1094,19 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
             {schedule && (schedule.season.status === "open" || schedule.season.status === "locked") ? <section className="operator-panel operator-panel-wide" aria-labelledby="pool-title">
               <header className="operator-panel-head"><div><span>05 / STRK20 SETTLEMENT</span><h2 id="pool-title">Sponsor the winner</h2></div><strong>{prizePool?.status.replaceAll("_", " ").toUpperCase() ?? "NOT CREATED"}</strong></header>
               <p className="operator-panel-copy">A reward is optional. If you add one, the sponsor funds and pays it from their own STRK20 wallet. Veil Arena verifies the authorization and receipt but never holds the funds.</p>
-              {!prizePool ? <form className="operator-form operator-pool-form" onSubmit={(event) => void createPrizePool(event)}><label>TOKEN CONTRACT<input value={tokenAddress} onChange={(event) => setTokenAddress(event.target.value)} placeholder="0x..." required /></label><label>TOKEN SYMBOL<input value={tokenSymbol} onChange={(event) => setTokenSymbol(event.target.value)} placeholder="USDC" required /></label><label>PRIZE AMOUNT IN MINOR UNITS<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="numeric" placeholder="1000000" required /></label><button className="operator-button operator-button-signal" type="submit" disabled={busy !== ""}>{busy === "pool-create" ? "CREATING" : "CREATE SPONSOR POOL"}<span>+</span></button></form> : null}
+              {!prizePool ? <form className="operator-form operator-pool-form" onSubmit={(event) => void createPrizePool(event)}>
+                <label>TOKEN CONTRACT<input value={tokenAddress} onChange={(event) => setTokenAddress(event.target.value)} placeholder="0x..." required /></label>
+                <label>TOKEN SYMBOL<input value={tokenSymbol} onChange={(event) => setTokenSymbol(event.target.value)} placeholder="USDC" required /></label>
+                <label>TOKEN DECIMALS<input value={tokenDecimals} onChange={(event) => setTokenDecimals(event.target.value)} inputMode="numeric" type="number" min="0" max="36" required /></label>
+                <label>PRIZE AMOUNT<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="decimal" placeholder="10.00" aria-describedby="prize-amount-help" required /><small id="prize-amount-help">Enter normal token units. For USDC, 10.00 becomes 10,000,000 minor units automatically.</small></label>
+                <button className="operator-button operator-button-signal" type="submit" disabled={busy !== ""}>{busy === "pool-create" ? "CREATING" : "CREATE SPONSOR POOL"}<span>+</span></button>
+              </form> : null}
               {prizePool && (prizePool.status === "funding_pending" || prizePool.status === "unknown") ? (
                 <div className="operator-chain-step">
                   <div>
                     <span>SPONSOR RESERVE</span>
                     <strong>Fund the reward from the sponsor wallet</strong>
-                    <small>{prizePool.amountMinor} {prizePool.tokenSymbol} minor units / STRK20 pool {shortCommitment(prizePool.poolAddress)}</small>
+                    <small>{formatTokenAmountFromMinor(prizePool.amountMinor, Number.isInteger(Number(tokenDecimals)) ? Number(tokenDecimals) : 6)} {prizePool.tokenSymbol} ({prizePool.amountMinor} minor units) / STRK20 pool {shortCommitment(prizePool.poolAddress)}</small>
                   </div>
                   <div className="operator-chain-actions">
                     <button type="button" className="operator-button operator-button-signal" onClick={() => void prepareFundingPlan()} disabled={busy !== ""}>{busy === "pool-plan" ? "PREPARING" : "SHOW SHIELD"}<span>→</span></button>
