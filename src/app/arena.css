@@ -29,6 +29,7 @@
 .arena-nav nav a:last-child { border-right: 1px solid var(--arena-rule); }
 .arena-nav nav a:hover { background: var(--arena-signal); color: var(--arena-signal-ink); }
 .arena-nav-actions { display: flex; align-items: center; align-self: center; justify-self: end; gap: 12px; }
+.arena-nav-actions .arena-notification-trigger { min-height: 44px; }
 .arena-nav-actions .hub-theme-toggle { border-color: var(--arena-ink); color: var(--arena-ink); }
 .arena-nav-actions .hub-theme-toggle[aria-pressed="true"] .hub-theme-toggle-icon { box-shadow: inset 0 0 0 2px var(--arena-panel); }
 .arena-nav-cta { min-height: 46px; padding: 0 18px; display: inline-flex; align-items: center; border: 2px solid var(--arena-ink); background: var(--arena-signal); color: var(--arena-signal-ink); box-shadow: 4px 4px 0 var(--arena-ink); font-size: 9px; text-transform: uppercase; }

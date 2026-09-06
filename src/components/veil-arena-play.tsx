@@ -6,6 +6,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { VeilLogo } from "@/components/veil-logo";
 import { XMark } from "@/components/brand/x-mark";
 import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
+import { ArenaNotificationBell } from "@/components/arena/arena-notification-bell";
 import {
   agentPackageCommitment,
   parseAgentPackage,
@@ -734,12 +735,13 @@ export function VeilArenaPlay({
       <header className="play-nav">
         <Link className="play-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
         <Link className="play-back" href={invitationToken ? "/arena" : "/"}>← {invitationToken ? "Back to arena" : "Back to home"}</Link>
-        <div className="play-nav-actions">
+          <div className="play-nav-actions">
           <nav aria-label="Player navigation">
             <Link href="/arena">Watch arena</Link>
             <Link href="/sign-in">Wallet access</Link>
             <Link href="/profile">Profile</Link>
           </nav>
+          <ArenaNotificationBell />
           <ArenaThemeToggle />
         </div>
       </header>

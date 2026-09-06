@@ -14,6 +14,9 @@ test("explains the sealed arena without fabricated competition data", async ({ p
   await expect(page.getByText(/Give it to your coding agent/)).toBeVisible();
   await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
   await expect(page.getByRole("link", { name: "Host a competition", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Notifications" })).toBeVisible();
+  await page.getByRole("button", { name: "Notifications" }).click();
+  await expect(page.getByRole("region", { name: "Arena notifications" })).toContainText("No new arena events.");
   await expect(page.getByRole("heading", { name: "PUBLIC ARENA" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "REWARD PROOF" })).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(/preview data|synthetic project|sample agent/i);

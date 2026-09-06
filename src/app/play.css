@@ -74,6 +74,7 @@ html[data-theme="dark"] .play-page {
 .play-nav nav a { min-width: 150px; min-height: 90px; padding: 0 20px; display: grid; place-items: center; border-right: 1px solid var(--play-ink); font-size: 11px; text-transform: uppercase; }
 .play-nav nav a:hover { background: var(--play-signal); color: var(--play-signal-ink); }
 .play-nav-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.play-nav-actions .arena-notification-trigger { min-height: 44px; }
 .play-nav-actions .hub-theme-toggle { min-height: 44px; border-color: var(--play-ink); color: var(--play-ink); }
 .play-nav-actions .hub-theme-toggle:hover { background: var(--play-signal); color: var(--play-signal-ink); }
 

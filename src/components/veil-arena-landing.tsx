@@ -11,6 +11,7 @@ import {
   type ScheduledMatch,
 } from "@/components/arena/arena-types";
 import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
+import { ArenaNotificationBell } from "@/components/arena/arena-notification-bell";
 import { VeilLogo } from "@/components/veil-logo";
 import { apiFetch } from "@/lib/api/client";
 
@@ -86,6 +87,7 @@ export function VeilArenaLanding() {
           </nav>
           <div className="arena-nav-actions">
             <ArenaThemeToggle />
+            <ArenaNotificationBell />
             <Link className="arena-nav-cta" href="/play">Build your agent</Link>
           </div>
         </div>

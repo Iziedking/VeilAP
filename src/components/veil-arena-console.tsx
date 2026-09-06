@@ -7,6 +7,7 @@ import type { TypedData } from "starknet";
 
 import { VeilLogo } from "@/components/veil-logo";
 import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
+import { ArenaNotificationBell, recordArenaNotification } from "@/components/arena/arena-notification-bell";
 import {
   buildArenaTransferAuthorizationTypedData,
   createArenaTransferAuthorization,
@@ -458,6 +459,11 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setSchedule({ season: body.value, entries: [], matches: [] });
       router.push(`/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`);
       setPrivateInvitation("");
+      recordArenaNotification({
+        title: "Competition created",
+        body: body.value.entryMode === "invite_only" ? "Create the private link, then use it yourself to join the ring." : "Your competition is open for agent entries.",
+        href: `/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`,
+      });
       setNotice(body.value.entryMode === "invite_only"
         ? `${body.value.name} is ready. Copy its private join link next.`
         : `${body.value.name} is open for entries.`);
@@ -483,6 +489,11 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         return;
       }
       setPrivateInvitation(body.value.url);
+      recordArenaNotification({
+        title: "Private join link ready",
+        body: "Share the link with your challenger, then use the JOIN PRIVATE RING action to enter with your own agent.",
+        href: `/arena-console/${encodeURIComponent(projectId)}/${encodeURIComponent(schedule.season.id)}`,
+      });
       try {
         await navigator.clipboard.writeText(body.value.url);
         setNotice(`Private join link copied. It expires ${readableDate(body.value.expiresAt)}.`);
@@ -515,6 +526,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         }
       }
       setNotice(`Added ${selectedAgents.length} sealed agent${selectedAgents.length === 1 ? "" : "s"} to the competition.`);
+      recordArenaNotification({ title: "Roster updated", body: `${selectedAgents.length} sealed agent${selectedAgents.length === 1 ? " is" : "s are"} ready for the draw.`, href: `/arena-console/${encodeURIComponent(projectId)}/${encodeURIComponent(schedule.season.id)}` });
       await loadSchedule(schedule.season.id);
     } catch {
       setError("The selected agents could not be registered.");
@@ -547,6 +559,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setSchedule(body.value);
       setSeasons((current) => current.map((season) => season.id === body.value.season.id ? body.value.season : season));
       setNotice(`The draw is locked with ${body.value.matches.length} pairing${body.value.matches.length === 1 ? "" : "s"}.`);
+      recordArenaNotification({ title: "Draw locked", body: `${body.value.matches.length} pairing${body.value.matches.length === 1 ? " is" : "s are"} ready to run.`, href: `/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(body.value.season.id)}` });
     } catch {
       setError("The season could not be locked.");
     } finally {
@@ -571,6 +584,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       }
       setLatestMatch(body.value);
       setNotice(`${body.value.matchId} finished. Its public receipt is ready.`);
+      recordArenaNotification({ title: "Verified replay ready", body: "A completed match receipt is ready to watch.", href: `/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(schedule.season.id)}/match/${encodeURIComponent(match.id)}` });
       await loadSchedule(schedule.season.id);
     } catch {
       setError("The scheduled pairing could not be reached.");
@@ -900,6 +914,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         <div className="operator-nav-meta"><span>OPERATOR DESK</span><strong>LIVE COMPETITION CONTROL</strong></div>
         <div className="operator-nav-actions">
           <ArenaThemeToggle />
+          <ArenaNotificationBell />
           <Link className="operator-nav-link" href="/sign-in">Wallet sign in</Link>
         </div>
       </header>
@@ -1013,6 +1028,10 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 <button type="button" className="operator-button operator-button-signal" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : privateInvitation ? "COPY A FRESH LINK" : "COPY PRIVATE JOIN LINK"}<span>↗</span></button>
                 {privateInvitation ? <input aria-label="Private join link" value={privateInvitation} readOnly onFocus={(event) => event.currentTarget.select()} /> : null}
               </div> : null}
+              {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" ? <aside className="operator-next-action" role="status">
+                <div><span>NEXT ACTION</span><strong>{privateInvitation ? "Join the ring with your own agent." : "Create the link, then join the ring yourself."}</strong><small>The challenger&apos;s entry does not add your agent. Use the private link from this competition to open player entry for your own wallet.</small></div>
+                {privateInvitation ? <Link className="operator-button operator-button-dark" href={privateInvitation}>JOIN PRIVATE RING <span>↗</span></Link> : <button type="button" className="operator-button operator-button-dark" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : "CREATE LINK TO JOIN"}<span>→</span></button>}
+              </aside> : null}
               {schedule.season.status === "open" ? <div className="operator-lock-bar">
                 {schedule.season.rules?.pairingMode === "gauntlet" ? <label htmlFor="benchmark-agent">SEALED BENCHMARK<select id="benchmark-agent" value={benchmarkAgentId} onChange={(event) => setBenchmarkAgentId(event.target.value)}><option value="">CHOOSE AN ENROLLED AGENT</option>{schedule.entries.map((entry) => <option value={entry.agentId} key={entry.id}>{entry.displayName.toUpperCase()}</option>)}</select></label> : null}
                 <p>Locking freezes the roster and committed rules, then creates the exact match list. Strategies remain sealed.</p>

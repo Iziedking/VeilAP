@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
+import { ArenaNotificationBell } from "@/components/arena/arena-notification-bell";
 import { VeilLogo } from "@/components/veil-logo";
 
 export function ArenaNav({ backHref = "/", backLabel = "Home" }: { backHref?: string; backLabel?: string }) {
@@ -17,6 +18,7 @@ export function ArenaNav({ backHref = "/", backLabel = "Home" }: { backHref?: st
       </nav>
       <div className="hub-nav-actions">
         <ArenaThemeToggle />
+        <ArenaNotificationBell />
         <Link className="hub-sign-in" href="/profile">Your account</Link>
       </div>
     </header>
