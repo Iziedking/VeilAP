@@ -57,6 +57,7 @@ type PrivateMatch = {
 };
 
 type TableSound = "deal" | "check" | "call" | "raise" | "fold" | "showdown" | "win" | "tie" | "complete";
+type ReplaySpeed = 0.5 | 1 | 2;
 
 function formatCard(card: PrivateCard): string {
   const rank = card.rank <= 10 ? String(card.rank) : ({ 11: "J", 12: "Q", 13: "K", 14: "A" }[card.rank] ?? "?");
@@ -121,7 +122,8 @@ function MatchSpectatorView({
   const [state, setState] = useState<LoadState>("loading");
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState<ReplaySpeed>(1);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     if (typeof window === "undefined") return false;
     try { return window.localStorage.getItem("veil-arena-sound") === "on"; } catch { return false; }
@@ -424,9 +426,9 @@ function MatchSpectatorView({
       const next = Math.min(activeIndex + 1, handReceipts.length - 1);
       setActiveIndex(next);
       if (next === handReceipts.length - 1) setPlaying(false);
-    }, 1000);
+    }, 2200 / replaySpeed);
     return () => window.clearTimeout(timer);
-  }, [activeIndex, handReceipts.length, playing]);
+  }, [activeIndex, handReceipts.length, playing, replaySpeed]);
 
   if (state === "loading") {
     return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-loading"><i /><strong>Opening the sealed table</strong></main></div>;
@@ -666,7 +668,13 @@ function MatchSpectatorView({
               else setPlaying((value) => !value);
             }}>{activeIndex >= handReceipts.length - 1 ? "Replay match" : playing ? "Pause replay" : "Play replay"}</button>
             <button type="button" disabled={!hasReplay || activeIndex >= handReceipts.length - 1} onClick={() => { setPlaying(false); setActiveIndex((index) => Math.min(handReceipts.length - 1, index + 1)); }}>Next →</button>
+            <label className="spectator-speed">Replay speed<select aria-label="Replay speed" value={replaySpeed} onChange={(event) => setReplaySpeed(Number(event.target.value) as ReplaySpeed)} disabled={!hasReplay}>
+              <option value="0.5">0.5×</option>
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+            </select></label>
           </div>
+          {hasReplay ? <p className="spectator-replay-note" role="status">{playing ? "Replay is moving through one verified decision at a time." : "Replay is paused. Start it when you are ready, or choose a decision below."}</p> : null}
           <div className="spectator-progress" aria-label="Match replay progress">
             {hasReplay ? handReceipts.map((hand, index) => (
               <button type="button" className={index === activeIndex ? "is-active" : index < activeIndex ? "is-past" : ""} aria-label={`Open receipt ${index + 1}`} onClick={() => { setPlaying(false); setActiveIndex(index); }} key={hand.handCommitment} />

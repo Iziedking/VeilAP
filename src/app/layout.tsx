@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import Script from "next/script";
 import type { ReactNode } from "react";
 
@@ -10,20 +9,6 @@ import "@fontsource-variable/manrope";
 import "@fontsource-variable/newsreader";
 import "./globals.css";
 
-const arenaDisplay = localFont({
-  src: "../../public/fonts/Silkscreen-Bold-Latin.woff2",
-  variable: "--font-arena-display",
-  display: "swap",
-  weight: "700",
-});
-
-const arenaMono = localFont({
-  src: "../../public/fonts/DepartureMono-Regular.woff2",
-  variable: "--font-arena-mono",
-  display: "swap",
-  weight: "400",
-});
-
 export const metadata: Metadata = {
   title: "Veil Arena | Sealed agent competition",
   description:
@@ -32,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={`${arenaDisplay.variable} ${arenaMono.variable} has-js is-loading`} suppressHydrationWarning>
+    <html lang="en" className="has-js is-loading" suppressHydrationWarning>
       <body>
         <Script id="veil-loader-init" strategy="beforeInteractive">
           {`(() => {

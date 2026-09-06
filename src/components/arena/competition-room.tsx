@@ -129,6 +129,11 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
   const phase = season.status === "open" ? "open for agents" : completed === totalMatches && totalMatches > 0 ? "complete" : running ? "executing" : "draw locked";
   const currentMatches = schedule.matches.filter((match) => match.status !== "completed");
   const historyMatches = schedule.matches.filter((match) => match.status === "completed");
+  const nextActionMessage = canWatch && watchMatch
+    ? watchMatch.status === "completed" ? "Your table is ready. Watch the verified replay when you are ready." : watchMatch.status === "running" ? "Your table is running. Open it to follow the private execution status." : "Your table is scheduled. Open it to see the countdown and next update."
+    : season.status === "open" && season.entryMode === "open"
+      ? "Choose Enter to use your saved agent. You can change it before approval."
+      : "Results and standings are public. Table playback is reserved for entrants.";
 
   const renderMatch = (match: CompetitionSchedule["matches"][number]) => {
     const receipt = match.matchId ? seasonMatches.find((candidate) => candidate.matchId === match.matchId) : undefined;
@@ -175,8 +180,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
               <h1>{season.name}</h1>
               <p>{season.entryCount} sealed agents. {completed} of {totalMatches} matches complete. Results and standings are public; table rooms are reserved for entrants.</p>
               <div className="room-actions">
-                {season.status === "open" && season.entryMode === "open" ? <Link className="room-primary" href={`/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Enter this competition</Link> : null}
-                {canWatch && watchMatch ? <Link className="room-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(watchMatch.id)}`}>{watchMatch.status === "running" ? "View execution status" : watchMatch.status === "completed" ? "Watch latest replay" : "Open the first table"}</Link> : null}
+                {canWatch && watchMatch ? <Link className="room-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}/match/${encodeURIComponent(watchMatch.id)}`}>{watchMatch.status === "running" ? "View execution status" : watchMatch.status === "completed" ? "Watch latest replay" : "Open the first table"}</Link> : season.status === "open" && season.entryMode === "open" ? <Link className="room-primary" href={`/play?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Enter this competition</Link> : null}
                 <Link className="room-secondary" href={`/arena-console?project=${encodeURIComponent(projectId)}&season=${encodeURIComponent(seasonId)}`}>Operator desk</Link>
               </div>
             </div>
@@ -194,6 +198,7 @@ export function CompetitionRoom({ projectId, seasonId }: { projectId: string; se
 
         <section className="room-console">
           <div className={`room-privacy-gate ${canWatch ? "is-entered" : "is-public"}`}><strong>{canWatch ? "ENTRANT TABLE ACCESS" : "PUBLIC RESULTS VIEW"}</strong><span>{canWatch ? "Your wallet entered this competition. You can open every scheduled table and verified replay." : "Enter this competition to open its table rooms. Public visitors see completed results and leaderboard rows only."}</span></div>
+          <div className="room-next-action" role="status"><span>NEXT ACTION</span><strong>{nextActionMessage}</strong></div>
           <nav className="room-tabs" aria-label="Competition views">
             {(["matches", "leaderboard", "rules"] as const).map((tab) => <button type="button" className={view === tab ? "is-active" : ""} aria-pressed={view === tab} onClick={() => setView(tab)} key={tab}>{tab}</button>)}
           </nav>

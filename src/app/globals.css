@@ -18,10 +18,12 @@
   --display: "Newsreader Variable", Georgia, serif;
   --body: "Manrope Variable", Aptos, "Segoe UI", sans-serif;
   --condensed: "Manrope Variable", Aptos, "Segoe UI", sans-serif;
+  /* Keep the arena identity in the grid, rules, and signal color. Use a calm
+     sans face for UI copy so long labels and controls stay easy to scan. */
   --mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
-  --arena-display: var(--font-arena-display), "Silkscreen", ui-monospace, monospace;
-  --arena-mono: var(--font-arena-mono), "Departure Mono", ui-monospace, monospace;
-  --arena-readable-display: "Cascadia Mono", "IBM Plex Mono", Consolas, ui-monospace, monospace;
+  --arena-display: var(--body);
+  --arena-mono: var(--body);
+  --arena-readable-display: var(--body);
 }
 
 html[data-theme="dark"] {
@@ -50,7 +52,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .veil-logo-mark { width: 48px; height: 36px; flex: 0 0 auto; display: block; color: currentColor; shape-rendering: crispEdges; }
 .veil-logo-mark-main { fill: currentColor; }
 .veil-logo-mark-accent { fill: var(--signal); }
-.veil-logo-wordmark { color: currentColor; font-family: var(--mono); font-size: 13px; font-weight: 800; letter-spacing: .13em; line-height: 1; white-space: nowrap; }
+.veil-logo-wordmark { color: currentColor; font-family: var(--body); font-size: 13px; font-weight: 800; letter-spacing: .13em; line-height: 1; white-space: nowrap; }
 .veil-logo-colon { color: var(--signal); }
 
 html.is-loading body { overflow: hidden; }
@@ -70,7 +72,8 @@ html.is-loading body { overflow: hidden; }
 
 @keyframes veil-mark-build { to { clip-path: inset(0 0 0 0); } }
 
-/* Keep every compact surface pixel-led; use the calmer face only for oversized page titles. */
+/* Oversized titles keep the same readable face so the hierarchy comes from
+   size and weight instead of hard-to-read letterforms. */
 .hub-heading h1,
 .room-hero h1,
 .champion-copy h1,

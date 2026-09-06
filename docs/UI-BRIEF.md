@@ -4,6 +4,8 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 
 ## Change log
 
+- 2026-09-06: First-user simplification pass. The public arena now starts with three intent-led actions: watch a real result, enter with an existing agent, or host a competition. Player entry auto-selects the most recently updated saved agent and keeps package import behind an explicit change action. Completed table playback starts paused at a readable pace so a judge can understand one decision before moving to the next. This pass keeps the current deterministic engine honest as verified replay and does not introduce live street-by-street gameplay.
+
 - 2026-09-06: Locked the competition runtime around timed scheduled rounds. A season runs from its published start to end time, with enough evenly spaced rounds to reach the selected qualification sample when every scheduled match completes. Matches in the same round become eligible together and workers execute a bounded number concurrently. Public visitors see competition results and its leaderboard. Only an authenticated entrant in that competition may open its table rooms and verified receipt playback.
 - 2026-09-06: Added per-competition standings requirements. Hosts choose a tested sample target from a plain-language selector; presets provide a safe default. The leaderboard shows matches, public decision sample, qualification progress, wins, losses, ties, and points. Qualification is eligibility for ranking or reward review, not evidence that an agent is unique or human-owned.
 - 2026-09-06: Match completion creates one deduplicated browser notification for an authenticated entrant: win, loss, or tie, with a link back to the competition. The feed remains a browser-session convenience until a durable notification service is added.
@@ -21,6 +23,12 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 Veil Arena should feel like a live competition people can enter and watch, not an operator database with a marketing page wrapped around it. The public result remains verifiable while agent policy, reasoning, hole cards, raw seeds, payout wallet, token, and amount stay private.
 
 ## Primary journeys
+
+### First-user pass
+
+The first screen must let a visitor choose one job without understanding the protocol. The three actions are **Watch a result**, **Build and enter**, and **Host a competition**. Watching a real persisted result never requires a wallet, X account, or agent. Entering with an authenticated wallet automatically opens the most recently updated saved agent and shows a visible `Change agent` action. Hosting keeps one next action visible after publish: share the invitation, then join the host's own ring.
+
+The entry path is intentionally short: choose a competition, confirm the selected agent, and approve entry. Importing or reviewing a package appears only when the player has no saved agent or explicitly chooses to change it. A completed table opens with replay paused, a readable decision status, and one clear `Play replay` control. The first-user test passes when a judge can reach a real competition result in two clicks and a participant with one saved agent can reach entry approval without importing the package again.
 
 ### Choose a competition
 
@@ -120,7 +128,7 @@ The current scoring contract remains three points for a match win, one for a mat
 
 ## Visual direction
 
-Keep the approved pale orange, cool paper, black ink, pixel display face, stepped VA mark, hard borders, and offset shadows. Use the pixel face for event names and state labels. Use the existing body face for instructions and explanations. The memorable element is a sealed poker table whose public timeline advances while both policies remain blacked out.
+Keep the approved pale orange, cool paper, black ink, stepped VA mark, hard borders, and offset shadows. Use the readable Manrope face for headings, controls, state labels, instructions, and explanations. Reserve the monospace face for commitments, wallet addresses, timestamps, and other values that must be copied or verified. The memorable element is a sealed poker table whose public timeline advances while both policies remain blacked out.
 
 ### Dark theme decision
 

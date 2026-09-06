@@ -132,6 +132,12 @@ html[data-theme="dark"] .play-page {
 .play-inline-error { grid-column: 1 / -1; margin: 0; color: var(--play-error-ink); font-size: 10px; }
 
 .play-package-import { padding: 26px 24px 28px; }
+.play-saved-agent-selected { display: grid; gap: 10px; border: 1px solid var(--play-rule); background: color-mix(in srgb, var(--play-signal) 16%, var(--play-panel)); }
+.play-saved-agent-selected > span { color: var(--play-signal-dark); font-size: 9px; letter-spacing: .08em; }
+.play-saved-agent-selected p { margin: 0; font-size: 18px; line-height: 1.35; }
+.play-saved-agent-selected p strong { font-weight: 800; }
+.play-saved-agent-selected > small { max-width: 620px; color: var(--play-dim); font-family: var(--body); font-size: 13px; line-height: 1.5; }
+.play-saved-agent-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 5px; }
 .play-package-import-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .play-file-button { position: relative; flex: 0 0 auto; overflow: hidden; }
 .play-file-button input { width: 1px; height: 1px; position: absolute; opacity: 0; }

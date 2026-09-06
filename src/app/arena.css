@@ -37,6 +37,14 @@
 .arena-button { min-height: 54px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--arena-ink); background: var(--arena-panel); box-shadow: 6px 6px 0 var(--arena-ink); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .arena-button:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--arena-ink); }
 .arena-button-signal { background: var(--arena-signal); color: var(--arena-signal-ink); }
+.arena-action-card { min-width: 190px; min-height: 132px; padding: 16px 18px; display: grid; align-content: center; justify-items: start; gap: 8px; text-align: left; text-transform: none; }
+.arena-action-card > span { color: var(--arena-signal-ink); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.arena-action-card > strong { font-size: 15px; line-height: 1.15; text-transform: uppercase; }
+.arena-action-card > small { max-width: 220px; color: var(--arena-dim); font-family: var(--body); font-size: 12px; font-weight: 500; line-height: 1.4; text-transform: none; }
+.arena-action-card.arena-button-signal > small { color: color-mix(in srgb, var(--arena-signal-ink) 78%, transparent); }
+.arena-home-secondary-actions { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 24px; }
+.arena-home-secondary-actions a { min-height: 44px; display: inline-flex; align-items: center; padding-bottom: 3px; border-bottom: 1px solid var(--arena-ink); color: var(--arena-dim); font-size: 10px; text-transform: uppercase; }
+.arena-home-secondary-actions a:hover { color: var(--arena-ink); }
 
 .arena-home-hero { width: min(1420px, calc(100% - 48px)); margin: 0 auto; padding: clamp(64px, 8vw, 128px) 0 116px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(480px, .84fr); gap: clamp(56px, 8vw, 126px); align-items: start; }
 .arena-home-kicker { display: flex; align-items: center; gap: 10px; color: var(--arena-signal-ink); font-size: 9px; letter-spacing: .08em; }
@@ -137,6 +145,8 @@
   .arena-home-hero { padding: 62px 0 84px; gap: 64px; }
   .arena-home-copy h1 { font-size: clamp(45px, 14vw, 72px); }
   .arena-home-actions { display: grid; }
+  .arena-action-card { width: 100%; min-height: 116px; }
+  .arena-home-secondary-actions { gap: 14px; }
   .arena-home-stats { grid-template-columns: 1fr; }
   .arena-home-stats div { min-height: 78px; border-right: 0; border-bottom: 1px solid var(--arena-rule); }
   .arena-home-preview { margin-top: 0; box-shadow: 6px 6px 0 var(--arena-signal); }

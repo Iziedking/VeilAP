@@ -123,7 +123,7 @@ test("owner sees an action profile without exposing the opponent action", async 
 test("one click on replay at natural completion restarts playback", async ({ page }) => {
   await fixtures(page);
   await page.goto(url);
-  const replay = page.getByRole("button", { name: "Replay match", exact: true });
+  const replay = page.getByRole("button", { name: "Play replay", exact: true });
   await expect(replay).toBeVisible({ timeout: 10000 });
   await replay.click();
   await expect(page.getByRole("button", { name: "Pause replay", exact: true })).toBeVisible();
@@ -146,7 +146,6 @@ test("historical v0.3 replay uses score deltas at intermediate and final receipt
   await page.route("**/api/projects/audit-project/matches/audit-receipt", route => route.fulfill({ json: { ok: true, value: legacyReceipt } }));
   await page.route("**/api/projects/audit-project/seasons/audit-season/matches/audit-match/receipt", route => route.fulfill({ json: { ok: true, value: legacyReceipt } }));
   await page.goto(url);
-  await page.getByRole("button", { name: "Pause replay", exact: true }).click();
   await page.getByRole("button", { name: "Open receipt 1", exact: true }).click();
   await expect(page.locator(".spectator-seat.is-left .spectator-seat-score")).toHaveText(String(legacy.value.hands[0]!.scoreDelta.LEFT));
   await page.getByRole("button", { name: "Open receipt 4", exact: true }).click();
@@ -155,6 +154,8 @@ test("historical v0.3 replay uses score deltas at intermediate and final receipt
 
 test("pause, seek to end and restart have explicit transitions", async ({ page }) => {
   await fixtures(page); await page.goto(url);
+  await page.getByRole("button", { name: "Play replay", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause replay", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Pause replay", exact: true }).click();
   await expect(page.getByRole("button", { name: "Play replay", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open receipt 4", exact: true }).click();
@@ -192,7 +193,7 @@ test("navigation to another match starts its replay at the first receipt", async
   await page.getByRole("button", { name: "Open receipt 4", exact: true }).click();
   await page.getByRole("link", { name: "← Audit competition", exact: true }).click();
   await page.locator('.room-match[href$="/match/audit-match-2"]').click();
-  await expect(page.getByRole("button", { name: "Pause replay", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play replay", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open receipt 1", exact: true })).toHaveClass(/is-active/);
 });
 

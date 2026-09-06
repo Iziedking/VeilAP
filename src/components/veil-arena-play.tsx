@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { VeilLogo } from "@/components/veil-logo";
 import { XMark } from "@/components/brand/x-mark";
@@ -272,6 +272,7 @@ export function VeilArenaPlay({
   const [replacementMode, setReplacementMode] = useState(false);
   const [replacementConfirmed, setReplacementConfirmed] = useState(false);
   const [entryRefresh, setEntryRefresh] = useState(0);
+  const autoSelectedAgent = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
 
   useEffect(() => {
@@ -462,8 +463,12 @@ export function VeilArenaPlay({
   const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now, invitedSeasonId) : false;
   const localPackageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
   const packageReview = claimedPackage ?? localPackageReview;
+  const selectedSavedAgent = packageReview.status === "ready"
+    ? savedAgents.find((agent) => agent.agentId === packageReview.agent.agentId) ?? null
+    : null;
+  const usingSavedAgent = Boolean(defaultAgentId || selectedSavedAgent);
 
-  async function loadSavedAgent(agentId: string) {
+  const loadSavedAgent = useCallback(async (agentId: string) => {
     setSaveMessage("");
     try {
       const response = await apiFetch(`/api/profile/agents/${encodeURIComponent(agentId)}`);
@@ -479,7 +484,23 @@ export function VeilArenaPlay({
     } catch {
       setSaveMessage("Your saved package could not be reached. Try again in a moment.");
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (
+      defaultAgentId
+      || sessionState !== "authenticated"
+      || autoSelectedAgent.current
+      || savedAgents.length === 0
+      || agentPackageText.trim()
+      || claimedPackage
+    ) return;
+    const mostRecentlyUpdated = savedAgents[0];
+    if (!mostRecentlyUpdated) return;
+    autoSelectedAgent.current = true;
+    const timer = window.setTimeout(() => { void loadSavedAgent(mostRecentlyUpdated.agentId); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [agentPackageText, claimedPackage, defaultAgentId, loadSavedAgent, savedAgents, sessionState]);
 
   useEffect(() => {
     if (!defaultAgentId || sessionState !== "authenticated") return;
@@ -749,13 +770,13 @@ export function VeilArenaPlay({
       <main>
         <section className="play-hero" aria-labelledby="play-title">
           <span className="play-kicker">AGENT ENTRY</span>
-          <h1 id="play-title">{defaultAgentId ? "Choose where your agent competes." : "Prepare an agent for competition."}</h1>
-          <p>{defaultAgentId ? "Your saved agent is selected below. Review the competition, then approve entry when ready." : "Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it, then verify your wallet. Funded competitions also verify X account control before entry."}</p>
+          <h1 id="play-title">{usingSavedAgent ? "Choose where your agent competes." : "Prepare an agent for competition."}</h1>
+          <p>{usingSavedAgent ? "Your saved agent is ready. Choose a competition, check the short summary, then approve entry." : "Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it once, then choose where it competes."}</p>
           <ol className="play-steps" aria-label="How to enter">
-            <li><span>01</span><strong>{defaultAgentId ? "Choose an open competition" : "Give AGENT.md to a coding agent"}</strong></li>
-            <li><span>02</span><strong>{defaultAgentId ? "Review your saved agent" : "Have it build and validate the package"}</strong></li>
-            <li><span>03</span><strong>Review the package and sign in with your wallet</strong></li>
-            <li><span>04</span><strong>{selectedSeasonRequiresX ? "Verify your X account and approve entry" : "Approve entry with your wallet"}</strong></li>
+            <li><span>01</span><strong>{usingSavedAgent ? "Choose an open competition" : "Give AGENT.md to a coding agent"}</strong></li>
+            <li><span>02</span><strong>{usingSavedAgent ? "Use your saved agent" : "Have it build and validate the package"}</strong></li>
+            <li><span>03</span><strong>{selectedSeasonRequiresX ? "Verify your X account if required" : "Sign in with your wallet"}</strong></li>
+            <li><span>04</span><strong>Approve entry</strong></li>
           </ol>
         </section>
 
@@ -800,7 +821,7 @@ export function VeilArenaPlay({
 
           <section className="play-builder" aria-labelledby="builder-title">
             <header>
-              <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">{defaultAgentId ? "Your saved agent" : "Bring your agent package"}</h2></div>
+              <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">{usingSavedAgent ? "Your saved agent" : "Bring your agent package"}</h2></div>
               <strong>{selectedSeasonJoinable ? "OPEN FOR ENTRY" : selectedSeason ? "VIEW ONLY" : "WAITING FOR SEASON"}</strong>
             </header>
             {selectedSeason?.rules?.duplicateStrategyPolicy === "reject_exact" && <p className="play-roster-note">One entry per exact strategy. Changing its name or ID does not make it a different strategy.</p>}
@@ -850,7 +871,7 @@ export function VeilArenaPlay({
 
             {(!currentEntry || replacementMode) && (
               <form className="play-form" onSubmit={enterArena}>
-                {defaultAgentId ? <section className="play-package-import"><p><strong>{defaultAgentId}</strong> is selected from My agents.</p><Link className="play-secondary" href="/profile">Choose another agent</Link>{packageReview.status !== "ready" && sessionState === "authenticated" ? <button type="button" className="play-secondary" onClick={()=>void loadSavedAgent(defaultAgentId)}>Retry loading agent</button> : null}</section> : <fieldset disabled={submitting}>
+                {usingSavedAgent ? <section className="play-package-import play-saved-agent-selected"><span>READY TO ENTER</span><p><strong>{packageReview.status === "ready" ? packageReview.agent.displayName : defaultAgentId}</strong> is selected from your private library.</p><small>We will reuse this sealed package for the competition you choose. Nothing is uploaded again.</small><div className="play-saved-agent-actions"><Link className="play-secondary" href="/profile">Change agent</Link>{defaultAgentId && packageReview.status !== "ready" && sessionState === "authenticated" ? <button type="button" className="play-secondary" onClick={() => void loadSavedAgent(defaultAgentId)}>Retry loading agent</button> : null}</div></section> : <fieldset disabled={submitting}>
                   <legend className="sr-only">Import a Veil Agent Protocol package</legend>
 
                   <section className="play-agent-guide" aria-labelledby="agent-guide-title">

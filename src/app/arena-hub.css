@@ -156,6 +156,9 @@
 .room-privacy-gate { min-height: 62px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); background: color-mix(in srgb, var(--signal) 14%, var(--paper-light)); }
 .room-privacy-gate strong { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; }
 .room-privacy-gate span { max-width: 760px; color: var(--ink-soft); font-size: 11px; line-height: 1.45; text-align: right; }
+.room-next-action { margin-top: 12px; padding: 14px 18px; display: grid; gap: 6px; border-left: 4px solid var(--signal); background: color-mix(in srgb, var(--signal) 12%, var(--paper-light)); }
+.room-next-action span { color: var(--signal-dark); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.room-next-action strong { font-family: var(--body); font-size: 13px; line-height: 1.45; }
 .room-tabs { min-height: 64px; display: flex; align-items: stretch; border-bottom: 2px solid var(--ink); }
 .room-tabs button { min-width: 150px; padding: 0 22px; border: 0; border-right: 1px solid var(--ink); background: transparent; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 10px; text-transform: uppercase; cursor: pointer; }
 .room-tabs button.is-active { background: var(--ink); color: var(--signal); }
@@ -270,6 +273,9 @@
 .spectator-controls button.is-primary { background: var(--signal); color: var(--signal-ink); }
 .spectator-controls button:disabled { color: var(--ink-soft); cursor: not-allowed; opacity: .92; }
 .spectator-controls button.is-primary:disabled { color: var(--signal-ink); opacity: 1; }
+.spectator-speed { min-height: 68px; padding: 0 16px; display: inline-flex; align-items: center; gap: 9px; border-left: 1px solid var(--ink); color: var(--ink-soft); font-size: 8px; text-transform: uppercase; }
+.spectator-speed select { min-height: 40px; padding: 0 8px; border: 1px solid var(--ink); background: var(--paper-light); color: var(--ink); font: inherit; font-size: 9px; }
+.spectator-replay-note { margin: 0; padding: 12px 18px; border-bottom: 1px solid var(--rule); color: var(--ink-soft); font-family: var(--body); font-size: 12px; line-height: 1.45; }
 .spectator-progress { min-height: 72px; padding: 22px; display: flex; align-items: center; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--ink); }
 .spectator-progress button { min-width: 18px; height: 18px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
 .spectator-progress button.is-past { background: var(--ink-soft); }
@@ -306,6 +312,7 @@
   .spectator-controls { display: grid; grid-template-columns: 1fr 1fr; }
   .spectator-controls button { min-width: 0; min-height: 50px; }
   .spectator-controls button.is-primary { grid-column: 1 / -1; grid-row: 1; }
+  .spectator-speed { min-height: 50px; grid-column: 1 / -1; justify-content: space-between; border-top: 1px solid var(--ink); border-left: 0; }
   .spectator-receipt { grid-template-columns: 1fr 1fr; }
   .spectator-receipt div:nth-child(2) { border-right: 0; }
   .spectator-receipt div:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
