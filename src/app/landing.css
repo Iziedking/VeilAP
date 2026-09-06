@@ -41,7 +41,7 @@
 .wallet-option > span { width: 34px; height: 34px; display: grid; place-items: center; background: var(--ink); color: var(--paper-light); font-family: var(--mono); font-size: 9px; }
 .wallet-option strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .wallet-option small { color: var(--signal-dark); font-family: var(--mono); font-size: 7px; letter-spacing: .6px; }
-.wallet-option:hover { background: var(--signal); }
+.wallet-option:hover { background: var(--signal); color: var(--signal-ink); }
 .wallet-option:disabled { cursor: wait; opacity: .55; }
 .wallet-empty { min-height: 84px; padding: 16px; border: 1px dashed var(--rule); }
 .wallet-empty strong, .wallet-empty span { display: block; }

@@ -5,6 +5,7 @@
   --play-dim: #66636c;
   --play-rule: #a7a39b;
   --play-signal: #f2a572;
+  --play-signal-ink: #19181f;
   --play-signal-dark: #6b3518;
   --play-muted-surface: #e8ded2;
   --play-error-surface: #efd7ce;
@@ -33,6 +34,7 @@ html[data-theme="dark"] .play-page {
   --play-dim: #b4b0ba;
   --play-rule: #56525d;
   --play-signal: #f2a572;
+  --play-signal-ink: #19181f;
   --play-signal-dark: #f7bf91;
   --play-muted-surface: #302a2d;
   --play-error-surface: #4a2a2b;
@@ -70,10 +72,10 @@ html[data-theme="dark"] .play-page {
 .play-brand .veil-logo-wordmark { font-family: var(--arena-display); font-size: 15px; letter-spacing: 0; }
 .play-nav nav { display: flex; align-items: stretch; border-left: 1px solid var(--play-ink); }
 .play-nav nav a { min-width: 150px; min-height: 90px; padding: 0 20px; display: grid; place-items: center; border-right: 1px solid var(--play-ink); font-size: 11px; text-transform: uppercase; }
-.play-nav nav a:hover { background: var(--play-signal); }
+.play-nav nav a:hover { background: var(--play-signal); color: var(--play-signal-ink); }
 .play-nav-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .play-nav-actions .hub-theme-toggle { min-height: 44px; border-color: var(--play-ink); color: var(--play-ink); }
-.play-nav-actions .hub-theme-toggle:hover { background: var(--play-signal); color: var(--play-ink); }
+.play-nav-actions .hub-theme-toggle:hover { background: var(--play-signal); color: var(--play-signal-ink); }
 
 .play-hero {
   width: min(1320px, calc(100% - 48px));
@@ -109,7 +111,8 @@ html[data-theme="dark"] .play-page {
 .play-season small { margin-top: 8px; color: var(--play-dim); font-size: 9px; line-height: 1.35; text-transform: uppercase; }
 .play-season-index { color: var(--play-signal-dark); font-family: var(--arena-display); font-size: 16px; }
 .play-season-name strong { overflow: hidden; font-family: var(--arena-display); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.play-season:hover, .play-season.is-selected { background: var(--play-signal); color: var(--play-ink); }
+.play-season:hover, .play-season.is-selected { background: var(--play-signal); color: var(--play-signal-ink); }
+.play-season:hover small, .play-season.is-selected small { color: var(--play-signal-ink); opacity: .76; }
 .play-season.is-selected { box-shadow: inset 7px 0 0 var(--play-ink); }
 .play-season.is-unavailable:not(.is-selected) { opacity: .58; }
 
@@ -124,7 +127,7 @@ html[data-theme="dark"] .play-page {
 .play-agent-guide code { color: var(--play-ink); font-family: var(--arena-mono); }
 .play-agent-guide-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .play-agent-guide-actions button, .play-agent-guide-actions a, .play-file-button { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--play-ink); background: var(--play-panel); box-shadow: 4px 4px 0 var(--play-ink); color: var(--play-ink); font-size: 10px; cursor: pointer; }
-.play-agent-guide-actions button { background: var(--play-signal); }
+.play-agent-guide-actions button { background: var(--play-signal); color: var(--play-signal-ink); }
 .play-inline-error { grid-column: 1 / -1; margin: 0; color: var(--play-error-ink); font-size: 10px; }
 
 .play-package-import { padding: 26px 24px 28px; }
@@ -139,7 +142,7 @@ html[data-theme="dark"] .play-page {
 .play-saved-agents { margin-top: 18px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .play-saved-agents > span { width: 100%; color: var(--play-signal-dark); font-size: 8px; }
 .play-saved-agents button { min-height: 40px; padding: 0 12px; border: 1px solid var(--play-ink); background: var(--play-panel); color: var(--play-ink); cursor: pointer; font-family: var(--arena-mono); font-size: 9px; }
-.play-saved-agents button:hover { background: var(--play-signal); }
+.play-saved-agents button:hover { background: var(--play-signal); color: var(--play-signal-ink); }
 .play-package-import .play-claim-status { padding: 11px 12px; border-left: 4px solid var(--play-signal-dark); background: var(--play-muted-surface); color: var(--play-ink); }
 .play-package-import .play-claim-status.is-error { border-left-color: var(--play-error-ink); color: var(--play-error-ink); }
 .play-package-import .play-package-invalid { color: var(--play-error-ink); font-weight: 700; }
@@ -185,7 +188,7 @@ html[data-theme="dark"] .play-page {
 .play-x-label { display: inline-flex !important; align-items: center; gap: 8px; }
 .play-x-label svg { width: 14px; height: 14px; flex: 0 0 auto; fill: currentColor; }
 .play-inline-action { min-height: 40px; padding: 0 12px; border: 1px solid var(--play-ink); background: transparent; color: var(--play-ink); cursor: pointer; font: inherit; font-size: 9px; }
-.play-inline-action:hover:not(:disabled) { background: var(--play-signal); }
+.play-inline-action:hover:not(:disabled) { background: var(--play-signal); color: var(--play-signal-ink); }
 .play-inline-action:disabled { cursor: wait; opacity: .65; }
 .play-sign-in-callout { background: var(--play-muted-surface); }
 .play-sign-in-callout span { color: var(--play-signal-dark); font-size: 9px; }
@@ -196,7 +199,7 @@ html[data-theme="dark"] .play-page {
 .play-entry-error { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .play-entry-error button { min-height: 44px; padding: 0 14px; flex: 0 0 auto; border: 1px solid var(--play-error-ink); background: transparent; color: inherit; cursor: pointer; font: inherit; }
 .play-entry-error button:hover { background: var(--play-error-ink); color: var(--play-panel); }
-.play-submit { width: 100%; min-height: 74px; padding: 0 26px; display: flex; align-items: center; justify-content: space-between; border: 0; background: var(--play-signal); color: var(--play-ink); cursor: pointer; font-family: var(--arena-display); font-size: 14px; text-align: left; }
+.play-submit { width: 100%; min-height: 74px; padding: 0 26px; display: flex; align-items: center; justify-content: space-between; border: 0; background: var(--play-signal); color: var(--play-signal-ink); cursor: pointer; font-family: var(--arena-display); font-size: 14px; text-align: left; }
 .play-submit strong { font-size: 22px; }
 .play-submit:hover:not(:disabled) { background: #ffb27e; }
 .play-submit:disabled { cursor: not-allowed; filter: none; opacity: 1; background: var(--play-disabled-surface); color: var(--play-disabled-ink); }
@@ -230,7 +233,7 @@ html[data-theme="dark"] .play-page {
 .play-version-history li span { color: var(--play-signal-dark); }
 .play-success-actions { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 16px; }
 .play-primary, .play-secondary { min-height: 54px; padding: 0 20px; display: inline-flex; align-items: center; border: 2px solid var(--play-ink); box-shadow: 5px 5px 0 var(--play-ink); font-size: 11px; }
-.play-primary { background: var(--play-signal); }
+.play-primary { background: var(--play-signal); color: var(--play-signal-ink); }
 .play-secondary { background: var(--play-panel); color: var(--play-ink); cursor: pointer; font-family: inherit; }
 .play-roster-note { margin-top: 24px !important; padding-top: 18px; border-top: 1px solid var(--play-rule); font-size: 10px !important; }
 .play-replacement-confirmation { min-height: 92px; padding: 18px 24px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--play-rule); background: var(--play-muted-surface); cursor: pointer; }

@@ -38,7 +38,7 @@
 .profile-entry dd { margin: 8px 0 0; overflow: hidden; font-size: 10px; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
 .profile-entry code { font-family: var(--arena-mono); font-size: 9px; }
 .profile-entry-link, .profile-primary, .profile-secondary { min-height: 46px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; }
-.profile-entry-link, .profile-primary { background: var(--signal); }
+.profile-entry-link, .profile-primary { background: var(--signal); color: var(--signal-ink); }
 .profile-agent-library { margin-top: 28px; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 7px 7px 0 var(--signal); }
 .profile-agent-library > header { min-height: 70px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); }
 .profile-agent-library > header span { color: var(--signal); font-family: var(--arena-mono); font-size: 8px; }
@@ -99,7 +99,7 @@
 .onboarding-panel h2 { margin: 12px 0 20px; font-size: 28px; overflow-wrap: anywhere; }
 .onboarding-panel p, .onboarding-privacy, .onboarding-target { line-height: 1.65; color: var(--ink-soft); }
 .onboarding-panel textarea { display:block; width:100%; min-height:200px; padding:16px; border:1px solid var(--ink); background:var(--paper); color:var(--ink); font:12px/1.65 var(--arena-mono); resize:vertical; margin:14px 0; }
-.onboarding-file { position: relative; display: inline-flex; align-items:center; justify-content:center; min-height: 52px; padding: 14px 22px; background:var(--signal); color:var(--ink); border:2px solid var(--ink); font-weight:700; cursor:pointer; }
+.onboarding-file { position: relative; display: inline-flex; align-items:center; justify-content:center; min-height: 52px; padding: 14px 22px; background:var(--signal); color:var(--signal-ink); border:2px solid var(--ink); font-weight:700; cursor:pointer; }
 .onboarding-file input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
 .onboarding-file:focus-within { outline: 3px solid var(--ink); outline-offset:4px; }
 .onboarding-panel details { margin: 20px 0; }
