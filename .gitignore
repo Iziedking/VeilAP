@@ -12,6 +12,7 @@ out/
 .env.*.local
 !.env.example
 /deploy/veil-arena.env
+.private/
 *.pem
 *.key
 id_*
@@ -21,6 +22,8 @@ id_*
 /RESEARCH.md
 /todo.md
 /OPERATIONS.md
+/docs/LIVE-POKER-ENGINE-ARCHITECTURE-2026-09-06.md
+/docs/LIVE-POKER-ENGINE-DECISIONS-2026-09-06.md
 
 # Test output is reproducible from tracked tests.
 coverage/
