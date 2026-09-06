@@ -8,6 +8,7 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 - 2026-09-03: Added a persistent dark theme switch to the shared Arena navigation. Dark mode keeps the existing paper, ink, and orange signal roles, changes semantic tokens rather than adding a parallel stylesheet, and is remembered per browser. Oversized headings retain the clearer readable face; compact labels keep the pixel and mono faces.
 - 2026-09-03: Added a real match start window to the draw. Queued tables show a wall-clock countdown derived from their persisted creation time and sequence, and the worker will not claim a future table early. At zero the table becomes ready to start, then changes to live when claimed. Completed tables remain immutable replays.
 - 2026-09-06: Added a host next-action nudge for private head-to-heads. After creating or generating an invitation, the operator is shown the exact next step: share the expiring link, then open that same link to submit their own agent. Added a browser-session notification bell that records confirmed competition events without storing strategy, wallet, or invitation secrets.
+- 2026-09-06: Private competition sharing now shows a scannable QR code beside the expiring join URL and an explicit COPY LINK action. The QR encodes only the invitation URL already issued by the server and is generated in the browser.
 - 2026-09-06: Mobile layout pass targets 320, 360, 375, 390, 412, and 430 CSS-pixel phones. Shared navigation collapses into a compact scroll-free action row, dense tables become readable stacked cards, and long identifiers wrap inside their panels. Every primary control remains at least 44px high and no route may create horizontal page overflow.
 
 ## Product intent
@@ -44,7 +45,7 @@ While a match runs, the spectator page refreshes its real status. Once the worke
 
 An operator first selects Challenge a friend, Public freepass, or Sponsored competition. The form then asks only for fields that change that format. The operator names the event, sets its dates, reviews the privacy and workload summary, then creates it. The system creates the underlying project automatically. Project IDs remain available in technical details but are not setup inputs.
 
-Private challenges produce one copyable join link. Public freepass competitions appear in the arena lobby. Sponsored competitions may open before funding, but the UI must distinguish a pledged reward from a funded reward.
+Private challenges produce one expiring join link with both a copy action and a scannable QR code. Public freepass competitions appear in the arena lobby. Sponsored competitions may open before funding, but the UI must distinguish a pledged reward from a funded reward.
 
 After a private challenge is created, the host desk keeps the next action visible until the host opens player entry. The join control uses the freshly generated invitation URL, so the host does not have to reconstruct a project, season, or token link. The notification bell surfaces confirmed local events such as competition creation, link generation, roster changes, draw lock, and completed replay; it is a short-lived browser-session feed and never stores the opaque invitation token.
 

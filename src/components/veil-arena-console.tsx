@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import QRCode from "qrcode";
 import type { TypedData } from "starknet";
 
 import { VeilLogo } from "@/components/veil-logo";
@@ -259,6 +260,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [privateInvitation, setPrivateInvitation] = useState("");
+  const [privateInvitationQr, setPrivateInvitationQr] = useState<{ invitation: string; dataUrl: string } | null>(null);
 
   const openSeasons = useMemo(() => seasons.filter((season) => season.status === "open"), [seasons]);
   const lockedMatches = schedule?.matches ?? [];
@@ -282,6 +284,22 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   }, [customEncounters, customHands, customPairingMode, customResubmission, customReward, entryMode, maxEntries, templateId]);
 
   useEffect(() => () => fundingAccount?.unsubscribeChange?.(), [fundingAccount]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!privateInvitation) return;
+    void QRCode.toDataURL(privateInvitation, {
+      width: 192,
+      margin: 2,
+      errorCorrectionLevel: "M",
+      color: { dark: "#211f2a", light: "#f7f1e6" },
+    }).then((dataUrl) => {
+      if (!cancelled) setPrivateInvitationQr({ invitation: privateInvitation, dataUrl });
+    }).catch(() => {
+      if (!cancelled) setPrivateInvitationQr(null);
+    });
+    return () => { cancelled = true; };
+  }, [privateInvitation]);
 
   const loadProject = useCallback(async (nextProjectId: string) => {
     const normalized = nextProjectId.trim();
@@ -504,6 +522,16 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setError("The private join link could not be created.");
     } finally {
       setBusy("");
+    }
+  }
+
+  async function copyExistingInvitation() {
+    if (!privateInvitation) return;
+    try {
+      await navigator.clipboard.writeText(privateInvitation);
+      setNotice("Private join link copied. Share it with your challenger.");
+    } catch {
+      setNotice("Select the private join link, then copy it to share with your challenger.");
     }
   }
 
@@ -1026,7 +1054,16 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
               {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" ? <div className="operator-invite-bar">
                 <div><span>PRIVATE ENTRY</span><strong>Send one expiring link to your challenger.</strong><small>The link grants entry to this competition only. Strategies and payout details remain sealed.</small></div>
                 <button type="button" className="operator-button operator-button-signal" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : privateInvitation ? "COPY A FRESH LINK" : "COPY PRIVATE JOIN LINK"}<span>↗</span></button>
-                {privateInvitation ? <input aria-label="Private join link" value={privateInvitation} readOnly onFocus={(event) => event.currentTarget.select()} /> : null}
+                {privateInvitation ? <div className="operator-invite-share">
+                  <div className="operator-invite-qr">
+                    {privateInvitationQr?.invitation === privateInvitation ? <img src={privateInvitationQr.dataUrl} alt="QR code for the private competition join link" /> : <span>PREPARING QR</span>}
+                  </div>
+                  <div className="operator-invite-link">
+                    <label htmlFor="private-join-link">PRIVATE JOIN LINK</label>
+                    <input id="private-join-link" aria-label="Private join link" value={privateInvitation} readOnly onFocus={(event) => event.currentTarget.select()} />
+                    <button type="button" className="operator-button operator-button-dark" onClick={() => void copyExistingInvitation()}>COPY LINK <span>↗</span></button>
+                  </div>
+                </div> : null}
               </div> : null}
               {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" ? <aside className="operator-next-action" role="status">
                 <div><span>NEXT ACTION</span><strong>{privateInvitation ? "Join the ring with your own agent." : "Create the link, then join the ring yourself."}</strong><small>The challenger&apos;s entry does not add your agent. Use the private link from this competition to open player entry for your own wallet.</small></div>

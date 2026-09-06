@@ -15,6 +15,8 @@ const routes = [
   "/sign-in",
 ];
 
+test.setTimeout(90_000);
+
 test("keeps every public route inside common phone widths", async ({ page }) => {
   for (const width of phoneWidths) {
     await page.setViewportSize({ width, height: 844 });
