@@ -78,17 +78,18 @@ export async function POST(request: Request, context: JoinRouteContext) {
     if (enrollment.ok) {
       const schedule = await seasonService.getPublicSchedule(projectId, seasonId);
       if (!schedule.ok) return serviceResponse(schedule, { stage: "roster-lock", enrollment: "saved" });
-      if (
-        schedule.ok
-        && schedule.value.season.templateId === "champion_challenge"
-        && schedule.value.season.status === "open"
-        && schedule.value.entries.length === 2
-      ) {
+      const fullDuel = schedule.value.season.status === "open"
+        && schedule.value.season.rules?.pairingMode === "duel_series"
+        && schedule.value.season.rules.minEntries === 2
+        && schedule.value.season.rules.maxEntries === 2
+        && schedule.value.entries.length === 2;
+      if (fullDuel) {
         const locked = await seasonService.lockSeason({
           projectId,
           seasonId,
           actorWalletAddress: actor.walletAddress,
-          idempotencyKey: `champion-lock-${seasonId}`,
+          idempotencyKey: `duel-lock-${seasonId}`,
+          automatic: true,
         });
         if (!locked.ok) return serviceResponse(locked, { stage: "roster-lock", enrollment: "saved" });
       }

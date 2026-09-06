@@ -45,6 +45,14 @@ type ProfileEntry = {
   };
 };
 
+type ProfileEntriesPage = {
+  items: ProfileEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 type SavedAgent = {
   id: string;
   agentId: string;
@@ -82,6 +90,11 @@ function initials(username: string): string {
   return username.slice(0, 2).toUpperCase();
 }
 
+function normalizeEntriesPage(value: ProfileEntriesPage | ProfileEntry[]): ProfileEntriesPage {
+  if (Array.isArray(value)) return { items: value, page: 1, pageSize: Math.max(1, value.length), total: value.length, totalPages: 1 };
+  return value;
+}
+
 function ProfileAvatar({ identity }: { identity: ProfileIdentity | null }) {
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const imageUrl = identity?.profileImageUrl;
@@ -103,6 +116,8 @@ export function VeilProfile() {
   const [state, setState] = useState<LoadState>("loading");
   const [session, setSession] = useState<ProfileSession | null>(null);
   const [entries, setEntries] = useState<ProfileEntry[]>([]);
+  const [entriesPage, setEntriesPage] = useState({ page: 1, pageSize: 4, total: 0, totalPages: 1 });
+  const [entriesLoading, setEntriesLoading] = useState(false);
   const [agents, setAgents] = useState<SavedAgent[]>([]);
   const [drafts, setDrafts] = useState<AgentDraftView[]>([]);
   const [libraryError, setLibraryError] = useState(false);
@@ -129,14 +144,16 @@ export function VeilProfile() {
 
       setSession(sessionBody.value);
       const [entryResult, agentResult, draftResult] = await Promise.allSettled([
-        onboardingRequest<ProfileEntry[]>("/api/profile/entries"),
+        onboardingRequest<ProfileEntriesPage | ProfileEntry[]>("/api/profile/entries?page=1&pageSize=4"),
         onboardingRequest<SavedAgent[]>("/api/profile/agents"),
         onboardingRequest<AgentDraftView[]>("/api/profile/agent-drafts"),
       ]);
       setEntriesError(entryResult.status === "rejected");
       setLibraryError(agentResult.status === "rejected");
       setDraftError(draftResult.status === "rejected");
-      setEntries(entryResult.status === "fulfilled" ? entryResult.value : []);
+      const entryPage = entryResult.status === "fulfilled" ? normalizeEntriesPage(entryResult.value) : { items: [], page: 1, pageSize: 4, total: 0, totalPages: 1 };
+      setEntries(entryPage.items);
+      setEntriesPage({ page: entryPage.page, pageSize: entryPage.pageSize, total: entryPage.total, totalPages: entryPage.totalPages });
       setAgents(agentResult.status === "fulfilled" ? agentResult.value : []);
       setDrafts(draftResult.status === "fulfilled" ? draftResult.value.filter(d=>d.status === "pending" || d.status === "ready") : []);
       setState("ready");
@@ -145,6 +162,21 @@ export function VeilProfile() {
       setError("Your profile could not be loaded. Try again in a moment.");
     }
   }, []);
+
+  async function changeEntriesPage(page: number) {
+    if (page < 1 || page > entriesPage.totalPages || page === entriesPage.page || entriesLoading) return;
+    setEntriesLoading(true);
+    setEntriesError(false);
+    try {
+      const value = normalizeEntriesPage(await onboardingRequest<ProfileEntriesPage | ProfileEntry[]>(`/api/profile/entries?page=${page}&pageSize=${entriesPage.pageSize}`));
+      setEntries(value.items);
+      setEntriesPage({ page: value.page, pageSize: value.pageSize, total: value.total, totalPages: value.totalPages });
+    } catch {
+      setEntriesError(true);
+    } finally {
+      setEntriesLoading(false);
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -253,7 +285,9 @@ export function VeilProfile() {
                 <div><span>SEALED AGENTS</span><h2 id="profile-entries-title">Your competition entries</h2></div>
                 <Link href="/play">Enter a competition →</Link>
               </header>
-              {entriesError ? <p role="alert">Competition history could not be loaded. <button className="profile-secondary" type="button" onClick={() => void load()}>Try again</button></p> : entries.length ? entries.map(({ projectId, seasonId, competition, entry }) => (
+              {entriesError ? <p role="alert">Competition history could not be loaded. <button className="profile-secondary" type="button" onClick={() => void load()}>Try again</button></p> : null}
+              {entries.length ? <>
+                {entries.map(({ projectId, seasonId, competition, entry }) => (
                 <article className="profile-entry" key={`${projectId}:${seasonId}`}>
                   <div className="profile-entry-main">
                     <span>{competition.name}</span>
@@ -267,13 +301,19 @@ export function VeilProfile() {
                   </dl>
                   <Link className="profile-entry-link" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`}>Open competition →</Link>
                 </article>
-              )) : (
+                ))}
+                {entriesPage.totalPages > 1 ? <nav className="profile-pagination" aria-label="Competition entry pages">
+                  <button type="button" className="profile-secondary" onClick={() => void changeEntriesPage(entriesPage.page - 1)} disabled={entriesLoading || entriesPage.page === 1}>Previous</button>
+                  <span>Page {entriesPage.page} of {entriesPage.totalPages}</span>
+                  <button type="button" className="profile-secondary" onClick={() => void changeEntriesPage(entriesPage.page + 1)} disabled={entriesLoading || entriesPage.page === entriesPage.totalPages}>Next</button>
+                </nav> : null}
+              </> : !entriesError ? (
                 <div className="profile-empty">
                   <strong>No competition entries yet.</strong>
                   <p>Saved agents stay in My agents above. Competition entries appear here after you approve entry with your wallet.</p>
                   <Link className="profile-primary" href="/play">Bring an agent →</Link>
                 </div>
-              )}
+              ) : null}
             </section>
           </>
         ) : null}

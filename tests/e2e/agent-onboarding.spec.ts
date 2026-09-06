@@ -8,7 +8,7 @@ const file=(value:unknown=pkg)=>({name:"browser.veil-agent.json",mimeType:"appli
 async function fixture(page:Page) {
   const deps={repositories:createMemoryRepositories().projects,walletHashPepper:"p".repeat(32),sessionSecret:"s".repeat(32),vaultKeys:{currentKeyId:"test",keys:{test:"ab".repeat(32)}}};
   const service=new ParticipantAgentDraftService(deps);const vault=new ParticipantAgentService(deps);
-  const state={wallet:"0x123",loseSave:false,entriesFail:false,saveCalls:0};
+  const state={wallet:"0x123",loseSave:false,entriesFail:false,entriesPage:false,saveCalls:0};
   // Browser network responses use the real service. Wallet authentication is a fixture;
   // separate HTTP tests prove that a bearer grant cannot authenticate an owner action.
   await page.route("**/api/**",async route=>{
@@ -25,13 +25,33 @@ async function fixture(page:Page) {
       } else if(path==="/api/agent-drafts/upload") value=await service.upload(req.headers().authorization.slice(7),body);
       else if(path==="/api/profile/agents") value=await vault.list(state.wallet);
       else if(path.startsWith("/api/profile/agents/")) value=await vault.open({actorWalletAddress:state.wallet,agentId:decodeURIComponent(path.split("/").at(-1)!)});
-      else if(path==="/api/profile/entries") {if(state.entriesFail) return route.fulfill({status:503,json:{ok:false,code:"PERSISTENCE_FAILED"}});value=[];}
+      else if(path==="/api/profile/entries") {
+        if(state.entriesFail) return route.fulfill({status:503,json:{ok:false,code:"PERSISTENCE_FAILED"}});
+        if(state.entriesPage) {
+          const entries=Array.from({length:5},(_,index)=>({projectId:`project-${index+1}`,seasonId:`season-${index+1}`,competition:{name:`Competition ${index+1}`},entry:{displayName:`Agent ${index+1}`,agentId:`AGENT_${index+1}`,artifactCommitment:"commitment",version:1,joinedAt:"2026-09-06T00:00:00.000Z",versions:[{version:1,agentId:`AGENT_${index+1}`,displayName:`Agent ${index+1}`,artifactCommitment:"commitment",status:"active",submittedAt:"2026-09-06T00:00:00.000Z"}]}}));
+          const page=Number(new URL(req.url()).searchParams.get("page") ?? "1");
+          value={items:page===2 ? entries.slice(4) : entries.slice(0,4),page,pageSize:4,total:entries.length,totalPages:2};
+        } else value=[];
+      }
       else if(path==="/api/competitions") value=[];
       return route.fulfill({json:{ok:true,value}});
     } catch(error) {return route.fulfill({status:409,json:{ok:false,code:error instanceof Error ? error.message : "PERSISTENCE_FAILED"}});}
   });
   return {service,vault,state};
 }
+
+test("paginates competition entries instead of growing an endless profile",async({page})=>{
+  const {state}=await fixture(page);
+  state.entriesPage=true;
+  await page.goto("/profile");
+  await expect(page.getByRole("heading",{name:"Your competition entries"})).toBeVisible();
+  await expect(page.locator(".profile-entry")).toHaveCount(4);
+  await expect(page.getByRole("navigation",{name:"Competition entry pages"})).toContainText("Page 1 of 2");
+  await page.getByRole("button",{name:"Next"}).click();
+  await expect(page.locator(".profile-entry")).toHaveCount(1);
+  await expect(page.getByText("Agent 5",{exact:true})).toBeVisible();
+  await expect(page.getByRole("navigation",{name:"Competition entry pages"})).toContainText("Page 2 of 2");
+});
 
 test("file upload reviews and saves without an open season or X verification",async({page},info)=>{
   const {vault}=await fixture(page);

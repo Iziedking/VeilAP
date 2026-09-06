@@ -140,6 +140,14 @@ export interface ArenaOwnedEntryView {
   };
 }
 
+export interface ArenaOwnedEntriesPage {
+  items: ArenaOwnedEntryView[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface ArenaSeasonServiceDependencies {
   repositories: ProjectRepository;
   keyProvider: KeyProvider;
@@ -466,6 +474,7 @@ export class ArenaSeasonService {
     hands?: number;
     benchmarkAgentId?: string;
     idempotencyKey: string;
+    automatic?: boolean;
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonScheduleView>> {
     const projectId = input.projectId.trim();
     const seasonId = input.seasonId.trim();
@@ -480,7 +489,7 @@ export class ArenaSeasonService {
       const authorized = await authorizeProject(this.repositories, {
         projectId,
         walletFingerprint: actorFingerprint,
-        action: "lock_arena_season",
+        action: input.automatic ? "auto_lock_full_duel" : "lock_arena_season",
       });
       if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
 
@@ -510,9 +519,18 @@ export class ArenaSeasonService {
         const prize = await this.repositories.getArenaPrizePool(projectId, seasonId);
         if (prize?.status !== "funded") return { ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" };
       }
+      if (input.automatic && (rules.pairingMode !== "duel_series" || rules.minEntries !== 2 || rules.maxEntries !== 2 || entries.length !== 2)) {
+        return { ok: false, code: "INVALID_INPUT" };
+      }
       const rulesCommitment = season.rulesCommitment ?? tournamentRulesCommitment(rules);
       const benchmarkAgentId = input.benchmarkAgentId?.trim() || undefined;
-      const requestDigest = commitment({ actorFingerprint, seasonId, rulesCommitment, benchmarkAgentId: benchmarkAgentId ?? null, entries: entries.map((entry) => [entry.agentId, entry.artifactCommitment]) });
+      const requestDigest = commitment({
+        ...(input.automatic ? {} : { actorFingerprint }),
+        seasonId,
+        rulesCommitment,
+        benchmarkAgentId: benchmarkAgentId ?? null,
+        entries: entries.map((entry) => [entry.agentId, entry.artifactCommitment]),
+      });
       if (season.lockIdempotencyKey) {
         if (season.lockIdempotencyKey !== input.idempotencyKey || season.lockRequestDigest !== requestDigest) return { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
         return { ok: true, value: normalizeSchedule(season, entries, await this.repositories.listArenaScheduledMatches(projectId, seasonId)) };
@@ -757,8 +775,12 @@ export class ArenaSeasonService {
 
   async listOwnedEntries(input: {
     actorWalletAddress: string;
-  }): Promise<ArenaSeasonServiceResult<ArenaOwnedEntryView[]>> {
+    page?: number;
+    pageSize?: number;
+  }): Promise<ArenaSeasonServiceResult<ArenaOwnedEntriesPage>> {
     try {
+      const pageSize = Math.min(20, Math.max(1, Math.floor(input.pageSize ?? 4)));
+      const requestedPage = Math.max(1, Math.floor(input.page ?? 1));
       const ownerFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
       const [seasons, ownedEntries] = await Promise.all([
         this.repositories.listAllArenaSeasons(),
@@ -790,12 +812,13 @@ export class ArenaSeasonService {
           entry: this.ownedEntryView(entry, versions),
         } satisfies ArenaOwnedEntryView;
       }));
-      return {
-        ok: true,
-        value: values
+      const ordered = values
           .filter((value): value is ArenaOwnedEntryView => value !== null)
-          .sort((left, right) => new Date(right.entry.joinedAt).getTime() - new Date(left.entry.joinedAt).getTime()),
-      };
+          .sort((left, right) => new Date(right.entry.joinedAt).getTime() - new Date(left.entry.joinedAt).getTime());
+      const total = ordered.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const page = Math.min(requestedPage, totalPages);
+      return { ok: true, value: { items: ordered.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total, totalPages } };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
     }
