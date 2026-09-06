@@ -1,14 +1,21 @@
-import type { STRK20_CALL_AND_PROOF } from "starknet";
+import type { STRK20_BALANCE_ENTRY, STRK20_CALL_AND_PROOF } from "starknet";
 
 import { confirmStrk20Transaction, type ReceiptTraceProvider } from "./receipt";
 import type { PoolFeeResult } from "./pool-fee";
 import type { Strk20Action, Strk20Outcome } from "./types";
+import { sameFeltAddress } from "./address";
 
 export interface Strk20WalletAccount {
   address: string;
+  strk20Balances(tokens: string[]): Promise<STRK20_BALANCE_ENTRY[]>;
   strk20PrepareInvoke(actions: Strk20Action[], simulate?: boolean): Promise<STRK20_CALL_AND_PROOF>;
   strk20InvokeTransaction(actions: Strk20Action[]): Promise<{ transaction_hash: string }>;
 }
+
+export type ShieldedBalanceOutcome =
+  | { kind: "loaded"; token: string; balanceMinor: string }
+  | { kind: "user_rejected" }
+  | { kind: "error"; code: "BALANCE_READ_FAILED" };
 
 export interface Strk20AdapterDependencies {
   account: Strk20WalletAccount;
@@ -55,6 +62,23 @@ export class Strk20WalletAdapter {
     }
     const actions = createShieldActions(input);
     return this.prepare(actions);
+  }
+
+  async readShieldedBalance(token: string): Promise<ShieldedBalanceOutcome> {
+    if (!hasValue(token)) return { kind: "error", code: "BALANCE_READ_FAILED" };
+    try {
+      const entries = await this.account.strk20Balances([token]);
+      const entry = entries.find((candidate) => sameFeltAddress(candidate.token, token));
+      const balance = entry?.balance ?? "0x0";
+      if (!/^0x[0-9a-f]+$/i.test(balance)) return { kind: "error", code: "BALANCE_READ_FAILED" };
+      return { kind: "loaded", token, balanceMinor: BigInt(balance).toString() };
+    } catch (error) {
+      const text = errorText(error).toLowerCase();
+      if (/(user|request|transaction).*(reject|denied|cancel)|reject|denied|cancelled/.test(text)) {
+        return { kind: "user_rejected" };
+      }
+      return { kind: "error", code: "BALANCE_READ_FAILED" };
+    }
   }
 
   async submit(actions: Strk20Action[]): Promise<Strk20Outcome> {

@@ -26,6 +26,7 @@ export type TournamentPairingMode = "round_robin" | "duel_series" | "gauntlet";
 export type TournamentEntryMode = "open" | "invite_only";
 export type TournamentResubmissionPolicy = "replace_until_lock" | "fixed";
 export type TournamentRewardPolicy = "optional" | "funded_before_start";
+export type TournamentPaymentRail = "strk20";
 export type TournamentScheduleMode = "timed_rounds";
 
 export interface TournamentRules {
@@ -44,6 +45,7 @@ export interface TournamentRules {
   qualificationHands?: number;
   resubmissionPolicy: TournamentResubmissionPolicy;
   rewardPolicy: TournamentRewardPolicy;
+  paymentRail?: TournamentPaymentRail;
   revealPolicy: "loser_action_only";
   strategyVisibility: "sealed";
 }
@@ -116,6 +118,7 @@ const tournamentRulesSchema = z.object({
   qualificationHands: z.number().int().optional(),
   resubmissionPolicy: z.enum(["replace_until_lock", "fixed"]),
   rewardPolicy: z.enum(["optional", "funded_before_start"]),
+  paymentRail: z.literal("strk20").optional(),
   revealPolicy: z.literal("loser_action_only"),
   strategyVisibility: z.literal("sealed"),
 }).strict();
@@ -190,6 +193,7 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     qualificationHands: 20_000,
     resubmissionPolicy: "replace_until_lock",
     rewardPolicy: "funded_before_start",
+    paymentRail: "strk20",
   },
   duel_series: {
     ...sharedPrivacyRules,
@@ -232,6 +236,7 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     qualificationHands: 20_000,
     resubmissionPolicy: "fixed",
     rewardPolicy: "funded_before_start",
+    paymentRail: "strk20",
   },
 };
 
@@ -338,6 +343,10 @@ function validateRules(rules: TournamentRules): TournamentRules {
   return rules;
 }
 
+export function usesStrk20RewardRail(rules: TournamentRules): boolean {
+  return rules.paymentRail === "strk20" || rules.rewardPolicy === "funded_before_start";
+}
+
 export function parseTournamentRules(value: unknown): TournamentRules {
   const parsed = tournamentRulesSchema.safeParse(value);
   if (!parsed.success) throw new Error("TOURNAMENT_RULES_INVALID");
@@ -370,6 +379,7 @@ export function resolveTournamentRules(input: {
     qualificationHands: input.custom.qualificationHands ?? input.qualificationHands ?? 1_000,
     resubmissionPolicy: input.custom.resubmissionPolicy,
     rewardPolicy: input.custom.rewardPolicy,
+    ...(input.custom.rewardPolicy === "funded_before_start" ? { paymentRail: "strk20" as const } : {}),
   });
 }
 

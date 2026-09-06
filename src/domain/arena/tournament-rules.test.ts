@@ -6,6 +6,7 @@ import {
   estimateTournamentWorkload,
   resolveTournamentRules,
   tournamentRulesCommitment,
+  usesStrk20RewardRail,
   type TournamentRules,
 } from "@/domain/arena/tournament-rules";
 
@@ -109,8 +110,37 @@ describe("tournament rules", () => {
     expect(resolveTournamentRules({ templateId: "sponsored_open" })).toMatchObject({
       entryMode: "open",
       rewardPolicy: "funded_before_start",
+      paymentRail: "strk20",
       maxEntries: 16,
     });
+  });
+
+  it("marks funded templates as STRK20-backed and preserves optional rewards", () => {
+    const sponsored = resolveTournamentRules({ templateId: "sponsored_open" });
+    const championship = resolveTournamentRules({ templateId: "championship" });
+    const playground = resolveTournamentRules({ templateId: "playground" });
+    expect(usesStrk20RewardRail(sponsored)).toBe(true);
+    expect(usesStrk20RewardRail(championship)).toBe(true);
+    expect(championship.paymentRail).toBe("strk20");
+    expect(usesStrk20RewardRail(playground)).toBe(false);
+    expect(playground.paymentRail).toBeUndefined();
+  });
+
+  it("derives the STRK20 rail for funded custom tournaments", () => {
+    const rules = resolveTournamentRules({
+      templateId: "custom",
+      custom: {
+        pairingMode: "round_robin",
+        entryMode: "open",
+        maxEntries: 8,
+        handsPerMatch: 20,
+        encountersPerPair: 1,
+        resubmissionPolicy: "replace_until_lock",
+        rewardPolicy: "funded_before_start",
+      },
+    });
+    expect(rules.paymentRail).toBe("strk20");
+    expect(usesStrk20RewardRail(rules)).toBe(true);
   });
 
   it("requires an enrolled benchmark for a gauntlet", () => {

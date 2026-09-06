@@ -20,6 +20,7 @@ function fee() {
 function account(overrides: Partial<Strk20WalletAccount> = {}): Strk20WalletAccount {
   return {
     address: "0x99",
+    strk20Balances: async () => [],
     strk20PrepareInvoke: async () => preparedProof,
     strk20InvokeTransaction: async () => ({ transaction_hash: "0xtx" }),
     ...overrides,
@@ -68,6 +69,43 @@ describe("STRK20 address and wallet adapter", () => {
     });
     await expect(adapter.prepareShield({ token, amountMinor: "1000" })).resolves.toMatchObject({ kind: "prepared" });
     expect(type).toBe("deposit");
+  });
+
+  it("reads a shielded balance only when explicitly requested", async () => {
+    let reads = 0;
+    const adapter = new Strk20WalletAdapter({
+      account: account({
+        strk20Balances: async (tokens) => {
+          reads += 1;
+          expect(tokens).toEqual([token]);
+          return [{ token, balance: "0x03e8" }];
+        },
+      }),
+      poolAddress,
+      readPoolFee: async () => fee(),
+      receiptProvider: { getTransactionReceipt: async () => ({}), getTransactionTrace: async () => ({}) },
+    });
+    expect(reads).toBe(0);
+    await expect(adapter.readShieldedBalance(token)).resolves.toEqual({ kind: "loaded", token, balanceMinor: "1000" });
+    expect(reads).toBe(1);
+  });
+
+  it("distinguishes an empty balance from a rejected wallet read", async () => {
+    const empty = new Strk20WalletAdapter({
+      account: account(),
+      poolAddress,
+      readPoolFee: async () => fee(),
+      receiptProvider: { getTransactionReceipt: async () => ({}), getTransactionTrace: async () => ({}) },
+    });
+    await expect(empty.readShieldedBalance(token)).resolves.toEqual({ kind: "loaded", token, balanceMinor: "0" });
+
+    const rejected = new Strk20WalletAdapter({
+      account: account({ strk20Balances: async () => { throw new Error("User rejected request"); } }),
+      poolAddress,
+      readPoolFee: async () => fee(),
+      receiptProvider: { getTransactionReceipt: async () => ({}), getTransactionTrace: async () => ({}) },
+    });
+    await expect(rejected.readShieldedBalance(token)).resolves.toEqual({ kind: "user_rejected" });
   });
 
   it("refuses invalid amounts before reading the fee or wallet", async () => {

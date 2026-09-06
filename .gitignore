@@ -24,6 +24,7 @@ id_*
 /OPERATIONS.md
 /docs/LIVE-POKER-ENGINE-ARCHITECTURE-2026-09-06.md
 /docs/LIVE-POKER-ENGINE-DECISIONS-2026-09-06.md
+/docs/STRK20-INTEGRATION-UI-BRIEF-2026-09-06.md
 
 # Test output is reproducible from tracked tests.
 coverage/
