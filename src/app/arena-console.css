@@ -34,7 +34,7 @@
 .operator-intro h1 { margin: 27px 0 18px; font-family: var(--arena-display); font-size: clamp(42px, 7vw, 95px); font-weight: 700; line-height: .95; letter-spacing: -.04em; text-transform: uppercase; }
 .operator-intro p { max-width: 610px; margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.65; }
 .operator-live-links { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 18px; }
-.operator-live-links a { padding-bottom: 4px; border-bottom: 1px solid var(--ink); color: var(--signal-dark); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.operator-live-links a { min-height: 44px; display: inline-flex; align-items: center; padding-bottom: 4px; border-bottom: 1px solid var(--ink); color: var(--signal-dark); font-size: 10px; font-weight: 800; text-transform: uppercase; }
 
 .operator-project-bar { min-height: 80px; padding: 15px 18px; display: grid; grid-template-columns: 125px minmax(0, 1fr) auto; gap: 18px; align-items: center; border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 6px 6px 0 var(--signal); }
 .operator-project-bar label, .operator-form label, .operator-lock-bar label { display: grid; gap: 8px; color: var(--ink-soft); font-size: 8px; letter-spacing: .9px; }
@@ -210,10 +210,14 @@
 }
 
 @media (max-width: 480px) {
+  .operator-nav { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; }
   .operator-brand { padding-inline: 15px; }
+  .operator-brand .veil-logo-wordmark { display: none; }
   .operator-back { font-size: 8px; }
-  .operator-nav-link { min-width: 145px; padding-inline: 14px; font-size: 8px; }
-  .operator-nav-actions .hub-theme-toggle { margin-right: 8px; }
+  .operator-back { min-width: 44px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+  .operator-nav-link { min-width: 44px; width: 44px; padding-inline: 0; justify-content: center; overflow: hidden; font-size: 0; }
+  .operator-nav-actions { min-width: 0; gap: 6px; }
+  .operator-nav-actions .hub-theme-toggle { width: 44px; min-width: 44px; margin-right: 0; padding-inline: 0; font-size: 0; }
   .operator-main { width: calc(100% - 24px); padding-bottom: 60px; }
   .operator-intro { padding-bottom: 38px; }
   .operator-intro h1 { font-size: 43px; }

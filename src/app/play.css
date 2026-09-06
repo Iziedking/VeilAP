@@ -19,7 +19,7 @@
   --play-review-copy: #c5c1ca;
   --play-review-dim: #aaa7af;
   --play-review-details: #b6b2ba;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
   overflow-x: hidden;
   background: var(--play-paper);
@@ -256,11 +256,16 @@ html[data-theme="dark"] .play-page {
 }
 
 @media (max-width: 700px) {
-  .play-nav { min-height: 76px; padding-inline: 14px; gap: 14px; }
+  .play-page { padding-bottom: 58px; }
+  .play-nav { min-height: 76px; padding-inline: 14px; gap: 12px; }
   .play-brand .veil-logo-mark { width: 29px; height: 29px; }
   .play-brand .veil-logo-wordmark { font-size: 10px; }
-  .play-nav nav a { min-width: 0; min-height: 74px; padding-inline: 12px; font-size: 9px; }
-  .play-nav nav a:first-child { display: none; }
+  .play-nav nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 50; height: 58px; justify-content: stretch; border-top: 2px solid var(--play-ink); background: var(--play-panel); }
+  .play-nav nav a { min-width: 0; min-height: 56px; flex: 1 1 0; padding-inline: 8px; border-right: 1px solid var(--play-rule); font-size: 8px; text-align: center; }
+  .play-nav nav a:last-child { border-right: 0; }
+  .play-nav-actions { margin-left: auto; gap: 6px; }
+  .play-nav-actions .arena-notification-trigger, .play-nav-actions .hub-theme-toggle { min-width: 44px; width: 44px; padding-inline: 0; }
+  .play-nav-actions .arena-notification-trigger > span, .play-nav-actions .hub-theme-toggle > span:last-child { display: none; }
   .play-back { font-size: 8px; }
   .play-hero, .play-seasons, .play-builder { width: calc(100% - 28px); }
   .play-hero { padding: 48px 0 52px; }
@@ -302,7 +307,7 @@ html[data-theme="dark"] .play-page {
   .play-version-history code { grid-column: 1 / -1; grid-row: 2; }
   .play-success-actions { display: grid; }
   .play-primary, .play-secondary { width: 100%; justify-content: center; }
-  .play-footer { min-height: 150px; padding: 28px 18px; grid-template-columns: 1fr; align-items: start; gap: 14px; }
+  .play-footer { min-height: 150px; margin-bottom: 58px; padding: 28px 18px; grid-template-columns: 1fr; align-items: start; gap: 14px; }
 }
 
 @media (max-width: 390px) {
@@ -313,6 +318,14 @@ html[data-theme="dark"] .play-page {
   .play-season > span { padding-inline: 7px; }
   .play-season strong { font-size: 10px; }
   .play-season small { font-size: 8px; }
+  .play-nav { padding-inline: 10px; }
+  .play-back { max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
+  .play-package-facts { grid-template-columns: 1fr; }
+  .play-package-facts div { border-right: 0; border-bottom: 1px solid var(--play-review-rule); }
+  .play-package-facts div:last-child { border-bottom: 0; }
+  .play-version-history li { display: block; min-height: 0; padding: 12px 14px; }
+  .play-version-history li > * { display: block; overflow-wrap: anywhere; white-space: normal; }
+  .play-version-history li code, .play-version-history li span { margin-top: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

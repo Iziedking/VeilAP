@@ -6,7 +6,7 @@
   --arena-rule: var(--rule);
   --arena-signal: var(--signal);
   --arena-signal-ink: var(--signal-ink);
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
   overflow-x: hidden;
   background: var(--arena-paper);
@@ -129,6 +129,8 @@
   .arena-nav nav a { min-width: 0; flex: 1; padding: 0 10px; }
   .arena-brand .veil-logo-wordmark { display: none; }
   .arena-nav-actions { gap: 8px; }
+  .arena-nav-actions .arena-notification-trigger { min-width: 44px; width: 44px; padding-inline: 0; }
+  .arena-nav-actions .arena-notification-trigger > span, .arena-nav-actions .hub-theme-toggle > span:last-child { display: none; }
   .arena-nav-actions .hub-theme-toggle { min-height: 44px; padding-inline: 8px; font-size: 7px; }
   .arena-nav-cta { font-size: 8px; }
   .arena-home-hero, .arena-home-host { width: calc(100% - 28px); }
