@@ -108,8 +108,11 @@ export class ArenaWorkerService {
     let lastFailure: ArenaWorkerTickResult | undefined;
     for (const season of allSeasons.filter((candidate) => candidate.status === "open" && (candidate.locksAt?.getTime() ?? Number.POSITIVE_INFINITY) <= this.now().getTime())) {
       const lockFailure = await this.lockDueSeason(season.projectId, season.id);
-      if (lockFailure) lastFailure = lockFailure;
-      else if (this.seasonService.lockSeason) autoLockedSeasonIds.add(`${season.projectId}:${season.id}`);
+      if (lockFailure) {
+        if (!isExpectedAutoLockBlock(lockFailure.errorCode)) lastFailure = lockFailure;
+      } else if (this.seasonService.lockSeason) {
+        autoLockedSeasonIds.add(`${season.projectId}:${season.id}`);
+      }
     }
 
     const seasons = allSeasons
@@ -186,4 +189,10 @@ function batchStatus(results: ArenaWorkerTickResult[]): ArenaWorkerBatchResult["
   if (results.some((result) => result.status === "in_progress")) return "in_progress";
   if (results.some((result) => result.status === "failed")) return "failed";
   return "idle";
+}
+
+function isExpectedAutoLockBlock(errorCode: string | undefined): boolean {
+  return errorCode === "ARENA_SEASON_TOO_SMALL"
+    || errorCode === "ARENA_PRIZE_POOL_NOT_FUNDED"
+    || errorCode === "ARENA_BENCHMARK_REQUIRED";
 }
