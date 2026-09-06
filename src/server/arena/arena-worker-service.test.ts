@@ -243,4 +243,30 @@ describe("ArenaWorkerService", () => {
       seasonId: "",
     });
   });
+
+  it("keeps expected auto-lock blocks out of the due-batch failure status", async () => {
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [{
+          projectId: "project-1",
+          id: "season-1",
+          status: "open",
+          locksAt: new Date("2026-08-30T12:00:00.000Z"),
+          createdAt: new Date("2026-08-30T00:00:00.000Z"),
+        }] as never,
+        listArenaScheduledMatches: async () => [],
+      },
+      seasonService: {
+        lockSeason: async () => ({ ok: false, code: "ARENA_SEASON_TOO_SMALL" }),
+        runScheduledMatch: async () => ({ ok: false, code: "PERSISTENCE_FAILED" }),
+      } as never,
+      workerWalletAddress: "0xworker",
+      now: () => new Date("2026-08-30T13:00:00.000Z"),
+    });
+
+    await expect(service.runDueBatch()).resolves.toEqual({
+      status: "idle",
+      results: [],
+    });
+  });
 });

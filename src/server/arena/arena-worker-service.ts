@@ -64,8 +64,11 @@ export class ArenaWorkerService {
     const failures: ArenaWorkerTickResult[] = [];
     for (const season of allSeasons.filter((candidate) => candidate.status === "open" && (candidate.locksAt?.getTime() ?? Number.POSITIVE_INFINITY) <= this.now().getTime())) {
       const lockFailure = await this.lockDueSeason(season.projectId, season.id);
-      if (lockFailure) failures.push(lockFailure);
-      else if (this.seasonService.lockSeason) autoLockedSeasonIds.add(`${season.projectId}:${season.id}`);
+      if (lockFailure) {
+        if (!isExpectedAutoLockBlock(lockFailure.errorCode)) failures.push(lockFailure);
+      } else if (this.seasonService.lockSeason) {
+        autoLockedSeasonIds.add(`${season.projectId}:${season.id}`);
+      }
     }
     const seasons = allSeasons
       .filter((season) => season.status === "locked" || autoLockedSeasonIds.has(`${season.projectId}:${season.id}`))
