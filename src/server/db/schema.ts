@@ -187,6 +187,8 @@ export const arenaScheduledMatches = pgTable(
     seasonId: text("season_id").notNull(),
     projectId: text("project_id").notNull(),
     sequence: integer("sequence").notNull(),
+    roundNumber: integer("round_number"),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
     hands: integer("hands").notNull(),
     leftAgentId: text("left_agent_id").notNull(),
     rightAgentId: text("right_agent_id").notNull(),

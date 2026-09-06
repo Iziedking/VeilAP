@@ -34,6 +34,7 @@ export type ScheduledMatch = {
   id: string;
   seasonId: string;
   sequence: number;
+  roundNumber?: number;
   hands: number;
   leftAgentId: string;
   rightAgentId: string;
@@ -55,6 +56,8 @@ export type TournamentRules = {
   maxEntries: number;
   handsPerMatch: number;
   encountersPerPair: number;
+  scheduleMode?: "timed_rounds";
+  qualificationHands?: number;
   resubmissionPolicy: "replace_until_lock" | "fixed";
   rewardPolicy: "optional" | "funded_before_start";
   strategyVisibility: "sealed";
@@ -63,7 +66,17 @@ export type TournamentRules = {
 };
 
 export type CompetitionSchedule = {
-  season: CompetitionSummary & { rules?: TournamentRules };
+  season: CompetitionSummary & {
+    rules?: TournamentRules;
+    workload?: {
+      entryCount: number;
+      pairingCount: number;
+      totalHands: number;
+      roundCount?: number;
+      decisionsPerAgent?: number;
+      qualificationHands?: number;
+    };
+  };
   entries: CompetitionEntry[];
   matches: ScheduledMatch[];
 };

@@ -351,6 +351,8 @@ export interface ArenaScheduledMatchRecord {
   seasonId: string;
   projectId: string;
   sequence: number;
+  roundNumber?: number;
+  scheduledFor?: Date;
   hands: number;
   leftAgentId: string;
   rightAgentId: string;
@@ -704,6 +706,8 @@ function toArenaScheduledMatchRecord(row: typeof arenaScheduledMatches.$inferSel
     seasonId: row.seasonId,
     projectId: row.projectId,
     sequence: row.sequence,
+    roundNumber: row.roundNumber ?? undefined,
+    scheduledFor: row.scheduledFor ?? undefined,
     hands: row.hands,
     leftAgentId: row.leftAgentId,
     rightAgentId: row.rightAgentId,
@@ -1741,6 +1745,8 @@ export function createPostgresRepositories(db: VeilapDatabase): {
       async saveArenaScheduledMatch(record) {
         await db.insert(arenaScheduledMatches).values({
           ...record,
+          roundNumber: record.roundNumber ?? null,
+          scheduledFor: record.scheduledFor ?? null,
           matchId: record.matchId ?? null,
           executionIdempotencyKey: record.executionIdempotencyKey ?? null,
           executionRequestDigest: record.executionRequestDigest ?? null,
@@ -1791,7 +1797,7 @@ export function createPostgresRepositories(db: VeilapDatabase): {
             eq(arenaScheduledMatches.id, input.scheduledMatchId),
             lt(arenaScheduledMatches.attempts, MAX_MATCH_ATTEMPTS),
             or(
-              and(eq(arenaScheduledMatches.status, "scheduled"), sql`${arenaScheduledMatches.createdAt} + greatest(1, ${arenaScheduledMatches.sequence}) * interval '10 seconds' <= ${input.now}`),
+              and(eq(arenaScheduledMatches.status, "scheduled"), sql`coalesce(${arenaScheduledMatches.scheduledFor}, ${arenaScheduledMatches.createdAt} + greatest(1, ${arenaScheduledMatches.sequence}) * interval '10 seconds') <= ${input.now}`),
               and(eq(arenaScheduledMatches.status, "failed"), sql`(${arenaScheduledMatches.retryAt} is null or ${arenaScheduledMatches.retryAt} <= ${input.now})`),
               and(eq(arenaScheduledMatches.status, "running"), sql`(${arenaScheduledMatches.leaseExpiresAt} is null or ${arenaScheduledMatches.leaseExpiresAt} <= ${input.now})`),
             ),

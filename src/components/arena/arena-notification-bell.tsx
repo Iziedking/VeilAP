@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { apiFetch } from "@/lib/api/client";
+
 const STORAGE_KEY = "veil-arena:notifications";
 const EVENT_NAME = "veil-arena:notification";
+const OUTCOME_KEY_PREFIX = "veil-arena:notified-outcome:";
 
 export type ArenaNotification = {
   id: string;
@@ -61,6 +64,51 @@ export function ArenaNotificationBell() {
     return () => {
       window.removeEventListener(EVENT_NAME, sync);
       window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const checkOutcomes = async () => {
+      try {
+        const response = await apiFetch("/api/profile/entries?page=1&pageSize=20", {
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+        });
+        const body = await response.json() as {
+          ok: boolean;
+          value?: { items?: Array<{
+            projectId: string;
+            seasonId: string;
+            outcome: "pending" | "won" | "complete";
+            competition: { name: string };
+            entry: { agentId: string; displayName: string };
+          }> };
+        };
+        if (!active || !response.ok || !body.ok) return;
+        for (const item of body.value?.items ?? []) {
+          if (item.outcome === "pending") continue;
+          const key = `${OUTCOME_KEY_PREFIX}${item.seasonId}:${item.entry.agentId}`;
+          if (window.sessionStorage.getItem(key)) continue;
+          recordArenaNotification({
+            title: item.outcome === "won" ? "Competition won" : "Competition complete",
+            body: item.outcome === "won"
+              ? `${item.entry.displayName} finished first in ${item.competition.name}.`
+              : `${item.competition.name} has final results.`,
+            href: `/arena/${encodeURIComponent(item.projectId)}/${encodeURIComponent(item.seasonId)}`,
+          });
+          window.sessionStorage.setItem(key, "recorded");
+        }
+      } catch {
+        // Account and outcome polling is best effort and does not affect arena state.
+      }
+    };
+    void checkOutcomes();
+    const interval = window.setInterval(() => void checkOutcomes(), 15_000);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
     };
   }, []);
 

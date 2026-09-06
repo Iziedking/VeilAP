@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { eligibleMatch, queueState, MAX_MATCH_ATTEMPTS, MATCH_LEASE_MS, retryAt } from "@/domain/arena/queue-policy";
 import { arenaMatchStartsAt } from "@/domain/arena/match-schedule";
+import { seasonStandings, type Standing } from "@/domain/arena/scoring";
 
 import { commitment } from "@/domain/canonical";
 import { ARENA_ENGINE_VERSION } from "@/domain/arena/poker-engine";
@@ -91,6 +92,7 @@ export interface ArenaScheduledMatchView {
   id: string;
   seasonId: string;
   sequence: number;
+  roundNumber?: number;
   hands: number;
   leftAgentId: string;
   rightAgentId: string;
@@ -120,6 +122,8 @@ export interface ArenaOwnedEntryView {
   projectId: string;
   seasonId: string;
   competition: ArenaCompetitionSummaryView;
+  standing: Standing;
+  outcome: "pending" | "won" | "complete";
   entry: {
     id: string;
     seasonId: string;
@@ -225,6 +229,7 @@ function normalizeSchedule(
       id: match.id,
       seasonId: match.seasonId,
       sequence: match.sequence,
+      roundNumber: match.roundNumber,
       hands: match.hands,
       leftAgentId: match.leftAgentId,
       rightAgentId: match.rightAgentId,
@@ -268,6 +273,7 @@ export class ArenaSeasonService {
     entryMode?: "invite_only" | "open";
     maxEntries?: number;
     templateId?: TournamentTemplateId;
+    qualificationHands?: number;
     customRules?: CustomTournamentRulesInput;
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonView>> {
     const projectId = input.projectId.trim();
@@ -280,6 +286,7 @@ export class ArenaSeasonService {
     try {
       rules = resolveTournamentRules({
         templateId: input.templateId ?? "custom",
+        qualificationHands: input.qualificationHands,
         custom: input.templateId
           ? input.customRules
           : {
@@ -542,7 +549,14 @@ export class ArenaSeasonService {
       const createdAt = this.now();
       let generatedSchedule: ReturnType<typeof buildTournamentSchedule>;
       try {
-        generatedSchedule = buildTournamentSchedule({ rules, entries: orderedEntries, benchmarkAgentId });
+        const scheduleStartsAt = new Date(Math.max(season.startsAt.getTime(), createdAt.getTime()));
+        generatedSchedule = buildTournamentSchedule({
+          rules,
+          entries: orderedEntries,
+          benchmarkAgentId,
+          startsAt: scheduleStartsAt,
+          endsAt: season.endsAt,
+        });
       } catch (error) {
         if (error instanceof Error && error.message === "TOURNAMENT_BENCHMARK_REQUIRED") {
           return { ok: false, code: "ARENA_BENCHMARK_REQUIRED" };
@@ -554,6 +568,8 @@ export class ArenaSeasonService {
             seasonId,
             projectId,
             sequence: pairing.sequence,
+            roundNumber: pairing.roundNumber,
+            scheduledFor: pairing.scheduledFor,
             hands: pairing.hands,
             leftAgentId: pairing.leftAgentId,
             rightAgentId: pairing.rightAgentId,
@@ -607,6 +623,29 @@ export class ArenaSeasonService {
           (await this.repositories.getArenaPrizePool(projectId, seasonId))?.status,
         ),
       };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async getScheduleForViewer(input: {
+    projectId: string;
+    seasonId: string;
+    actorWalletAddress?: string;
+  }): Promise<ArenaSeasonServiceResult<ArenaSeasonScheduleView>> {
+    const schedule = await this.getPublicSchedule(input.projectId, input.seasonId);
+    if (!schedule.ok) return schedule;
+    if (!input.actorWalletAddress) {
+      return { ok: true, value: { ...schedule.value, matches: schedule.value.matches.filter((match) => match.status === "completed") } };
+    }
+    try {
+      const fingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const [entry, roles] = await Promise.all([
+        this.repositories.getArenaSeasonEntryByOwnerFingerprint(input.projectId, input.seasonId, fingerprint),
+        this.repositories.getMemberRoles(input.projectId, fingerprint),
+      ]);
+      if (entry || roles.includes("company") || roles.includes("reviewer")) return schedule;
+      return { ok: true, value: { ...schedule.value, matches: schedule.value.matches.filter((match) => match.status === "completed") } };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
     }
@@ -787,6 +826,14 @@ export class ArenaSeasonService {
         this.repositories.listArenaSeasonEntriesByOwnerFingerprint(ownerFingerprint),
       ]);
       const seasonsById = new Map(seasons.map((season) => [`${season.projectId}:${season.id}`, season]));
+      const matchesByProject = new Map<string, Promise<PublicArenaMatchView[]>>();
+      const publicMatches = (projectId: string) => {
+        const existing = matchesByProject.get(projectId);
+        if (existing) return existing;
+        const pending = this.matchService.getPublicArena(projectId).then((arena) => arena.ok ? arena.value.matches : []);
+        matchesByProject.set(projectId, pending);
+        return pending;
+      };
       const values = await Promise.all(ownedEntries.map(async (entry) => {
         const season = seasonsById.get(`${entry.projectId}:${entry.seasonId}`);
         if (!season) return null;
@@ -805,10 +852,29 @@ export class ArenaSeasonService {
           completedMatchCount: matches.filter((match) => match.status === "completed").length,
           runningMatchCount: matches.filter((match) => match.status === "running").length,
         };
+        const scheduledReceiptIds = new Set(matches.map((match) => match.matchId).filter((matchId): matchId is string => Boolean(matchId)));
+        const standings = seasonStandings((await publicMatches(entry.projectId)).filter((match) => scheduledReceiptIds.has(match.matchId)));
+        const standing = standings.find((row) => row.agentId === entry.agentId) ?? {
+          agentId: entry.agentId,
+          matches: 0,
+          wins: 0,
+          losses: 0,
+          ties: 0,
+          points: 0,
+        };
+        const finished = matches.length > 0 && competition.completedMatchCount === matches.length;
+        const leaders = standings.filter((row) => row.points === standings[0]?.points);
+        const outcome = !finished
+          ? "pending" as const
+          : leaders.length === 1 && leaders[0]?.agentId === entry.agentId
+            ? "won" as const
+            : "complete" as const;
         return {
           projectId: entry.projectId,
           seasonId: entry.seasonId,
           competition,
+          standing,
+          outcome,
           entry: this.ownedEntryView(entry, versions),
         } satisfies ArenaOwnedEntryView;
       }));

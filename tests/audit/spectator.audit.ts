@@ -16,6 +16,8 @@ const schedule = {
     id: "audit-season", projectId: "audit-project", name: "Audit competition", status: "locked",
     startsAt: date, locksAt: date, endsAt: date, entryMode: "open", maxEntries: 2,
     entryCount: 2, matchCount: 1, completedMatchCount: 1, runningMatchCount: 0,
+    workload: { entryCount: 2, pairingCount: 2, totalHands: 4, roundCount: 2, decisionsPerAgent: 8, qualificationHands: 8 },
+    rules: { handsPerMatch: 2, qualificationHands: 8 },
   },
   entries: ["LEFT", "RIGHT"].map((agentId) => ({ agentId, displayName: agentId, artifactCommitment: agentId })),
   matches: [{ id: "audit-match", matchId: "audit-receipt", seasonId: "audit-season", sequence: 1, hands: 2,
@@ -28,7 +30,7 @@ const receipt = {
 };
 const url = "/arena/audit-project/audit-season/match/audit-match";
 
-async function fixtures(page: Page, scheduleFailure?: () => boolean) {
+async function fixtures(page: Page, scheduleFailure?: () => boolean, participant = true) {
   // Only test-browser responses are intercepted. These are not production records.
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -39,9 +41,49 @@ async function fixtures(page: Page, scheduleFailure?: () => boolean) {
     if (path === "/api/projects/audit-project/matches/audit-receipt") {
       return route.fulfill({ json: { ok: true, value: receipt } });
     }
+    if (path === "/api/projects/audit-project/seasons/audit-season/join") {
+      return route.fulfill({ json: { ok: true, value: participant ? { agentId: "LEFT", displayName: "LEFT", artifactCommitment: "LEFT", version: 1 } : null } });
+    }
+    if (path === "/api/projects/audit-project/seasons/audit-season/matches/audit-match/receipt") {
+      return route.fulfill(participant ? { json: { ok: true, value: receipt } } : { status: 401, json: { ok: false, code: "AUTHENTICATION_REQUIRED" } });
+    }
+    if (path === "/api/auth/session") {
+      return route.fulfill({ json: { ok: true, value: participant ? {} : null } });
+    }
     return route.fulfill({ json: { ok: true, value: null } });
   });
 }
+
+test("public visitors see a completed result without table playback", async ({ page }) => {
+  await fixtures(page, undefined, false);
+  await page.goto(url);
+  await expect(page.getByText("PUBLIC RESULT", { exact: true })).toBeVisible();
+  await expect(page.getByText("Detailed table playback is private to wallets that entered this competition.", { exact: false })).toBeVisible();
+  await expect(page.locator(".spectator-stage")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Pause replay", exact: true })).toHaveCount(0);
+});
+
+test("public visitors cannot open a queued private table", async ({ page }) => {
+  await fixtures(page, undefined, false);
+  await page.route("**/api/projects/audit-project/seasons/audit-season", route => route.fulfill({ json: { ok: true, value: { ...schedule, matches: [] } } }));
+  await page.goto(url);
+  await expect(page.getByText("This table room is private to competition entrants.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View public competition results", exact: true })).toBeVisible();
+});
+
+test("public competition room exposes results and its own leaderboard without table links", async ({ page }) => {
+  await fixtures(page, undefined, false);
+  await page.route("**/api/projects/audit-project/matches", route => route.fulfill({ json: { ok: true, value: { matches: [receipt], leaderboard: [] } } }));
+  await page.goto("/arena/audit-project/audit-season");
+
+  await expect(page.getByText("1 of 2 matches complete", { exact: false })).toBeVisible();
+  await expect(page.locator(".room-match")).toHaveCount(1);
+  await expect(page.locator(".room-match[href]")).toHaveCount(0);
+  await expect(page.getByText("RESULT ONLY", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "leaderboard", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Competition leaderboard" })).toContainText("LEFT");
+  await expect(page.getByRole("table", { name: "Competition leaderboard" })).toContainText("of 8");
+});
 
 test("replay scoreboard equals the engine score after the final hand", async ({ page }) => {
   await fixtures(page);
@@ -100,7 +142,9 @@ test("historical v0.3 replay uses score deltas at intermediate and final receipt
   const legacy = runMatch({ agents: [player("LEFT", "raise"), player("RIGHT", "call")], hands: 2, seed: "audit-seed", matchId: "audit-receipt", receiptVersion: 1 });
   if (!legacy.ok) throw new Error(legacy.code);
   await fixtures(page);
-  await page.route("**/api/projects/audit-project/matches/audit-receipt", route => route.fulfill({ json: { ok: true, value: { ...receipt, ...legacy.value.publicReceipt, receiptVersion: undefined, publicHandReceipts: legacy.value.publicHandReceipts } } }));
+  const legacyReceipt = { ...receipt, ...legacy.value.publicReceipt, receiptVersion: undefined, publicHandReceipts: legacy.value.publicHandReceipts };
+  await page.route("**/api/projects/audit-project/matches/audit-receipt", route => route.fulfill({ json: { ok: true, value: legacyReceipt } }));
+  await page.route("**/api/projects/audit-project/seasons/audit-season/matches/audit-match/receipt", route => route.fulfill({ json: { ok: true, value: legacyReceipt } }));
   await page.goto(url);
   await page.getByRole("button", { name: "Pause replay", exact: true }).click();
   await page.getByRole("button", { name: "Open receipt 1", exact: true }).click();
@@ -124,15 +168,16 @@ for (const initialStatus of ["scheduled", "running"] as const) test(`recovers af
   await fixtures(page);
   await page.route("**/api/projects/audit-project/seasons/audit-season", route => {
     requests++;
-    if (requests === 2) return route.fulfill({ status: 503, json: { ok: false, code: "TEMPORARY_OUTAGE" } });
-    const status = requests >= 3 ? "completed" : initialStatus;
+    if (requests === 2 || requests === 3) return route.fulfill({ status: 503, json: { ok: false, code: "TEMPORARY_OUTAGE" } });
+    const status = requests >= 4 ? "completed" : initialStatus;
     return route.fulfill({ json: { ok: true, value: { ...schedule, matches: [{ ...schedule.matches[0], status, matchId: status === "completed" ? "audit-receipt" : undefined }] } } });
   });
   await page.goto(url);
   await expect(page.locator(".spectator-stage")).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("Reconnecting", { timeout: 8000 });
-  await expect.poll(() => requests, { timeout: 8000 }).toBeGreaterThanOrEqual(3);
+  await expect.poll(() => requests, { timeout: 10_000 }).toBeGreaterThanOrEqual(4);
   await expect(page.getByRole("button", { name: "Open receipt 4", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(url);
+  await expect.poll(() => page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
   await expect(page.getByText("LIVE TABLE", { exact: true })).toHaveCount(0);
 });
 
@@ -142,6 +187,7 @@ test("navigation to another match starts its replay at the first receipt", async
   await page.route("**/api/projects/audit-project/seasons/audit-season", route => route.fulfill({ json: { ok: true, value: { ...schedule, matches: [...schedule.matches, { ...schedule.matches[0], id: "audit-match-2", matchId: "audit-receipt-2", sequence: 2 }] } } }));
   await page.route("**/api/projects/audit-project/matches", route => route.fulfill({ json: { ok: true, value: { matches: [receipt, second], leaderboard: [] } } }));
   await page.route("**/api/projects/audit-project/matches/audit-receipt-2", route => route.fulfill({ json: { ok: true, value: second } }));
+  await page.route("**/api/projects/audit-project/seasons/audit-season/matches/audit-match-2/receipt", route => route.fulfill({ json: { ok: true, value: second } }));
   await page.goto(url);
   await page.getByRole("button", { name: "Open receipt 4", exact: true }).click();
   await page.getByRole("link", { name: "← Audit competition", exact: true }).click();
@@ -162,5 +208,6 @@ test("returning after logout clears the completed private replay", async ({ page
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByLabel("A♠", { exact: true })).toHaveCount(0);
   await expect(page.getByText("@audit-owner", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".spectator-stage")).toBeVisible();
+  await expect(page.getByText("PUBLIC RESULT", { exact: true })).toBeVisible();
+  await expect(page.locator(".spectator-stage")).toHaveCount(0);
 });

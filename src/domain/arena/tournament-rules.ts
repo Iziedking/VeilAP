@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 
 export const TOURNAMENT_RULES_SCHEMA_VERSION = 1 as const;
-export const TOURNAMENT_TEMPLATE_VERSION = 2 as const;
+export const TOURNAMENT_TEMPLATE_VERSION = 3 as const;
 
 export type TournamentTemplateId =
   | "friend_challenge"
@@ -26,11 +26,12 @@ export type TournamentPairingMode = "round_robin" | "duel_series" | "gauntlet";
 export type TournamentEntryMode = "open" | "invite_only";
 export type TournamentResubmissionPolicy = "replace_until_lock" | "fixed";
 export type TournamentRewardPolicy = "optional" | "funded_before_start";
+export type TournamentScheduleMode = "timed_rounds";
 
 export interface TournamentRules {
   schemaVersion: typeof TOURNAMENT_RULES_SCHEMA_VERSION;
   templateId: TournamentTemplateId;
-  templateVersion: 1 | typeof TOURNAMENT_TEMPLATE_VERSION;
+  templateVersion: 1 | 2 | typeof TOURNAMENT_TEMPLATE_VERSION;
   duplicateStrategyPolicy?: "reject_exact";
   engineVersion: ArenaEngineVersion;
   pairingMode: TournamentPairingMode;
@@ -39,6 +40,8 @@ export interface TournamentRules {
   maxEntries: number;
   handsPerMatch: number;
   encountersPerPair: number;
+  scheduleMode?: TournamentScheduleMode;
+  qualificationHands?: number;
   resubmissionPolicy: TournamentResubmissionPolicy;
   rewardPolicy: TournamentRewardPolicy;
   revealPolicy: "loser_action_only";
@@ -53,6 +56,7 @@ export interface CustomTournamentRulesInput {
   encountersPerPair: number;
   resubmissionPolicy: TournamentResubmissionPolicy;
   rewardPolicy: TournamentRewardPolicy;
+  qualificationHands?: number;
 }
 
 export interface TournamentTemplateDefinition {
@@ -74,12 +78,17 @@ export interface TournamentPairing {
   leftAgentId: string;
   rightAgentId: string;
   hands: number;
+  roundNumber?: number;
+  scheduledFor?: Date;
 }
 
 export interface TournamentWorkload {
   entryCount: number;
   pairingCount: number;
   totalHands: number;
+  roundCount?: number;
+  decisionsPerAgent?: number;
+  qualificationHands?: number;
 }
 
 const sharedPrivacyRules = {
@@ -94,7 +103,7 @@ const sharedPrivacyRules = {
 const tournamentRulesSchema = z.object({
   schemaVersion: z.literal(TOURNAMENT_RULES_SCHEMA_VERSION),
   templateId: z.enum(["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship", "custom"]),
-  templateVersion: z.union([z.literal(1), z.literal(TOURNAMENT_TEMPLATE_VERSION)]),
+  templateVersion: z.union([z.literal(1), z.literal(2), z.literal(TOURNAMENT_TEMPLATE_VERSION)]),
   duplicateStrategyPolicy: z.literal("reject_exact").optional(),
   engineVersion: z.enum(SUPPORTED_ARENA_ENGINE_VERSIONS),
   pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
@@ -103,6 +112,8 @@ const tournamentRulesSchema = z.object({
   maxEntries: z.number().int(),
   handsPerMatch: z.number().int(),
   encountersPerPair: z.number().int(),
+  scheduleMode: z.literal("timed_rounds").optional(),
+  qualificationHands: z.number().int().optional(),
   resubmissionPolicy: z.enum(["replace_until_lock", "fixed"]),
   rewardPolicy: z.enum(["optional", "funded_before_start"]),
   revealPolicy: z.literal("loser_action_only"),
@@ -117,8 +128,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "invite_only",
     minEntries: 2,
     maxEntries: 2,
-    handsPerMatch: 8,
-    encountersPerPair: 3,
+    handsPerMatch: 20,
+    encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 400,
     resubmissionPolicy: "fixed",
     rewardPolicy: "optional",
   },
@@ -129,8 +142,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "invite_only",
     minEntries: 2,
     maxEntries: 2,
-    handsPerMatch: 12,
-    encountersPerPair: 3,
+    handsPerMatch: 20,
+    encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 1_000,
     resubmissionPolicy: "fixed",
     rewardPolicy: "optional",
   },
@@ -141,8 +156,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "open",
     minEntries: 2,
     maxEntries: 8,
-    handsPerMatch: 4,
+    handsPerMatch: 12,
     encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 500,
     resubmissionPolicy: "replace_until_lock",
     rewardPolicy: "optional",
   },
@@ -153,8 +170,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "open",
     minEntries: 4,
     maxEntries: 16,
-    handsPerMatch: 12,
+    handsPerMatch: 20,
     encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 5_000,
     resubmissionPolicy: "replace_until_lock",
     rewardPolicy: "optional",
   },
@@ -165,8 +184,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "open",
     minEntries: 4,
     maxEntries: 16,
-    handsPerMatch: 12,
+    handsPerMatch: 20,
     encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 20_000,
     resubmissionPolicy: "replace_until_lock",
     rewardPolicy: "funded_before_start",
   },
@@ -177,8 +198,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "open",
     minEntries: 2,
     maxEntries: 2,
-    handsPerMatch: 8,
-    encountersPerPair: 3,
+    handsPerMatch: 20,
+    encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 2_000,
     resubmissionPolicy: "replace_until_lock",
     rewardPolicy: "optional",
   },
@@ -189,8 +212,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "invite_only",
     minEntries: 3,
     maxEntries: 16,
-    handsPerMatch: 10,
+    handsPerMatch: 20,
     encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 2_000,
     resubmissionPolicy: "fixed",
     rewardPolicy: "optional",
   },
@@ -201,8 +226,10 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     entryMode: "invite_only",
     minEntries: 4,
     maxEntries: 8,
-    handsPerMatch: 16,
+    handsPerMatch: 20,
     encountersPerPair: 1,
+    scheduleMode: "timed_rounds",
+    qualificationHands: 20_000,
     resubmissionPolicy: "fixed",
     rewardPolicy: "funded_before_start",
   },
@@ -213,7 +240,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "friend_challenge",
     group: "quick_start",
     name: "Friend challenge",
-    summary: "A private two-agent duel entered through one expiring link.",
+    summary: "A private two-agent competition with timed rounds and one expiring entry link.",
     bestFor: "Challenge someone you know",
     rules: templates.friend_challenge,
   },
@@ -221,7 +248,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "playground",
     group: "quick_start",
     name: "Public freepass",
-    summary: "A short public exhibition where every agent faces every other agent.",
+    summary: "A public exhibition with repeated scheduled rounds and a visible sample target.",
     bestFor: "Fast demos and first competitions",
     rules: templates.playground,
   },
@@ -229,7 +256,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "sponsored_open",
     group: "quick_start",
     name: "Sponsored open",
-    summary: "A public league whose sponsor reward must be funded before play.",
+    summary: "A timed public league whose sponsor reward must be funded before play.",
     bestFor: "Open funded competitions",
     rules: templates.sponsored_open,
   },
@@ -237,7 +264,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "open_league",
     group: "advanced",
     name: "Open league",
-    summary: "A public fixed-roster league with one match against every opponent.",
+    summary: "A public fixed-roster league with repeated rounds against every opponent.",
     bestFor: "Community competitions",
     rules: templates.open_league,
   },
@@ -245,7 +272,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "duel_series",
     group: "advanced",
     name: "Duel series",
-    summary: "Two agents play three independently receipted matches.",
+    summary: "Two agents play scheduled receipted matches throughout the competition window.",
     bestFor: "Head-to-head challenges",
     rules: templates.duel_series,
   },
@@ -279,9 +306,19 @@ function validateRules(rules: TournamentRules): TournamentRules {
     ? rules.minEntries === 2 && rules.maxEntries === 2
     : true;
   const validReplacement = rules.resubmissionPolicy === "fixed" || rules.entryMode === "open";
+  const validVersionedRules = rules.templateVersion === 3
+    ? rules.duplicateStrategyPolicy === "reject_exact"
+      && rules.scheduleMode === "timed_rounds"
+      && Number.isInteger(rules.qualificationHands)
+      && (rules.qualificationHands ?? 0) >= 40
+      && (rules.qualificationHands ?? 0) <= 100_000
+    : rules.scheduleMode === undefined
+      && rules.qualificationHands === undefined
+      && (rules.templateVersion === 2
+        ? rules.duplicateStrategyPolicy === "reject_exact"
+        : rules.duplicateStrategyPolicy === undefined);
   if (
-    (rules.templateVersion === 2 && rules.duplicateStrategyPolicy !== "reject_exact")
-    || (rules.templateVersion === 1 && rules.duplicateStrategyPolicy !== undefined)
+    !validVersionedRules
     || !Number.isInteger(rules.minEntries)
     || !Number.isInteger(rules.maxEntries)
     || rules.minEntries < 2
@@ -310,8 +347,13 @@ export function parseTournamentRules(value: unknown): TournamentRules {
 export function resolveTournamentRules(input: {
   templateId: TournamentTemplateId;
   custom?: CustomTournamentRulesInput;
+  qualificationHands?: number;
 }): TournamentRules {
-  if (input.templateId !== "custom") return validateRules(structuredClone(templates[input.templateId]));
+  if (input.templateId !== "custom") {
+    const rules = structuredClone(templates[input.templateId]);
+    if (input.qualificationHands !== undefined) rules.qualificationHands = input.qualificationHands;
+    return validateRules(rules);
+  }
   if (!input.custom) throw new Error("CUSTOM_TOURNAMENT_RULES_REQUIRED");
   const minEntries = input.custom.pairingMode === "duel_series" ? 2 : input.custom.pairingMode === "gauntlet" ? 3 : 2;
   const maxEntries = input.custom.pairingMode === "duel_series" ? 2 : input.custom.maxEntries;
@@ -324,6 +366,8 @@ export function resolveTournamentRules(input: {
     maxEntries,
     handsPerMatch: input.custom.handsPerMatch,
     encountersPerPair: input.custom.encountersPerPair,
+    scheduleMode: "timed_rounds",
+    qualificationHands: input.custom.qualificationHands ?? input.qualificationHands ?? 1_000,
     resubmissionPolicy: input.custom.resubmissionPolicy,
     rewardPolicy: input.custom.rewardPolicy,
   });
@@ -349,6 +393,8 @@ export function buildTournamentSchedule(input: {
   rules: TournamentRules;
   entries: TournamentScheduleEntry[];
   benchmarkAgentId?: string;
+  startsAt?: Date;
+  endsAt?: Date;
 }): TournamentPairing[] {
   const rules = validateRules(input.rules);
   const entries = orderedEntries(input.entries);
@@ -372,8 +418,23 @@ export function buildTournamentSchedule(input: {
   }
 
   const pairings: TournamentPairing[] = [];
+  const timed = rules.templateVersion === 3;
+  const startsAt = input.startsAt;
+  const endsAt = input.endsAt;
+  if (timed && (!startsAt || !endsAt || !Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt)) {
+    throw new Error("TOURNAMENT_WINDOW_INVALID");
+  }
+  const decisionsPerAgentPerRound = rules.pairingMode === "gauntlet"
+    ? rules.handsPerMatch * 2
+    : Math.max(1, entries.length - 1) * rules.handsPerMatch * 2;
+  const roundCount = timed
+    ? Math.ceil((rules.qualificationHands ?? decisionsPerAgentPerRound) / decisionsPerAgentPerRound)
+    : rules.encountersPerPair;
   let sequence = 1;
-  for (let encounter = 0; encounter < rules.encountersPerPair; encounter += 1) {
+  for (let encounter = 0; encounter < roundCount; encounter += 1) {
+    const scheduledFor = timed && startsAt && endsAt
+      ? new Date(startsAt.getTime() + Math.floor(((endsAt.getTime() - startsAt.getTime()) * encounter) / roundCount))
+      : undefined;
     for (const [first, second] of basePairs) {
       const swap = encounter % 2 === 1;
       pairings.push({
@@ -381,6 +442,7 @@ export function buildTournamentSchedule(input: {
         leftAgentId: swap ? second.agentId : first.agentId,
         rightAgentId: swap ? first.agentId : second.agentId,
         hands: rules.handsPerMatch,
+        ...(timed ? { roundNumber: encounter + 1, scheduledFor } : {}),
       });
       sequence += 1;
     }
@@ -399,10 +461,21 @@ export function estimateTournamentWorkload(input: {
   const basePairings = rules.pairingMode === "gauntlet"
     ? input.entryCount - 1
     : (input.entryCount * (input.entryCount - 1)) / 2;
-  const pairingCount = basePairings * rules.encountersPerPair;
+  const decisionsPerAgentPerRound = rules.pairingMode === "gauntlet"
+    ? rules.handsPerMatch * 2
+    : Math.max(1, input.entryCount - 1) * rules.handsPerMatch * 2;
+  const roundCount = rules.templateVersion === 3
+    ? Math.ceil((rules.qualificationHands ?? decisionsPerAgentPerRound) / decisionsPerAgentPerRound)
+    : rules.encountersPerPair;
+  const pairingCount = basePairings * roundCount;
   return {
     entryCount: input.entryCount,
     pairingCount,
     totalHands: pairingCount * rules.handsPerMatch,
+    ...(rules.templateVersion === 3 ? {
+      roundCount,
+      decisionsPerAgent: roundCount * decisionsPerAgentPerRound,
+      qualificationHands: rules.qualificationHands,
+    } : {}),
   };
 }

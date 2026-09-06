@@ -68,6 +68,8 @@ export interface PublicArenaMatchView {
   createdAt: string;
 }
 
+export type PublicArenaMatchSummaryView = Omit<PublicArenaMatchView, "publicHandReceipts" | "selectiveReveal">;
+
 export interface PrivateArenaHandView {
   handNumber: number;
   seatSwapped: boolean;
@@ -117,6 +119,11 @@ export interface ArenaLeaderboardEntry {
 
 export interface PublicArenaView {
   matches: PublicArenaMatchView[];
+  leaderboard: ArenaLeaderboardEntry[];
+}
+
+export interface PublicArenaResultsView {
+  matches: PublicArenaMatchSummaryView[];
   leaderboard: ArenaLeaderboardEntry[];
 }
 
@@ -233,6 +240,13 @@ function publicView(record: ArenaMatchReceiptRecord, reveal?: ArenaMatchRevealRe
     selectiveReveal: reveal ? publicReveal(reveal) : undefined,
     createdAt: record.createdAt.toISOString(),
   };
+}
+
+function publicSummary(record: ArenaMatchReceiptRecord): PublicArenaMatchSummaryView {
+  const { publicHandReceipts: _privateReceiptStream, selectiveReveal: _participantReveal, ...summary } = publicView(record);
+  void _privateReceiptStream;
+  void _participantReveal;
+  return summary;
 }
 
 export class ArenaMatchService {
@@ -566,7 +580,24 @@ export class ArenaMatchService {
     }
   }
 
-  async getPublicMatch(projectId: string, matchId: string): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
+  async getPublicResults(projectId: string): Promise<ArenaMatchServiceResult<PublicArenaResultsView>> {
+    const arena = await this.getPublicArena(projectId);
+    if (!arena.ok) return arena;
+    return {
+      ok: true,
+      value: {
+        matches: arena.value.matches.map((match) => {
+          const { publicHandReceipts: _privateReceiptStream, selectiveReveal: _participantReveal, ...summary } = match;
+          void _privateReceiptStream;
+          void _participantReveal;
+          return summary;
+        }),
+        leaderboard: arena.value.leaderboard,
+      },
+    };
+  }
+
+  async getPublicMatch(projectId: string, matchId: string): Promise<ArenaMatchServiceResult<PublicArenaMatchSummaryView>> {
     const normalizedProjectId = projectId.trim();
     const normalizedMatchId = matchId.trim();
     if (!normalizedProjectId || !normalizedMatchId) return { ok: false, code: "INVALID_INPUT" };
@@ -574,7 +605,31 @@ export class ArenaMatchService {
       if (!(await this.repositories.getProject(normalizedProjectId))) return { ok: false, code: "PROJECT_NOT_FOUND" };
       const record = await this.repositories.getArenaMatchReceipt(normalizedProjectId, normalizedMatchId);
       if (!record) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
-      const reveal = await this.repositories.getArenaMatchReveal(normalizedProjectId, normalizedMatchId);
+      return { ok: true, value: publicSummary(record) };
+    } catch {
+      return { ok: false, code: "PERSISTENCE_FAILED" };
+    }
+  }
+
+  async getCompetitionMatch(input: {
+    projectId: string;
+    seasonId: string;
+    scheduledMatchId: string;
+    actorWalletAddress: string;
+  }): Promise<ArenaMatchServiceResult<PublicArenaMatchView>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    const scheduledMatchId = input.scheduledMatchId.trim();
+    if (!projectId || !seasonId || !scheduledMatchId) return { ok: false, code: "INVALID_INPUT" };
+    try {
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const entry = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(projectId, seasonId, actorFingerprint);
+      if (!entry) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      const scheduled = await this.repositories.getArenaScheduledMatch(projectId, seasonId, scheduledMatchId);
+      if (!scheduled?.matchId) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      const record = await this.repositories.getArenaMatchReceipt(projectId, scheduled.matchId);
+      if (!record) return { ok: false, code: "ARENA_MATCH_NOT_FOUND" };
+      const reveal = await this.repositories.getArenaMatchReveal(projectId, scheduled.matchId);
       return { ok: true, value: publicView(record, reveal) };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };

@@ -153,6 +153,9 @@
 .room-scoreboard dt { color: var(--ink-soft); font-family: var(--arena-mono); font-size: 7px; text-transform: uppercase; }
 .room-scoreboard dd { margin: 7px 0 0; overflow: hidden; font-size: 9px; font-weight: 750; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .room-console { border: 2px solid var(--ink); background: var(--paper-light); box-shadow: 9px 9px 0 var(--ink); }
+.room-privacy-gate { min-height: 62px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); background: color-mix(in srgb, var(--signal) 14%, var(--paper-light)); }
+.room-privacy-gate strong { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; }
+.room-privacy-gate span { max-width: 760px; color: var(--ink-soft); font-size: 11px; line-height: 1.45; text-align: right; }
 .room-tabs { min-height: 64px; display: flex; align-items: stretch; border-bottom: 2px solid var(--ink); }
 .room-tabs button { min-width: 150px; padding: 0 22px; border: 0; border-right: 1px solid var(--ink); background: transparent; color: var(--ink-soft); font-family: var(--arena-mono); font-size: 10px; text-transform: uppercase; cursor: pointer; }
 .room-tabs button.is-active { background: var(--ink); color: var(--signal); }
@@ -161,7 +164,9 @@
 .room-match-section-heading.is-history { margin-top: 18px; color: var(--ink-soft); }
 .room-match-section-heading span { color: var(--ink-soft); font-size: 7px; }
 .room-match { min-height: 92px; display: grid; grid-template-columns: 70px minmax(0, 1.4fr) minmax(130px, .6fr) 140px; align-items: stretch; border: 1px solid var(--ink); background: var(--paper); }
-.room-match:hover { background: #fff; }
+.room-match:hover { background: color-mix(in srgb, var(--paper-light) 86%, var(--signal)); }
+.room-match.is-public-result:hover { background: var(--paper); }
+.room-match.is-public-result .room-match-open { background: color-mix(in srgb, var(--ink) 86%, var(--paper)); color: var(--paper-light); }
 .room-match-index { display: grid; place-items: center; border-right: 1px solid var(--ink); color: var(--signal-dark); font-family: var(--arena-display); font-size: 24px; }
 .room-match-players { padding: 18px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 15px; align-items: center; }
 .room-match-players strong { overflow: hidden; font-family: var(--arena-display); font-size: clamp(13px, 1.4vw, 19px); text-overflow: ellipsis; white-space: nowrap; }
@@ -214,6 +219,8 @@
   .room-scoreboard dl { grid-template-columns: 1fr; }
   .room-scoreboard dl div { border-right: 0; border-bottom: 1px solid var(--rule); }
   .room-tabs { overflow-x: auto; }
+  .room-privacy-gate { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .room-privacy-gate span { text-align: left; }
   .room-tabs button { min-width: 120px; }
   .room-match-list { padding: 8px; }
   .room-match { min-height: 124px; grid-template-columns: 44px minmax(0, 1fr); }
@@ -223,6 +230,13 @@
   .room-match-open { grid-column: 1 / -1; min-height: 36px; padding: 8px; border-top: 1px solid var(--ink); border-left: 0; }
   .room-rules { grid-template-columns: 1fr; padding: 8px; }
 }
+
+.spectator-public-result { width: min(840px, calc(100% - 32px)); min-height: calc(100vh - 88px); margin: 0 auto; padding: clamp(70px, 12vh, 150px) 0; display: grid; place-items: start; align-content: center; }
+.spectator-public-result > span { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; }
+.spectator-public-result h1 { margin: 18px 0 28px; overflow-wrap: anywhere; font-family: var(--arena-display); font-size: clamp(34px, 7vw, 78px); line-height: 1; text-transform: uppercase; }
+.spectator-public-result > strong { font-family: var(--arena-display); font-size: clamp(22px, 4vw, 42px); text-transform: uppercase; }
+.spectator-public-result p { max-width: 680px; margin: 16px 0 0; color: var(--ink-soft); font-size: 14px; line-height: 1.6; }
+.spectator-public-result .room-primary { margin-top: 30px; }
 
 .spectator-page > main { width: min(1500px, calc(100% - 36px)); margin: 0 auto; padding-bottom: 100px; }
 .spectator-header { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); font-family: var(--arena-mono); font-size: 9px; text-transform: uppercase; }

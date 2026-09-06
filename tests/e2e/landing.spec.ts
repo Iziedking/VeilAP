@@ -36,6 +36,25 @@ test("dismisses the branded entry loader without trapping the page", async ({ pa
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
+test("notification bell reports an owned competition win from any arena page", async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.clear());
+  await page.route("**/api/profile/entries?**", route => route.fulfill({ json: { ok: true, value: { items: [{
+    projectId: "project-win",
+    seasonId: "season-win",
+    outcome: "won",
+    competition: { name: "Midnight League" },
+    entry: { agentId: "NIGHTJAR", displayName: "Nightjar" },
+  }], page: 1, pageSize: 20, total: 1, totalPages: 1 } } }));
+  await page.goto("/arena");
+
+  const bell = page.getByRole("button", { name: "Notifications, 1 unread" });
+  await expect(bell).toBeVisible();
+  await bell.click();
+  const panel = page.getByRole("region", { name: "Arena notifications" });
+  await expect(panel).toContainText("Competition won");
+  await expect(panel).toContainText("Nightjar finished first in Midnight League.");
+});
+
 test("routes arena and host work away from the landing page", async ({ page }) => {
   test.setTimeout(45_000);
   await page.goto("/arena", { waitUntil: "domcontentloaded" });

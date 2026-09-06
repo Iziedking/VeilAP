@@ -97,6 +97,7 @@ chmod 600 /opt/veil-arena/config/veil-arena.env
 | `VEILAP_RECEIPT_SIGNING_PUBLIC_KEY` | Published receipt verification key |
 | `VEILAP_ARENA_WORKER_SECRET` | Long internal worker secret |
 | `VEILAP_ARENA_WORKER_WALLET_ADDRESS` | Existing project company or reviewer wallet |
+| `VEILAP_ARENA_WORKER_CONCURRENCY` | Number of due matches claimed per worker tick, from `1` to `8`; defaults to `4` |
 | `X_OAUTH_CLIENT_ID` | X OAuth 2.0 confidential Web App client ID |
 | `X_OAUTH_CLIENT_SECRET` | Server-only X OAuth client secret |
 | `X_OAUTH_REDIRECT_URI` | Exact callback, `https://api.veilap.xyz/api/auth/x/callback` |

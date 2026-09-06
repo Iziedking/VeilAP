@@ -113,7 +113,10 @@ describe("ArenaMatchService", () => {
     expect(stored?.signedReceipt).toEqual(result.value.signedReceipt);
 
     const publicMatch = await service.getPublicMatch(projectId, result.value.matchId);
-    expect(publicMatch).toEqual(result);
+    expect(publicMatch.ok).toBe(true);
+    if (!publicMatch.ok) throw new Error(publicMatch.code);
+    expect(publicMatch.value).toMatchObject({ matchId: result.value.matchId, score: result.value.score, winner: result.value.winner });
+    expect(publicMatch.value).not.toHaveProperty("publicHandReceipts");
   });
 
   it("builds a public leaderboard from persisted receipts", async () => {
@@ -207,6 +210,16 @@ describe("ArenaMatchService", () => {
     expect(JSON.stringify(privateMatch.value)).not.toContain("rightHole");
     expect(JSON.stringify(privateMatch.value)).not.toContain("outcomes");
 
+    const competitionMatch = await service.getCompetitionMatch({
+      projectId,
+      seasonId,
+      scheduledMatchId,
+      actorWalletAddress: company,
+    });
+    expect(competitionMatch.ok).toBe(true);
+    if (!competitionMatch.ok) throw new Error(competitionMatch.code);
+    expect(competitionMatch.value.publicHandReceipts).toHaveLength(4);
+
     const unauthorized = await service.getPrivateMatch({
       projectId,
       seasonId,
@@ -214,6 +227,12 @@ describe("ArenaMatchService", () => {
       actorWalletAddress: contributor,
     });
     expect(unauthorized).toEqual({ ok: false, code: "ARENA_MATCH_NOT_FOUND" });
+    await expect(service.getCompetitionMatch({
+      projectId,
+      seasonId,
+      scheduledMatchId,
+      actorWalletAddress: contributor,
+    })).resolves.toEqual({ ok: false, code: "ARENA_MATCH_NOT_FOUND" });
   });
 
   it("selectively reveals one losing action with a real inclusion proof", async () => {

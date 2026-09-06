@@ -48,7 +48,7 @@ export async function GET(
 ) {
   try {
     const { projectId } = await context.params;
-    return serviceResponse(await getArenaMatchService().getPublicArena(projectId));
+    return serviceResponse(await getArenaMatchService().getPublicResults(projectId));
   } catch (error) {
     if (error instanceof Error && error.message === "CONFIGURATION_MISSING") {
       return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });

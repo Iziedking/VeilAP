@@ -91,6 +91,7 @@ describe("ArenaSeasonService", () => {
         maxEntries: 3,
         handsPerMatch: 5,
         encountersPerPair: 1,
+        qualificationHands: 40,
         resubmissionPolicy: "fixed",
         rewardPolicy: "optional",
       },
@@ -119,11 +120,21 @@ describe("ArenaSeasonService", () => {
     if (!locked.ok) throw new Error(locked.code);
     expect(locked.value.season.status).toBe("locked");
     expect(locked.value.entries.map((entry) => entry.agentId)).toEqual(["CINDER", "EMBER", "NOVA"]);
-    expect(locked.value.matches.map((match) => [match.sequence, match.leftAgentId, match.rightAgentId, match.hands])).toEqual([
-      [1, "CINDER", "EMBER", 5],
-      [2, "CINDER", "NOVA", 5],
-      [3, "EMBER", "NOVA", 5],
+    expect(locked.value.matches.map((match) => [match.sequence, match.roundNumber, match.leftAgentId, match.rightAgentId, match.hands])).toEqual([
+      [1, 1, "CINDER", "EMBER", 5],
+      [2, 1, "CINDER", "NOVA", 5],
+      [3, 1, "EMBER", "NOVA", 5],
+      [4, 2, "EMBER", "CINDER", 5],
+      [5, 2, "NOVA", "CINDER", 5],
+      [6, 2, "NOVA", "EMBER", 5],
     ]);
+    await expect(service.getScheduleForViewer({ projectId, seasonId: created.value.id })).resolves.toMatchObject({ ok: true, value: { matches: [] } });
+    const operatorSchedule = await service.getScheduleForViewer({ projectId, seasonId: created.value.id, actorWalletAddress: company });
+    expect(operatorSchedule.ok).toBe(true);
+    if (!operatorSchedule.ok) throw new Error(operatorSchedule.code);
+    expect(operatorSchedule.value.matches).toHaveLength(6);
+    expect(operatorSchedule.value.matches[0]?.id).toBe(locked.value.matches[0]?.id);
+    await expect(service.getScheduleForViewer({ projectId, seasonId: created.value.id, actorWalletAddress: address("9") })).resolves.toMatchObject({ ok: true, value: { matches: [] } });
 
     await expect(service.lockSeason({
       projectId,
@@ -176,8 +187,9 @@ describe("ArenaSeasonService", () => {
         pairingMode: "round_robin",
         entryMode: "invite_only",
         maxEntries: 2,
-        handsPerMatch: 2,
+        handsPerMatch: 20,
         encountersPerPair: 1,
+        qualificationHands: 40,
         resubmissionPolicy: "fixed",
         rewardPolicy: "optional",
       },
@@ -238,12 +250,16 @@ describe("ArenaSeasonService", () => {
         pairingMode: "duel_series",
         entryMode: "invite_only",
         maxEntries: 2,
-        handsPerMatch: 2,
+        handsPerMatch: 20,
         encountersPerPair: 1,
+        qualificationHands: 40,
         resubmissionPolicy: "fixed",
         rewardPolicy: "optional",
       },
       ...seasonInput,
+      startsAt: "2026-08-30T00:00:10.000Z",
+      locksAt: "2026-08-30T01:00:00.000Z",
+      endsAt: "2026-09-04T00:00:00.000Z",
     });
     if (!created.ok) throw new Error(created.code);
     for (const [agentId, key] of [["CINDER", "entry-cinder-3"], ["EMBER", "entry-ember-3"]] as const) {
@@ -282,7 +298,6 @@ describe("ArenaSeasonService", () => {
     expect(stored?.status).toBe("completed");
     expect(stored?.attempts).toBe(1);
 
-
     await expect(service.runScheduledMatch({
       projectId,
       seasonId: created.value.id,
@@ -297,7 +312,15 @@ describe("ArenaSeasonService", () => {
 
 it("reconciles a final-attempt receipt after a crash before terminal queue persistence", async () => {
   const { repositories, projectId, service, advance } = await setup();
-  const created = await service.createSeason({ projectId, actorWalletAddress: company, idempotencyKey: "crash-season-create", templateId: "friend_challenge", ...seasonInput });
+  const created = await service.createSeason({
+    projectId,
+    actorWalletAddress: company,
+    idempotencyKey: "crash-season-create",
+    templateId: "friend_challenge",
+    ...seasonInput,
+    startsAt: "2026-08-30T00:00:00.000Z",
+    locksAt: "2026-08-30T01:00:00.000Z",
+  });
   if (!created.ok) throw new Error(created.code);
   for (const agentId of ["CINDER", "EMBER"]) {
     const entered = await service.registerEntry({ projectId, seasonId: created.value.id, actorWalletAddress: contributor, agentId, idempotencyKey: "crash-entry-" + agentId });

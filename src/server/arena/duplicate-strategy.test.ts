@@ -132,6 +132,8 @@ for (const backend of ["memory", "postgres"] as const) {
         expect(a!.strategyFingerprint).not.toBe(b!.strategyFingerprint);
         const rules = { ...f.season.rulesSnapshot!, templateVersion: 1 as const };
         delete rules.duplicateStrategyPolicy;
+        delete rules.scheduleMode;
+        delete rules.qualificationHands;
         const legacy = { ...f.season, id: randomUUID(), rulesSnapshot: rules, templateVersion: 1, rulesCommitment: tournamentRulesCommitment(rules) };
         await f.repositories.saveArenaSeason(legacy);
         for (let i = 0; i < 2; i++) expect(await f.join(`0x${i + 5}`, `LEGACY_${i}`, "call", false, legacy.id)).toMatchObject({ ok: true });

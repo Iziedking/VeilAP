@@ -6,6 +6,7 @@ import {
   estimateTournamentWorkload,
   resolveTournamentRules,
   tournamentRulesCommitment,
+  type TournamentRules,
 } from "@/domain/arena/tournament-rules";
 
 const entries = [
@@ -15,18 +16,36 @@ const entries = [
   { agentId: "VAULT", joinedAt: new Date("2026-08-31T10:03:00.000Z") },
 ];
 
+function asLegacyV2(rules: TournamentRules, overrides: Partial<TournamentRules> = {}): TournamentRules {
+  const legacy = { ...rules, ...overrides, templateVersion: 2 as const };
+  delete legacy.scheduleMode;
+  delete legacy.qualificationHands;
+  return legacy;
+}
+
 describe("tournament rules", () => {
-  it("preserves version 1 commitments and requires an explicit rule on version 2", () => {
+  it("preserves version 1 and 2 commitments while requiring the versioned fields", () => {
     const rules = resolveTournamentRules({ templateId: "playground" });
-    expect(rules).toMatchObject({ templateVersion: 2, duplicateStrategyPolicy: "reject_exact" });
-    const old = { ...rules, templateVersion: 1 as const };
+    expect(rules).toMatchObject({
+      templateVersion: 3,
+      duplicateStrategyPolicy: "reject_exact",
+      scheduleMode: "timed_rounds",
+      qualificationHands: 500,
+    });
+    const versionTwo = asLegacyV2(rules);
+    expect(parseTournamentRules(versionTwo)).toEqual(versionTwo);
+    expect(tournamentRulesCommitment(parseTournamentRules(versionTwo))).toBe(tournamentRulesCommitment(versionTwo));
+    const old = { ...versionTwo, templateVersion: 1 as const };
     delete old.duplicateStrategyPolicy;
     expect(parseTournamentRules(old)).toEqual(old);
     expect(tournamentRulesCommitment(parseTournamentRules(old))).toBe(tournamentRulesCommitment(old));
     expect(parseTournamentRules(old)).not.toHaveProperty("duplicateStrategyPolicy");
-    const incomplete = { ...rules };
+    const incomplete = { ...versionTwo };
     delete incomplete.duplicateStrategyPolicy;
     expect(() => parseTournamentRules(incomplete)).toThrow("TOURNAMENT_RULES_INVALID");
+    const incompleteTimed = { ...rules };
+    delete incompleteTimed.qualificationHands;
+    expect(() => parseTournamentRules(incompleteTimed)).toThrow("TOURNAMENT_RULES_INVALID");
   });
 
   it("resolves immutable privacy rules for every preset", () => {
@@ -39,7 +58,7 @@ describe("tournament rules", () => {
   });
 
   it("builds a deterministic round robin and estimates its exact workload", () => {
-    const rules = resolveTournamentRules({ templateId: "open_league" });
+    const rules = asLegacyV2(resolveTournamentRules({ templateId: "open_league" }), { handsPerMatch: 12 });
     const schedule = buildTournamentSchedule({ rules, entries });
     expect(schedule).toHaveLength(6);
     expect(schedule[0]).toEqual({ sequence: 1, leftAgentId: "NIGHTJAR", rightAgentId: "CINDER", hands: 12 });
@@ -51,7 +70,7 @@ describe("tournament rules", () => {
   });
 
   it("runs a three-match duel without exposing either policy", () => {
-    const rules = resolveTournamentRules({ templateId: "duel_series" });
+    const rules = asLegacyV2(resolveTournamentRules({ templateId: "duel_series" }), { encountersPerPair: 3 });
     const schedule = buildTournamentSchedule({ rules, entries: entries.slice(0, 2) });
     expect(schedule.map((match) => [match.leftAgentId, match.rightAgentId])).toEqual([
       ["NIGHTJAR", "CINDER"],
@@ -72,14 +91,16 @@ describe("tournament rules", () => {
     });
   });
 
-  it("builds the champion challenge as a private three-match benchmark", () => {
+  it("builds the champion challenge as a timed private benchmark", () => {
     expect(resolveTournamentRules({ templateId: "champion_challenge" })).toMatchObject({
       entryMode: "invite_only",
       pairingMode: "duel_series",
       minEntries: 2,
       maxEntries: 2,
-      encountersPerPair: 3,
-      handsPerMatch: 12,
+      encountersPerPair: 1,
+      handsPerMatch: 20,
+      scheduleMode: "timed_rounds",
+      qualificationHands: 1_000,
       rewardPolicy: "optional",
     });
   });
@@ -93,7 +114,7 @@ describe("tournament rules", () => {
   });
 
   it("requires an enrolled benchmark for a gauntlet", () => {
-    const rules = resolveTournamentRules({ templateId: "benchmark_gauntlet" });
+    const rules = asLegacyV2(resolveTournamentRules({ templateId: "benchmark_gauntlet" }));
     expect(() => buildTournamentSchedule({ rules, entries })).toThrow("TOURNAMENT_BENCHMARK_REQUIRED");
     const schedule = buildTournamentSchedule({ rules, entries, benchmarkAgentId: "ORBIT" });
     expect(schedule).toHaveLength(3);
@@ -116,8 +137,11 @@ describe("tournament rules", () => {
     expect(rules.templateId).toBe("custom");
     expect(estimateTournamentWorkload({ rules, entryCount: 4 })).toEqual({
       entryCount: 4,
-      pairingCount: 12,
-      totalHands: 240,
+      pairingCount: 54,
+      totalHands: 1_080,
+      roundCount: 9,
+      decisionsPerAgent: 1_080,
+      qualificationHands: 1_000,
     });
   });
 

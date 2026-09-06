@@ -96,6 +96,7 @@ type ScheduledMatch = {
   id: string;
   seasonId: string;
   sequence: number;
+  roundNumber?: number;
   hands: number;
   leftAgentId: string;
   rightAgentId: string;
@@ -249,8 +250,9 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [entryMode, setEntryMode] = useState<Season["entryMode"]>("open");
   const [maxEntries, setMaxEntries] = useState("8");
   const [customPairingMode, setCustomPairingMode] = useState<TournamentPairingMode>("round_robin");
-  const [customHands, setCustomHands] = useState("8");
-  const [customEncounters, setCustomEncounters] = useState("1");
+  const [customHands, setCustomHands] = useState("20");
+  const customEncounters = "1";
+  const [qualificationHands, setQualificationHands] = useState("500");
   const [customResubmission, setCustomResubmission] = useState<TournamentResubmissionPolicy>("replace_until_lock");
   const [customReward, setCustomReward] = useState<TournamentRewardPolicy>("optional");
   const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
@@ -271,6 +273,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     try {
       return resolveTournamentRules({
         templateId,
+        qualificationHands: Number(qualificationHands),
         custom: templateId === "custom" ? {
           pairingMode: customPairingMode,
           entryMode,
@@ -279,12 +282,13 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
           encountersPerPair: Number(customEncounters),
           resubmissionPolicy: customResubmission,
           rewardPolicy: customReward,
+          qualificationHands: Number(qualificationHands),
         } : undefined,
       });
     } catch {
       return null;
     }
-  }, [customEncounters, customHands, customPairingMode, customResubmission, customReward, entryMode, maxEntries, templateId]);
+  }, [customHands, customPairingMode, customResubmission, customReward, entryMode, maxEntries, qualificationHands, templateId]);
 
   useEffect(() => () => fundingAccount?.unsubscribeChange?.(), [fundingAccount]);
 
@@ -458,6 +462,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
           locksAt: locks,
           endsAt: ends,
           templateId,
+          qualificationHands: Number(qualificationHands),
           customRules: templateId === "custom" ? {
             pairingMode: customPairingMode,
             entryMode,
@@ -466,6 +471,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
             encountersPerPair: Number(customEncounters),
             resubmissionPolicy: customResubmission,
             rewardPolicy: customReward,
+            qualificationHands: Number(qualificationHands),
           } : undefined,
         }),
       });
@@ -978,7 +984,10 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                         key={template.id}
                         className={`operator-template-card ${templateId === template.id ? "is-selected" : ""}`}
                         aria-pressed={templateId === template.id}
-                        onClick={() => setTemplateId(template.id)}
+                        onClick={() => {
+                          setTemplateId(template.id);
+                          if (template.rules?.qualificationHands) setQualificationHands(String(template.rules.qualificationHands));
+                        }}
                       >
                         <span>{template.name}</span>
                         <strong>{template.summary}</strong>
@@ -1005,7 +1014,10 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                           key={template.id}
                           className={`operator-template-card ${templateId === template.id ? "is-selected" : ""}`}
                           aria-pressed={templateId === template.id}
-                          onClick={() => setTemplateId(template.id)}
+                          onClick={() => {
+                            setTemplateId(template.id);
+                            if (template.rules?.qualificationHands) setQualificationHands(String(template.rules.qualificationHands));
+                          }}
                         >
                           <span>{template.name}</span>
                           <strong>{template.summary}</strong>
@@ -1019,6 +1031,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 <label>STARTS AT<input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required /></label>
                 <label>LOCKS AT<input type="datetime-local" value={locksAt} onChange={(event) => setLocksAt(event.target.value)} required /></label>
                 <label>ENDS AT<input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required /></label>
+                <label>QUALIFICATION SAMPLE<select value={qualificationHands} onChange={(event) => setQualificationHands(event.target.value)}><option value="100">100 DECISIONS / QUICK TEST</option><option value="500">500 DECISIONS / EXHIBITION</option><option value="1000">1,000 DECISIONS / CHALLENGE</option><option value="5000">5,000 DECISIONS / LEAGUE</option><option value="20000">20,000 DECISIONS / PRIZE SEASON</option></select><small>Veil Arena calculates repeated rounds from the final roster and spreads them across the competition window.</small></label>
                 {templateId === "custom" ? <>
                   <label>PAIRING STYLE<select value={customPairingMode} onChange={(event) => setCustomPairingMode(event.target.value as TournamentPairingMode)}><option value="round_robin">EVERY AGENT MEETS</option><option value="duel_series">TWO-AGENT SERIES</option><option value="gauntlet">BENCHMARK GAUNTLET</option></select></label>
                   <label>WHO CAN ENTER<select value={entryMode} onChange={(event) => {
@@ -1028,14 +1041,13 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                   }}><option value="open">ANY SIGNED-IN WALLET</option><option value="invite_only">PRIVATE LINK HOLDERS</option></select></label>
                   <label>ENTRY LIMIT<input type="number" min="2" max="32" value={maxEntries} onChange={(event) => setMaxEntries(event.target.value)} required /></label>
                   <label>HANDS PER MATCH<input type="number" min="1" max="100" value={customHands} onChange={(event) => setCustomHands(event.target.value)} required /></label>
-                  <label>MEETINGS PER PAIR<input type="number" min="1" max="5" value={customEncounters} onChange={(event) => setCustomEncounters(event.target.value)} required /></label>
                   <label>AGENT UPDATES<select value={customResubmission} onChange={(event) => setCustomResubmission(event.target.value as TournamentResubmissionPolicy)}><option value="replace_until_lock" disabled={entryMode === "invite_only"}>REPLACE UNTIL LOCK</option><option value="fixed">FIXED AFTER ENTRY</option></select></label>
                   <label>REWARD RULE<select value={customReward} onChange={(event) => setCustomReward(event.target.value as TournamentRewardPolicy)}><option value="optional">OPTIONAL REWARD</option><option value="funded_before_start">FUND BEFORE PLAY</option></select></label>
                 </> : null}
                 {draftRules ? <div className="operator-rule-preview" role="status">
                   <span>{draftRules.pairingMode.replaceAll("_", " ").toUpperCase()}</span>
-                  <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} hands / {draftRules.encountersPerPair} meeting{draftRules.encountersPerPair === 1 ? "" : "s"}</strong>
-                  <small>One entry per exact strategy. Renaming a package does not create a different strategy. Strategies stay sealed. Only the losing committed action may be revealed.</small>
+                  <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} duplicate deals per match / {(draftRules.qualificationHands ?? 0).toLocaleString()} decisions to qualify</strong>
+                  <small>Rounds are scheduled from start to end after the roster locks. One entry per exact strategy. Strategies and detailed table playback stay sealed from non-participants.</small>
                 </div> : <div className="operator-rule-preview is-error" role="alert">The custom limits do not form a valid tournament.</div>}
                 <button className="operator-button operator-button-dark" type="submit" disabled={busy !== ""}>{busy === "create" ? "PUBLISHING" : "PUBLISH COMPETITION"}<span>+</span></button>
               </form>

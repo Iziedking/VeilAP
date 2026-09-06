@@ -2,7 +2,7 @@ import { arenaMatchStartsAt } from "./match-schedule";
 
 export const MAX_MATCH_ATTEMPTS = 3;
 export const MATCH_LEASE_MS = 120_000;
-export type QueueRecord = { status: string; attempts: number; createdAt: Date; sequence: number; leaseExpiresAt?: Date; retryAt?: Date; startedAt?: Date };
+export type QueueRecord = { status: string; attempts: number; createdAt: Date; sequence: number; scheduledFor?: Date; leaseExpiresAt?: Date; retryAt?: Date; startedAt?: Date };
 export function retryAt(now: Date, attempts: number): Date { return new Date(now.getTime() + Math.min(60_000, 5_000 * 2 ** Math.max(0, attempts - 1))); }
 export function eligibleMatch(match: QueueRecord, now: Date): boolean {
   if (match.status === "running") return !match.leaseExpiresAt || match.leaseExpiresAt <= now;

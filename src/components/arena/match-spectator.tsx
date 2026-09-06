@@ -14,6 +14,7 @@ import {
   type ScheduledMatch,
 } from "@/components/arena/arena-types";
 import { apiFetch } from "@/lib/api/client";
+import { recordArenaNotification } from "@/components/arena/arena-notification-bell";
 
 type LoadState = "loading" | "ready" | "reconnecting";
 
@@ -247,7 +248,19 @@ function MatchSpectatorView({
         const body = await response.json() as ApiEnvelope<CompetitionSchedule>;
         if (!response.ok || !body.ok) throw new Error("SCHEDULE_UNAVAILABLE");
         const match = body.value.matches.find((candidate) => candidate.id === scheduledMatchId);
-        if (!match) throw new Error("MATCH_NOT_FOUND");
+        if (!match) {
+          if (!active || generation !== requestGeneration) return;
+          setSchedule(body.value);
+          setScheduledMatch(null);
+          setReceipt(null);
+          setPrivateMatch(null);
+          setViewerEntry(null);
+          setViewerUsername(null);
+          setViewerProfileImageUrl(null);
+          failures = 0;
+          setState("ready");
+          return;
+        }
         let publicMatch: PublicMatch | null = null;
         if (match.matchId) {
           const matchResponse = await request(`/api/projects/${encodeURIComponent(projectId)}/matches/${encodeURIComponent(match.matchId)}`);
@@ -265,6 +278,19 @@ function MatchSpectatorView({
         } catch {
           privateEntry = null;
           privateUnavailable = true;
+        }
+
+        if (privateEntry && match.matchId) {
+          try {
+            const receiptResponse = await request(
+              `/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(seasonId)}/matches/${encodeURIComponent(scheduledMatchId)}/receipt`,
+            );
+            const receiptBody = await receiptResponse.json() as ApiEnvelope<PublicMatch>;
+            if (receiptResponse.ok && receiptBody.ok && receiptBody.value) publicMatch = receiptBody.value;
+            else if (receiptResponse.status >= 500) privateUnavailable = true;
+          } catch {
+            privateUnavailable = true;
+          }
         }
 
         let privateUsername: string | null = null;
@@ -356,6 +382,24 @@ function MatchSpectatorView({
   }, [playTableSound, scheduledMatch?.status]);
 
   useEffect(() => {
+    if (!receipt || !viewerEntry || typeof window === "undefined") return;
+    const notificationKey = `veil-arena:match-result:${receipt.matchId}:${viewerEntry.agentId}`;
+    try {
+      if (window.sessionStorage.getItem(notificationKey)) return;
+      const tied = receipt.winner === "tie";
+      const won = receipt.winner === viewerEntry.agentId;
+      recordArenaNotification({
+        title: tied ? "Match tied" : won ? "Match won" : "Match completed",
+        body: tied ? `${viewerEntry.displayName} finished level.` : won ? `${viewerEntry.displayName} won this scheduled match.` : `${viewerEntry.displayName} has a new result.`,
+        href: `/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`,
+      });
+      window.sessionStorage.setItem(notificationKey, "recorded");
+    } catch {
+      // Result notifications are a browser convenience and never gate match access.
+    }
+  }, [projectId, receipt, seasonId, viewerEntry]);
+
+  useEffect(() => {
     if (!currentHand) return;
     const handKey = `${currentHand.handCommitment}:${activeIndex}`;
     if (lastPlayedHand.current === handKey) return;
@@ -386,6 +430,9 @@ function MatchSpectatorView({
 
   if (state === "loading") {
     return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-loading"><i /><strong>Opening the sealed table</strong></main></div>;
+  }
+  if (schedule && !scheduledMatch) {
+    return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-error"><strong>This table room is private to competition entrants.</strong><p>Public visitors can see completed results and the competition leaderboard.</p><Link href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`}>View public competition results</Link></main></div>;
   }
   if (!schedule || !scheduledMatch) {
     return <div className="hub-page"><ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" /><main className="room-error"><strong role="status">Reconnecting to the match. Retrying automatically.</strong><Link href={`/arena/${projectId}/${seasonId}`}>Back to the competition</Link></main></div>;
@@ -439,6 +486,21 @@ function MatchSpectatorView({
     ? arenaMatchCountdownMs(scheduledMatch.startsAt, nowMs)
     : null;
 
+  if (!viewerEntry) {
+    return (
+      <div className="hub-page spectator-page">
+        <ArenaNav backHref={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`} backLabel="Competition" />
+        <main className="spectator-public-result">
+          <span>PUBLIC RESULT</span>
+          <h1>{leftName} vs {rightName}</h1>
+          {receipt ? <><strong>{matchWinner ? `${matchWinner} won` : "Match tied"}</strong><p>Final score {leftName} {receipt.score[scheduledMatch.leftAgentId] ?? 0} · {rightName} {receipt.score[scheduledMatch.rightAgentId] ?? 0}</p></> : <strong>Result pending</strong>}
+          <p>Detailed table playback is private to wallets that entered this competition. Strategies, cards, actions, and reasoning remain sealed.</p>
+          <Link className="room-primary" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(seasonId)}`}>View competition leaderboard</Link>
+        </main>
+      </div>
+    );
+  }
+
   const renderSeat = ({
     side,
     agentId,
@@ -457,7 +519,7 @@ function MatchSpectatorView({
       <article className={`spectator-seat ${side === "A" ? "is-left" : "is-right"} ${yours ? "is-yours" : "is-sealed"}`}>
         <header>
           <span>SEAT {side}</span>
-          <b>{yours ? "YOUR AGENT" : privateView ? "SEALED OPPONENT" : "PUBLIC SEAT"}</b>
+          <b>{yours ? "YOUR AGENT" : privateView ? "SEALED OPPONENT" : "SEALED TABLE"}</b>
         </header>
         <div className="spectator-seat-identity">
           <SpectatorAvatar
@@ -511,9 +573,9 @@ function MatchSpectatorView({
 
         {state === "reconnecting" ? <p role="status">Reconnecting. The last public update may be stale; private cards are unavailable until refreshed.</p> : null}
         {receipt ? <p className="spectator-score-note">{receipt.receiptVersion === 2 ? "Final scores are public. Intermediate scores stay private because they can disclose actions." : "Legacy receipt: public commitments and per-hand scores may disclose actions."}</p> : null}
-        <div className={`spectator-room-banner ${privateView ? "is-private" : "is-public"}`}>
-          <div><i /> <strong>{privateView ? "PRIVATE PLAYER VIEW" : "PUBLIC BROADCAST"}</strong></div>
-          <span>{privateView ? "Your seat is highlighted. Verified cards appear only after your match result is available; opponent cards remain sealed." : "Results, timing, and proof are public. Agent strategy and cards remain sealed."}</span>
+        <div className="spectator-room-banner is-private">
+          <div><i /> <strong>{privateView ? "PRIVATE PLAYER VIEW" : "COMPETITION ENTRANT VIEW"}</strong></div>
+          <span>{privateView ? "Your seat is highlighted. Verified cards appear only after your match result is available; opponent cards remain sealed." : "Your wallet entered this competition. You can replay this table while both agents' cards and actions remain sealed."}</span>
         </div>
 
         {receipt ? (

@@ -18,6 +18,69 @@ const scheduled = (id: string, status: ArenaScheduledMatchRecord["status"]): Are
 });
 
 describe("ArenaWorkerService", () => {
+  it("runs due tables concurrently within the configured batch limit", async () => {
+    let active = 0;
+    let peak = 0;
+    const completed: string[] = [];
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [],
+        listArenaScheduledMatches: async () => [
+          scheduled("match-1", "scheduled"),
+          scheduled("match-2", "scheduled"),
+          scheduled("match-3", "scheduled"),
+        ],
+      },
+      seasonService: {
+        runScheduledMatch: async (input: { scheduledMatchId: string }) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          active -= 1;
+          completed.push(input.scheduledMatchId);
+          return { ok: true, value: { matchId: `receipt-${input.scheduledMatchId}` } as never };
+        },
+      },
+      workerWalletAddress: "0xworker",
+      maxConcurrentMatches: 2,
+    });
+
+    const result = await service.runDueBatch({ projectId: "project-1", seasonId: "season-1" });
+    expect(result.status).toBe("completed");
+    expect(result.results).toHaveLength(2);
+    expect(peak).toBe(2);
+    expect(completed.sort()).toEqual(["match-1", "match-2"]);
+  });
+
+  it("shares a global batch across due competitions before taking another table", async () => {
+    const calls: string[] = [];
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [
+          { projectId: "project-one", id: "season-one", status: "locked", lockedAt: new Date("2026-08-30T00:01:00.000Z"), createdAt: new Date("2026-08-30T00:00:00.000Z") },
+          { projectId: "project-two", id: "season-two", status: "locked", lockedAt: new Date("2026-08-30T00:02:00.000Z"), createdAt: new Date("2026-08-30T00:00:00.000Z") },
+        ] as never,
+        listArenaScheduledMatches: async (projectId) => [1, 2, 3].map((sequence) => ({
+          ...scheduled(`match-${sequence}`, "scheduled"),
+          projectId,
+          seasonId: projectId === "project-one" ? "season-one" : "season-two",
+        })),
+      },
+      seasonService: {
+        runScheduledMatch: async (input: { projectId: string; scheduledMatchId: string }) => {
+          calls.push(`${input.projectId}:${input.scheduledMatchId}`);
+          return { ok: true, value: { matchId: `receipt-${input.projectId}-${input.scheduledMatchId}` } as never };
+        },
+      },
+      workerWalletAddress: "0xworker",
+      maxConcurrentMatches: 3,
+    });
+
+    const result = await service.runDueBatch();
+    expect(result.status).toBe("completed");
+    expect(calls).toEqual(["project-one:match-1", "project-two:match-1", "project-one:match-2"]);
+  });
+
   it("runs the next scheduled pairing with a stable worker idempotency key", async () => {
     const calls: Array<{ scheduledMatchId: string; actorWalletAddress: string; idempotencyKey: string }> = [];
     const service = new ArenaWorkerService({

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   try {
     const body = bodySchema.parse(await readJsonBody(request));
-    const result = await getArenaWorkerService().runNext({
+    const result = await getArenaWorkerService().runDueBatch({
       projectId: body.projectId,
       seasonId: body.seasonId,
     });

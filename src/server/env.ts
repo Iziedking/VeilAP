@@ -15,6 +15,7 @@ export interface VeilapServerConfig {
   receiptSigningPublicKey?: string;
   arenaWorkerSecret?: string;
   arenaWorkerWalletAddress?: string;
+  arenaWorkerConcurrency?: number;
   xOAuthClientId?: string;
   xOAuthClientSecret?: string;
   xOAuthRedirectUri?: string;
@@ -34,6 +35,11 @@ const REQUIRED_PERSISTED_VARS = [
 
 function hasStrongSecret(value: string | undefined): boolean {
   return Boolean(value && value.length >= 64);
+}
+
+function workerConcurrency(value: string | undefined): number {
+  const parsed = Number(value ?? "4");
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 8 ? parsed : 4;
 }
 
 export function isLoopbackOrigin(origin: string): boolean {
@@ -76,6 +82,7 @@ export function readServerConfig(
     receiptSigningPublicKey: env.VEILAP_RECEIPT_SIGNING_PUBLIC_KEY,
     arenaWorkerSecret: env.VEILAP_ARENA_WORKER_SECRET,
     arenaWorkerWalletAddress: env.VEILAP_ARENA_WORKER_WALLET_ADDRESS,
+    arenaWorkerConcurrency: workerConcurrency(env.VEILAP_ARENA_WORKER_CONCURRENCY),
     xOAuthClientId: env.X_OAUTH_CLIENT_ID,
     xOAuthClientSecret: env.X_OAUTH_CLIENT_SECRET,
     xOAuthRedirectUri: env.X_OAUTH_REDIRECT_URI,

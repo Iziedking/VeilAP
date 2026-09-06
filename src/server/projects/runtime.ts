@@ -109,6 +109,7 @@ export function getArenaWorkerService(): ArenaWorkerService {
     repositories: getAuthRepositories().projects,
     seasonService: getArenaSeasonService(),
     workerWalletAddress: config.arenaWorkerWalletAddress,
+    maxConcurrentMatches: config.arenaWorkerConcurrency,
   });
 }
 
