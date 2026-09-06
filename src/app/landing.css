@@ -7,9 +7,11 @@
   color: var(--ink);
 }
 
-.sign-in-header { display: flex; align-items: center; justify-content: space-between; }
+.sign-in-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.sign-in-header-actions { display: flex; align-items: center; gap: 18px; }
+.sign-in-header-actions .hub-theme-toggle { min-height: 44px; }
 .sign-in-header > a { min-height: 44px; display: flex; align-items: center; }
-.sign-in-header > a:last-child { font-size: 10px; font-weight: 700; }
+.sign-in-header-actions > a { min-height: 44px; display: flex; align-items: center; font-size: 10px; font-weight: 700; }
 .sign-in-main { width: min(1120px, 100%); margin: 40px auto; display: grid; grid-template-columns: 1fr 440px; gap: 90px; align-items: center; }
 .sign-in-copy span { color: var(--signal-dark); font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
 .sign-in-copy h1 { max-width: 650px; margin: 26px 0 0; font-size: clamp(54px, 6vw, 88px); font-weight: 530; line-height: .95; letter-spacing: -.06em; }
@@ -62,6 +64,8 @@
 
 @media (max-width: 760px) {
   .sign-in-page { padding: 20px 16px; }
+  .sign-in-header-actions { gap: 10px; }
+  .sign-in-header-actions .hub-theme-toggle { padding-inline: 8px; font-size: 7px; }
   .sign-in-main { margin-top: 70px; display: block; }
   .sign-in-panel { margin-top: 60px; box-shadow: 6px 6px 0 var(--ink); }
 }

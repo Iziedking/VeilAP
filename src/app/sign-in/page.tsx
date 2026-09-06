@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { VeilLogo } from "@/components/veil-logo";
 import { WalletSessionButton } from "@/components/wallet/wallet-session-button";
+import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
 
 export const metadata = {
   title: "Sign in | Veil Arena",
@@ -24,7 +25,10 @@ export default async function SignInPage({
     <div className="sign-in-page">
       <header className="sign-in-header">
         <Link href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
-        <Link href="/">Back to home</Link>
+        <div className="sign-in-header-actions">
+          <ArenaThemeToggle />
+          <Link href="/">Back to home</Link>
+        </div>
       </header>
       <main className="sign-in-main">
         <div className="sign-in-copy">

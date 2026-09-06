@@ -46,6 +46,32 @@ test("optional-reward entry stays testable without X verification", async ({ pag
   await expect(page.getByText("Optional Bot is sealed.")).toBeVisible();
 });
 
+test("optional-reward entry offers X connection when configured", async ({ page }) => {
+  const now = new Date();
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/auth/session") {
+      return route.fulfill({ json: { ok: true, value: { walletAddress: "0x123", xVerification: { configured: true, identity: null } } } });
+    }
+    if (path.endsWith(`/projects/${projectId}/seasons`)) {
+      return route.fulfill({ json: { ok: true, value: [{
+        id: seasonId, projectId, name: "Judge Playground", rulesetVersion: "holdem-sealed-v0.3",
+        startsAt: new Date(now.getTime() - 60_000).toISOString(), locksAt: new Date(now.getTime() + 3_600_000).toISOString(), endsAt: new Date(now.getTime() + 7_200_000).toISOString(),
+        status: "open", entryMode: "open", maxEntries: 8, entryCount: 0, prizeStatus: "unknown",
+        rules: { resubmissionPolicy: "replace_until_lock", rewardPolicy: "optional", pairingMode: "round_robin", handsPerMatch: 8, encountersPerPair: 1, revealPolicy: "loser_action_only" },
+      }] } });
+    }
+    if (path === "/api/profile/agents") return route.fulfill({ json: { ok: true, value: [] } });
+    if (path.endsWith(`/projects/${projectId}/seasons/${seasonId}/join`)) return route.fulfill({ json: { ok: true, value: null } });
+    return route.fulfill({ json: { ok: true, value: null } });
+  });
+
+  await page.goto(`/play?project=${projectId}&season=${seasonId}`);
+  await expect(page.getByRole("button", { name: "CONNECT X ACCOUNT" })).toBeVisible();
+  await expect(page.getByText("X ACCOUNT OPTIONAL FOR THIS MODE")).toBeVisible();
+});
+
 test("profile-save configuration failures keep the reviewed package available", async ({ page }) => {
   await page.route("**/api/**", async (route) => {
     const request = route.request();

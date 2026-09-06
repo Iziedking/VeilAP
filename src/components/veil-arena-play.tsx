@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 
 import { VeilLogo } from "@/components/veil-logo";
 import { XMark } from "@/components/brand/x-mark";
+import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
 import {
   agentPackageCommitment,
   parseAgentPackage,
@@ -733,11 +734,14 @@ export function VeilArenaPlay({
       <header className="play-nav">
         <Link className="play-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
         <Link className="play-back" href={invitationToken ? "/arena" : "/"}>← {invitationToken ? "Back to arena" : "Back to home"}</Link>
-        <nav aria-label="Player navigation">
-          <Link href="/arena">Watch arena</Link>
-          <Link href="/sign-in">Wallet access</Link>
-          <Link href="/profile">Profile</Link>
-        </nav>
+        <div className="play-nav-actions">
+          <nav aria-label="Player navigation">
+            <Link href="/arena">Watch arena</Link>
+            <Link href="/sign-in">Wallet access</Link>
+            <Link href="/profile">Profile</Link>
+          </nav>
+          <ArenaThemeToggle />
+        </div>
       </header>
 
       <main>
@@ -984,8 +988,24 @@ export function VeilArenaPlay({
                 )}
                 {sessionState === "authenticated" && !selectedSeasonRequiresX && (
                   <div className="play-wallet-state">
-                    <span>X ACCOUNT OPTIONAL FOR THIS MODE</span>
-                    <small>Wallet access is enough to test exhibition and optional-reward competitions. Connect X later if you want to associate an account.</small>
+                    <div>
+                      <span>X ACCOUNT OPTIONAL FOR THIS MODE</span>
+                      <small>Wallet access is enough to test exhibition and optional-reward competitions. Connect X if you want to associate an account.</small>
+                    </div>
+                    {xIdentity ? (
+                      <div className="play-x-optional-identity">
+                        <span className="play-x-label"><XMark /> @{xIdentity.username}</span>
+                        {xConfigured ? (
+                          <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
+                            [ {xConnecting ? "OPENING X" : "REFRESH X PROFILE"} ]
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : xConfigured ? (
+                      <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
+                        [ {xConnecting ? "OPENING X" : "CONNECT X ACCOUNT"} ]
+                      </button>
+                    ) : null}
                   </div>
                 )}
                 {xMessage && <p className="play-claim-status" role="status">{xMessage}</p>}
