@@ -86,6 +86,7 @@ Null Jack is Veil Arena's real deterministic system champion, stored through the
 - Completed matches offer a real public receipt replay. Every replay step says which decision receipt is open, which paired deal it belongs to, and whether it is the first or second seat run. A tied decision cannot be mistaken for a tied match.
 - A countdown at zero says the table is ready for the worker rather than pretending execution has started. A worker delay is visible as a ready/queued state until the claim is persisted.
 - Sponsor amounts are entered in normal token units (for example, `10.00` USDC); the desk converts them exactly to minor units before saving and shows both representations when reviewing the funding plan.
+- Sponsor setup offers only canonical Starknet Mainnet STRK or USDC. The sponsor wallet reviews and approves the exact selected token and amount; after verified completion, settlement transfers the reward privately to the winning participant wallet recorded at entry.
 - Failed requests explain what failed and provide retry or back navigation.
 - A Starknet wallet is the root account identity. Connecting X is the final participant check before a new or improved agent can enter a competition.
 - X verification proves control of a real X account through OAuth. It does not require a paid badge and it does not grant Veil Arena permission to post, follow, or read private messages.
