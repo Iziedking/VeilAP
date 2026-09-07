@@ -113,7 +113,7 @@
 .operator-reward-note { min-height: 44px; padding: 11px 13px; display: grid; gap: 5px; border-left: 4px solid var(--signal); background: rgba(242,165,114,.12); }
 .operator-reward-note strong, .operator-freepass-note strong { font-family: var(--arena-display); font-size: 13px; text-transform: uppercase; }
 .operator-freepass-note { grid-column: 1 / -1; padding: 13px 15px; display: grid; gap: 5px; border-left: 4px solid var(--green); background: rgba(102,135,108,.1); }
-.operator-funding-toggle { min-height: 58px; padding: 12px 14px; display: grid !important; grid-template-columns: 24px 24px 1fr; align-items: center; gap: 10px; border: 1px solid var(--ink); background: var(--paper); cursor: pointer; }
+.operator-funding-toggle { min-height: 58px; padding: 12px 14px; display: grid !important; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 10px; border: 1px solid var(--ink); background: var(--paper); cursor: pointer; }
 .operator-funding-toggle input {
   position: absolute;
   width: 1px;
