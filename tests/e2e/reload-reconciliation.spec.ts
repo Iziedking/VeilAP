@@ -4,9 +4,7 @@ test("redirects the retired workspace into the real player journey", async ({ pa
   await page.goto("/workspace");
 
   await expect(page).toHaveURL(/\/play$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Prepare an agent for competition.",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Bring your agent.");
   await expect(page.locator("body")).not.toContainText(/synthetic project|release intent|zk compliance module/i);
 });
 

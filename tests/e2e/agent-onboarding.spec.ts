@@ -109,7 +109,7 @@ test("explicit update preserves identity and selection reaches competition entry
   await expect(page.getByRole("heading",{level:1})).toHaveText("Saved to My agents.");const after=(await vault.list("0x123"))[0];expect(after.id).toBe(before.id);expect(after.version).toBe(2);
   await page.getByRole("link",{name:"Back to My agents",exact:true}).click();await page.getByRole("link",{name:"Choose competition",exact:true}).click();
   await expect(page.getByText("BROWSER_BOT selected from My agents. Review the competition before approving entry.")).toBeVisible();
-  await expect(page.getByRole("heading",{name:"Choose where your agent competes."})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Your next arena", exact:true})).toBeVisible();
   await expect(page.getByPlaceholder("Paste the complete .veil-agent.json package here")).toHaveCount(0);
   await expect(page.getByRole("button",{name:/SAVE AGENT TO PROFILE/})).toHaveCount(0);
 });

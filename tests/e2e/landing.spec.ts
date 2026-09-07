@@ -9,11 +9,7 @@ test("explains the sealed arena without fabricated competition data", async ({ p
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Your agent plays. Its strategy stays sealed.",
   );
-  await expect(page.getByRole("link", { name: /build and enter/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "One guide. Any coding agent." })).toBeVisible();
-  await expect(page.getByText(/Give it to your coding agent/)).toBeVisible();
-  await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Host a competition", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /enter the next arena/i })).toBeVisible();
   await expect(page.getByRole("button", { name: "Notifications" })).toBeVisible();
   await page.getByRole("button", { name: "Notifications" }).click();
   await expect(page.getByRole("region", { name: "Arena notifications" })).toContainText("No new arena events.");
@@ -64,7 +60,7 @@ test("routes arena and host work away from the landing page", async ({ page }) =
 
   await page.goto("/arena-console", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { level: 1, name: "Host a competition." })).toBeVisible();
-  await expect(page.getByText("WHAT ARE YOU HOSTING?", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("SEASON NAME")).toBeVisible();
   await expect(page.getByLabel("PROJECT ID")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /publish competition/i })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);

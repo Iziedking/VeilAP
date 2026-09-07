@@ -9,7 +9,7 @@ test("keeps private reward fields out of the public arena", async ({ page }) => 
   await expect(page.locator("body")).not.toContainText(
     /amountMinor|tokenAddress|recipientFingerprint|fundingTransactionHash|settlementTransactionHash/,
   );
-  await expect(page.locator("body")).toContainText("Optional and privately settled");
+  await expect(page.locator("body")).toContainText("The strategy stays sealed");
 });
 
 test("returns a nullable session instead of fabricating a signed-in player", async ({ page }) => {

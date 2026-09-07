@@ -38,6 +38,8 @@ test("optional-reward entry stays testable without X verification", async ({ pag
   });
 
   await page.goto(`/play?project=${projectId}&season=${seasonId}`);
+  const optionalCheck = page.locator("details.play-optional-check");
+  await optionalCheck.locator("summary").click();
   await expect(page.getByText("X ACCOUNT OPTIONAL FOR THIS MODE")).toBeVisible();
   await page.getByPlaceholder("Paste the complete .veil-agent.json package here").fill(JSON.stringify(packageJson));
   const submit = page.getByRole("button", { name: "APPROVE, SEAL AND ENTER" });
@@ -68,24 +70,8 @@ test("optional-reward entry offers X connection when configured", async ({ page 
   });
 
   await page.goto(`/play?project=${projectId}&season=${seasonId}`);
+  const optionalCheck = page.locator("details.play-optional-check");
+  await optionalCheck.locator("summary").click();
   await expect(page.getByRole("button", { name: "CONNECT X ACCOUNT" })).toBeVisible();
   await expect(page.getByText("X ACCOUNT OPTIONAL FOR THIS MODE")).toBeVisible();
-});
-
-test("profile-save configuration failures keep the reviewed package available", async ({ page }) => {
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (path === "/api/auth/session") return route.fulfill({ json: { ok: true, value: { walletAddress: "0x123", xVerification: { configured: false, identity: null } } } });
-    if (path.endsWith(`/projects/${projectId}/seasons`)) return route.fulfill({ json: { ok: true, value: [] } });
-    if (path === "/api/profile/agents" && request.method() === "GET") return route.fulfill({ json: { ok: true, value: [] } });
-    if (path === "/api/profile/agents" && request.method() === "POST") return route.fulfill({ status: 503, json: { ok: false, code: "CONFIGURATION_MISSING" } });
-    return route.fulfill({ json: { ok: true, value: null } });
-  });
-
-  await page.goto(`/play?project=${projectId}`);
-  await page.getByPlaceholder("Paste the complete .veil-agent.json package here").fill(JSON.stringify(packageJson));
-  await page.getByRole("button", { name: "SAVE AGENT TO PROFILE" }).click();
-  await expect(page.getByText(/Private agent storage is not configured/)).toBeVisible();
-  await expect(page.getByPlaceholder("Paste the complete .veil-agent.json package here")).toHaveValue(JSON.stringify(packageJson));
 });

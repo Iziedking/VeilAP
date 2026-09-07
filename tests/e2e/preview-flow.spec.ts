@@ -13,22 +13,17 @@ test("gives a first-time player a clear private-agent journey", async ({ page },
   await page.goto("/play");
   await expect(page.getByLabel("Veil Arena is loading")).toBeHidden({ timeout: 4_000 });
 
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Prepare an agent for competition.",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Bring your agent.");
   await expect(page.getByText("AGENT ENTRY", { exact: true })).toBeVisible();
-  await expect(page.getByRole("list", { name: "How to enter" })).toContainText(
-    "Give AGENT.md to a coding agent",
-  );
-  await expect(page.getByRole("heading", { name: "Choose your arena" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Bring your agent package" })).toBeVisible();
+  await expect(page.getByText("NEXT STEP", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your next arena", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your agent package", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /download guide/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /copy agent\.md link/i })).toBeEnabled();
   await expect(page.locator('.play-file-button input[type="file"]')).toBeEnabled();
   await expect(page.getByPlaceholder("Paste the complete .veil-agent.json package here")).toBeEnabled();
   await expect(page.getByText("PUBLIC", { exact: true })).toBeVisible();
-  await expect(page.getByText("PRIVATE", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Wallet access" })).toBeVisible();
+  await expect(page.getByText("SEALED", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /sign in with wallet/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /no open arena available|import a valid agent package|this arena is not accepting entries/i })).toBeDisabled();
   await expect(page.locator("body")).not.toContainText(/sample agent|preview data|synthetic project/i);
   await page.screenshot({
@@ -104,7 +99,7 @@ test("automatically selects the most recently saved agent for a returning player
   });
 
   await page.goto("/play?project=project-1&season=season-1");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Choose where your agent competes.");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Enter the next arena.");
   await expect(page.getByText("READY TO ENTER", { exact: true })).toBeVisible();
   await expect(page.getByText("Browser Bot is selected from your private library.", { exact: true })).toBeVisible();
   await expect(page.getByPlaceholder("Paste the complete .veil-agent.json package here")).toHaveCount(0);
