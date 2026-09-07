@@ -114,7 +114,20 @@
 .operator-reward-note strong, .operator-freepass-note strong { font-family: var(--arena-display); font-size: 13px; text-transform: uppercase; }
 .operator-freepass-note { grid-column: 1 / -1; padding: 13px 15px; display: grid; gap: 5px; border-left: 4px solid var(--green); background: rgba(102,135,108,.1); }
 .operator-funding-toggle { min-height: 58px; padding: 12px 14px; display: grid !important; grid-template-columns: 24px 24px 1fr; align-items: center; gap: 10px; border: 1px solid var(--ink); background: var(--paper); cursor: pointer; }
-.operator-funding-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.operator-funding-toggle input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  opacity: 0;
+  white-space: nowrap;
+}
 .operator-toggle-box { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--ink); background: var(--paper-light); color: var(--ink); font-family: var(--arena-display); font-size: 14px; }
 .operator-funding-toggle input:focus-visible + .operator-toggle-box { outline: 3px solid var(--signal); outline-offset: 2px; }
 .operator-funding-toggle strong, .operator-funding-toggle small { display: block; }
