@@ -19,7 +19,6 @@ import {
   resolveTournamentRules,
   type TournamentPairingMode,
   type TournamentResubmissionPolicy,
-  type TournamentRewardPolicy,
   type TournamentRules,
   type TournamentTemplateId,
   type TournamentWorkload,
@@ -42,7 +41,7 @@ import { WalletPicker } from "@/components/wallet/wallet-picker";
 
 type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
 
-const quickStartTemplates = TOURNAMENT_TEMPLATES.filter((template) => template.group === "quick_start");
+const quickStartTemplates = TOURNAMENT_TEMPLATES.filter((template) => template.group === "quick_start" && template.id !== "sponsored_open");
 const advancedTemplates = TOURNAMENT_TEMPLATES.filter((template) => template.group === "advanced");
 
 type Project = {
@@ -217,6 +216,21 @@ function friendlyError(code: string): string {
   return errorCopy[code] ?? `The arena server returned ${code}.`;
 }
 
+function walletOutcomeCopy(outcome: Strk20Outcome | null): string | null {
+  if (!outcome) return null;
+  switch (outcome.kind) {
+    case "unsupported": return `This wallet needs STRK20 Wallet API ${outcome.minimum} or newer.`;
+    case "insufficient_private_balance": return "The wallet has no private balance for this exact reward. Fund the wallet privately, then retry.";
+    case "recipient_not_ready": return "The STRK20 pool is not ready yet. Retry after the pool configuration is available.";
+    case "user_rejected": return "The wallet request was declined. Nothing was submitted.";
+    case "error": return `Wallet ${outcome.code === "PREPARATION_FAILED" ? "preflight" : "submission"} failed. Nothing was submitted.`;
+    case "reverted": return `The wallet transaction reverted: ${outcome.reason}`;
+    case "expired": return `The wallet authorization expired: ${outcome.reason}`;
+    case "unknown": return outcome.reason ? `The wallet returned an unknown result: ${outcome.reason}` : "The wallet result is not confirmed yet. Check the wallet before retrying.";
+    default: return null;
+  }
+}
+
 function signatureStrings(signature: unknown): string[] {
   if (Array.isArray(signature)) return signature.map(String);
   if (signature && typeof signature === "object") {
@@ -251,7 +265,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [settlementPrepared, setSettlementPrepared] = useState(false);
   const [settlementWalletOutcome, setSettlementWalletOutcome] = useState<Strk20Outcome | null>(null);
   const [seasonName, setSeasonName] = useState("");
-  const [templateId, setTemplateId] = useState<TournamentTemplateId>("sponsored_open");
+  const [templateId, setTemplateId] = useState<TournamentTemplateId>("playground");
   const [startsAt, setStartsAt] = useState("");
   const [locksAt, setLocksAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
@@ -262,8 +276,8 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const customEncounters = "1";
   const [qualificationHands, setQualificationHands] = useState("20000");
   const [customResubmission, setCustomResubmission] = useState<TournamentResubmissionPolicy>("replace_until_lock");
-  const [customReward, setCustomReward] = useState<TournamentRewardPolicy>("optional");
   const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
+  const [fundingEnabled, setFundingEnabled] = useState(false);
   const [prizeTokenId, setPrizeTokenId] = useState<ArenaPrizeTokenId>("USDC");
   const [prizeAmount, setPrizeAmount] = useState("");
   const [fundingHash, setFundingHash] = useState("");
@@ -289,15 +303,15 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
           handsPerMatch: Number(customHands),
           encountersPerPair: Number(customEncounters),
           resubmissionPolicy: customResubmission,
-          rewardPolicy: customReward,
+          rewardPolicy: fundingEnabled ? "funded_before_start" : "optional",
           qualificationHands: Number(qualificationHands),
         } : undefined,
       });
     } catch {
       return null;
     }
-  }, [customHands, customPairingMode, customResubmission, customReward, entryMode, maxEntries, qualificationHands, templateId]);
-  const draftRequiresFunding = draftRules?.rewardPolicy === "funded_before_start";
+  }, [customHands, customPairingMode, customResubmission, entryMode, fundingEnabled, maxEntries, qualificationHands, templateId]);
+  const draftRequiresFunding = fundingEnabled || draftRules?.rewardPolicy === "funded_before_start";
 
   useEffect(() => () => fundingAccount?.unsubscribeChange?.(), [fundingAccount]);
 
@@ -485,7 +499,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
             handsPerMatch: Number(customHands),
             encountersPerPair: Number(customEncounters),
             resubmissionPolicy: customResubmission,
-            rewardPolicy: customReward,
+            rewardPolicy: fundingEnabled ? "funded_before_start" : "optional",
             qualificationHands: Number(qualificationHands),
           } : undefined,
         }),
@@ -1014,6 +1028,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                         aria-pressed={templateId === template.id}
                         onClick={() => {
                           setTemplateId(template.id);
+                          setFundingEnabled(template.id === "sponsored_open");
                           if (template.rules?.qualificationHands) setQualificationHands(String(template.rules.qualificationHands));
                         }}
                       >
@@ -1034,6 +1049,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                           aria-pressed={templateId === template.id}
                           onClick={() => {
                             setTemplateId(template.id);
+                            setFundingEnabled(template.id === "sponsored_open");
                             if (template.rules?.qualificationHands) setQualificationHands(String(template.rules.qualificationHands));
                           }}
                         >
@@ -1045,6 +1061,11 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                     </div>
                   </details>
                 </fieldset>
+                <label className="operator-funding-toggle">
+                  <input type="checkbox" checked={fundingEnabled} onChange={(event) => setFundingEnabled(event.target.checked)} />
+                  <span className="operator-toggle-box" aria-hidden="true">{fundingEnabled ? "✓" : ""}</span>
+                  <span><strong>Fund this competition</strong><small>Optional. Turn on to choose STRK or USDC and enter the reward amount.</small></span>
+                </label>
                 <label>SEASON NAME<input value={seasonName} onChange={(event) => setSeasonName(event.target.value)} placeholder="Season 01" required /></label>
                 <label>STARTS AT<input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
                 <label>LOCKS AT<input type="datetime-local" value={locksAt} onChange={(event) => setLocksAt(event.target.value)} /></label>
@@ -1060,7 +1081,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                   <label>ENTRY LIMIT<input type="number" min="2" max="32" value={maxEntries} onChange={(event) => setMaxEntries(event.target.value)} required /></label>
                   <label>HANDS PER MATCH<input type="number" min="1" max="100" value={customHands} onChange={(event) => setCustomHands(event.target.value)} required /></label>
                   <label>AGENT UPDATES<select value={customResubmission} onChange={(event) => setCustomResubmission(event.target.value as TournamentResubmissionPolicy)}><option value="replace_until_lock" disabled={entryMode === "invite_only"}>REPLACE UNTIL LOCK</option><option value="fixed">FIXED AFTER ENTRY</option></select></label>
-                  <label>REWARD RULE<select value={customReward} onChange={(event) => setCustomReward(event.target.value as TournamentRewardPolicy)}><option value="optional">OPTIONAL REWARD</option><option value="funded_before_start">FUND BEFORE PLAY</option></select></label>
                 </> : null}
                 {draftRequiresFunding ? <fieldset className="operator-reward-fieldset">
                   <legend>REWARD</legend>
@@ -1146,18 +1166,18 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                   <div className="operator-chain-actions">
                     {!fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}
                     {fundingAccount && !fundingPlan ? <button type="button" className="operator-button operator-button-signal" onClick={() => void prepareFundingPlan()} disabled={busy !== ""}>{busy === "pool-plan" ? "PREPARING" : "FUND REWARD"}<span>→</span></button> : null}
-                    {fundingPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletFunding()} disabled={busy !== "" || fundingPrepared}>{busy === "funding-prepare" ? "CHECKING" : fundingPrepared ? "PREPARED" : "CHECK WALLET"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletFunding()} disabled={busy !== "" || !fundingPrepared}>{busy === "funding-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}
-                    <label className="operator-inline-field">TRANSACTION HASH<input value={fundingHash} onChange={(event) => setFundingHash(event.target.value)} placeholder="0x..." /></label>
-                    <button type="button" className="operator-button operator-button-dark" onClick={() => void confirmFunding()} disabled={busy !== "" || !fundingPlan || !fundingAccount || !fundingHash.trim()}>{busy === "pool-funding" ? "SIGNING" : "SIGN AND VERIFY"}<span>↗</span></button>
+                    {fundingPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletFunding()} disabled={busy !== "" || fundingPrepared}>{busy === "funding-prepare" ? "CHECKING" : fundingWalletOutcome?.kind === "error" ? "TRY AGAIN" : fundingPrepared ? "PREPARED" : "CHECK WALLET"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletFunding()} disabled={busy !== "" || !fundingPrepared}>{busy === "funding-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}
+                    {fundingHash ? <label className="operator-inline-field">TRANSACTION HASH<input value={fundingHash} onChange={(event) => setFundingHash(event.target.value)} placeholder="0x..." /></label> : null}
+                    {fundingHash ? <button type="button" className="operator-button operator-button-dark" onClick={() => void confirmFunding()} disabled={busy !== "" || !fundingPlan || !fundingAccount}>{busy === "pool-funding" ? "SIGNING" : "SIGN AND VERIFY"}<span>↗</span></button> : null}
                   </div>
                   {fundingPlan ? <div className="operator-plan" aria-label="Prepared reward approval"><span>{fundingPlan.network} / WALLET APPROVAL</span><code>{formatTokenAmountFromMinor(fundingPlan.amountMinor, fundingPlan.tokenSymbol === "STRK" ? 18 : 6)} {fundingPlan.tokenSymbol} / reward funding</code><small>{fundingAccount ? "Review and approve this exact reward in the connected wallet." : "Connect the sponsor wallet to review and approve the reward."}</small></div> : null}
                   <small className="operator-wallet-note">Your wallet approves the reward. Veil Arena verifies the receipt and never holds the balance.</small>
-                  {fundingWalletOutcome?.kind === "error" ? <small className="operator-wallet-note">Wallet preflight or submission failed. No arena state was changed.</small> : null}
+                  {walletOutcomeCopy(fundingWalletOutcome) ? <small className="operator-wallet-note">{walletOutcomeCopy(fundingWalletOutcome)}</small> : null}
                 </div>
               ) : null}
               {prizePool?.status === "funded" && schedule.season.status === "open" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>The competition now shows a funded reward</strong><small>Entry stays open until you lock the draw. The sponsor keeps custody until payout.</small></div></div> : null}
               {prizePool?.status === "funded" && schedule.season.status === "locked" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>Finish every pairing before selecting the winner</strong><small>The payout goes to the wallet linked when the winning agent entered.</small></div><button type="button" className="operator-button operator-button-dark" onClick={() => void prepareSettlement()} disabled={busy !== ""}>{busy === "pool-settlement" ? "SELECTING" : "SELECT WINNER"}<span>→</span></button></div> : null}
-              {prizePool?.status === "settlement_pending" ? <div className="operator-chain-step"><div><span>WINNER SELECTED / {prizePool.winnerAgentId?.toUpperCase()}</span><strong>Approve the private winner payment</strong><small>The winning participant receives the reward at the wallet recorded when their agent entered.</small></div><div className="operator-chain-actions">{settlementPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}{settlementPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletSettlement()} disabled={busy !== "" || settlementPrepared}>{busy === "settlement-prepare" ? "CHECKING" : settlementPrepared ? "PREPARED" : "REVIEW PAYOUT"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletSettlement()} disabled={busy !== "" || !settlementPrepared}>{busy === "settlement-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}<label className="operator-inline-field">SETTLEMENT TRANSACTION HASH<input value={settlementHash} onChange={(event) => setSettlementHash(event.target.value)} placeholder="0x..." /></label><button type="button" className="operator-button operator-button-dark" onClick={() => void confirmSettlement()} disabled={busy !== "" || !settlementPlan || !fundingAccount || !settlementHash.trim()}>{busy === "pool-settlement-confirm" ? "SIGNING" : "VERIFY PAYMENT"}<span>↗</span></button></div>{settlementPlan ? <div className="operator-plan" aria-label="Prepared private winner payment"><span>{settlementPlan.network} / PRIVATE WINNER PAYMENT</span><code>{formatTokenAmountFromMinor(settlementPlan.amountMinor, settlementPlan.tokenSymbol === "STRK" ? 18 : 6)} {settlementPlan.tokenSymbol} / winning participant</code><small>{fundingAccount ? "Review and approve this exact payment in the connected wallet." : "Connect the sponsor wallet to review and approve the payment."}</small></div> : null}<small className="operator-wallet-note">The winner receives a private payment after the receipt is verified. The recipient stays sealed.</small>{settlementWalletOutcome?.kind === "error" ? <small className="operator-wallet-note">Wallet preflight or submission failed. No arena state was changed.</small> : null}</div> : null}
+              {prizePool?.status === "settlement_pending" ? <div className="operator-chain-step"><div><span>WINNER SELECTED / {prizePool.winnerAgentId?.toUpperCase()}</span><strong>Approve the private winner payment</strong><small>The winning participant receives the reward at the wallet recorded when their agent entered.</small></div><div className="operator-chain-actions">{settlementPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}{settlementPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletSettlement()} disabled={busy !== "" || settlementPrepared}>{busy === "settlement-prepare" ? "CHECKING" : settlementPrepared ? "PREPARED" : "REVIEW PAYOUT"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletSettlement()} disabled={busy !== "" || !settlementPrepared}>{busy === "settlement-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}<label className="operator-inline-field">SETTLEMENT TRANSACTION HASH<input value={settlementHash} onChange={(event) => setSettlementHash(event.target.value)} placeholder="0x..." /></label><button type="button" className="operator-button operator-button-dark" onClick={() => void confirmSettlement()} disabled={busy !== "" || !settlementPlan || !fundingAccount || !settlementHash.trim()}>{busy === "pool-settlement-confirm" ? "SIGNING" : "VERIFY PAYMENT"}<span>↗</span></button></div>{settlementPlan ? <div className="operator-plan" aria-label="Prepared private winner payment"><span>{settlementPlan.network} / PRIVATE WINNER PAYMENT</span><code>{formatTokenAmountFromMinor(settlementPlan.amountMinor, settlementPlan.tokenSymbol === "STRK" ? 18 : 6)} {settlementPlan.tokenSymbol} / winning participant</code><small>{fundingAccount ? "Review and approve this exact payment in the connected wallet." : "Connect the sponsor wallet to review and approve the payment."}</small></div> : null}<small className="operator-wallet-note">The winner receives a private payment after the receipt is verified. The recipient stays sealed.</small>{walletOutcomeCopy(settlementWalletOutcome) ? <small className="operator-wallet-note">{walletOutcomeCopy(settlementWalletOutcome)}</small> : null}</div> : null}
               {prizePool?.status === "settled" ? <div className="operator-chain-complete"><span>SETTLEMENT COMPLETE</span><strong>{prizePool.winnerAgentId?.toUpperCase()} / PRIVATE REWARD VERIFIED</strong><small>The receipt and sponsor authorization are confirmed. The amount and recipient remain private.</small></div> : null}
             </section> : null}
         </div>
