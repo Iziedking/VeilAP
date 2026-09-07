@@ -6,6 +6,7 @@ import {
   estimateTournamentWorkload,
   resolveTournamentRules,
   tournamentRulesCommitment,
+  rewardPercentages,
   usesStrk20RewardRail,
   type TournamentRules,
 } from "@/domain/arena/tournament-rules";
@@ -59,7 +60,18 @@ describe("tournament rules", () => {
   });
 
   it("builds a deterministic round robin and estimates its exact workload", () => {
-    const rules = asLegacyV2(resolveTournamentRules({ templateId: "open_league" }), { handsPerMatch: 12 });
+    const rules = asLegacyV2(resolveTournamentRules({
+      templateId: "custom",
+      custom: {
+        pairingMode: "round_robin",
+        entryMode: "invite_only",
+        maxEntries: 8,
+        handsPerMatch: 12,
+        encountersPerPair: 1,
+        resubmissionPolicy: "fixed",
+        rewardPolicy: "optional",
+      },
+    }));
     const schedule = buildTournamentSchedule({ rules, entries });
     expect(schedule).toHaveLength(6);
     expect(schedule[0]).toEqual({ sequence: 1, leftAgentId: "NIGHTJAR", rightAgentId: "CINDER", hands: 12 });
@@ -68,6 +80,19 @@ describe("tournament rules", () => {
       pairingCount: 6,
       totalHands: 72,
     });
+  });
+
+  it("keeps public seasons open until lock and samples randomised rounds", () => {
+    const rules = resolveTournamentRules({ templateId: "open_league" });
+    const manyEntries = Array.from({ length: 34 }, (_, index) => ({
+      agentId: `AGENT-${index}`,
+      joinedAt: new Date(Date.UTC(2026, 7, 31, 10, index)),
+    }));
+    const first = buildTournamentSchedule({ rules, entries: manyEntries, startsAt: new Date("2026-08-31T10:00:00.000Z"), endsAt: new Date("2026-09-01T10:00:00.000Z") });
+    const second = buildTournamentSchedule({ rules, entries: manyEntries, startsAt: new Date("2026-08-31T10:00:00.000Z"), endsAt: new Date("2026-09-01T10:00:00.000Z") });
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(2_125);
+    expect(rewardPercentages({ ...rules, rewardDistribution: "top_8" })).toEqual([30, 20, 15, 10, 8, 7, 5, 5]);
   });
 
   it("runs a three-match duel without exposing either policy", () => {
@@ -106,10 +131,12 @@ describe("tournament rules", () => {
     });
   });
 
-  it("opens sponsored competitions publicly but requires funding before play", () => {
+  it("opens sponsored competitions publicly with optional funding", () => {
     expect(resolveTournamentRules({ templateId: "sponsored_open" })).toMatchObject({
       entryMode: "open",
-      rewardPolicy: "funded_before_start",
+      entryLimit: "unlimited",
+      pairingMode: "sampled_rounds",
+      rewardPolicy: "optional",
       paymentRail: "strk20",
       maxEntries: 16,
     });

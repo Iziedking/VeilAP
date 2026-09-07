@@ -28,11 +28,13 @@ type ArenaSeason = {
   status: SeasonStatus;
   entryMode: "invite_only" | "open";
   maxEntries: number;
+  entryLimit: "capped" | "unlimited";
   entryCount: number;
   prizeStatus?: PrizeStatus;
   templateId?: string;
     rules?: {
       resubmissionPolicy: "fixed" | "replace_until_lock";
+      entryLimit?: "capped" | "unlimited";
       rewardPolicy?: "optional" | "funded_before_start";
       duplicateStrategyPolicy?: "reject_exact";
     pairingMode: "round_robin" | "duel_series" | "gauntlet";
@@ -93,7 +95,7 @@ function isJoinable(season: ArenaSeason, now: number, invitedSeasonId = ""): boo
     || (season.entryMode === "invite_only" && season.id === invitedSeasonId);
   return season.status === "open"
     && entryAllowed
-    && season.entryCount < season.maxEntries
+    && (season.entryLimit === "unlimited" || season.entryCount < season.maxEntries)
     && new Date(season.startsAt).getTime() <= now
     && now < new Date(season.locksAt).getTime();
 }
@@ -112,7 +114,7 @@ function seasonStateLabel(season: ArenaSeason, now: number, invitedSeasonId = ""
   if (season.status === "completed") return "COMPLETED";
   if (season.status === "locked" || now >= new Date(season.locksAt).getTime()) return "ENTRY LOCKED";
   if (now < new Date(season.startsAt).getTime()) return "OPENS SOON";
-  if (season.entryCount >= season.maxEntries) {
+  if (season.entryLimit !== "unlimited" && season.entryCount >= season.maxEntries) {
     return acceptsReplacement(season, now) ? "IMPROVEMENTS OPEN" : "ARENA FULL";
   }
   return "OPEN TO PLAY";
@@ -745,7 +747,7 @@ export function VeilArenaPlay({
       >
         <span className="play-season-index">{String(visibleSeasons.indexOf(season) + 1).padStart(2, "0")}</span>
         <span className="play-season-name"><strong>{season.name}</strong><small>{(season.templateId ?? season.rulesetVersion).replaceAll("_", " ")}</small></span>
-        <span><strong>{season.entryCount} / {season.maxEntries}</strong><small>AGENTS</small></span>
+        <span><strong>{season.entryCount}{season.entryLimit === "unlimited" ? "+" : ` / ${season.maxEntries}`}</strong><small>{season.entryLimit === "unlimited" ? "ENTER BEFORE LOCK" : "AGENTS"}</small></span>
         <span><strong>{seasonStateLabel(season, now, invitedSeasonId)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "FREE CHALLENGE"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
       </button>
     );

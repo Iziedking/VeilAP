@@ -22,12 +22,22 @@ export type TournamentTemplateId =
   | "championship"
   | "custom";
 
-export type TournamentPairingMode = "round_robin" | "duel_series" | "gauntlet";
+export type TournamentPairingMode = "round_robin" | "sampled_rounds" | "duel_series" | "gauntlet";
 export type TournamentEntryMode = "open" | "invite_only";
+export type TournamentEntryLimit = "capped" | "unlimited";
 export type TournamentResubmissionPolicy = "replace_until_lock" | "fixed";
 export type TournamentRewardPolicy = "optional" | "funded_before_start";
 export type TournamentPaymentRail = "strk20";
 export type TournamentScheduleMode = "timed_rounds";
+export type TournamentRewardDistribution = "winner_takes_all" | "top_3" | "top_5" | "top_8" | "top_10";
+
+export const TOURNAMENT_REWARD_PRESETS: Record<TournamentRewardDistribution, readonly number[]> = {
+  winner_takes_all: [100],
+  top_3: [50, 30, 20],
+  top_5: [40, 25, 15, 10, 10],
+  top_8: [30, 20, 15, 10, 8, 7, 5, 5],
+  top_10: [25, 18, 14, 10, 8, 7, 6, 5, 4, 3],
+};
 
 export interface TournamentRules {
   schemaVersion: typeof TOURNAMENT_RULES_SCHEMA_VERSION;
@@ -37,6 +47,7 @@ export interface TournamentRules {
   engineVersion: ArenaEngineVersion;
   pairingMode: TournamentPairingMode;
   entryMode: TournamentEntryMode;
+  entryLimit?: TournamentEntryLimit;
   minEntries: number;
   maxEntries: number;
   handsPerMatch: number;
@@ -45,6 +56,7 @@ export interface TournamentRules {
   qualificationHands?: number;
   resubmissionPolicy: TournamentResubmissionPolicy;
   rewardPolicy: TournamentRewardPolicy;
+  rewardDistribution?: TournamentRewardDistribution;
   paymentRail?: TournamentPaymentRail;
   revealPolicy: "loser_action_only";
   strategyVisibility: "sealed";
@@ -53,11 +65,13 @@ export interface TournamentRules {
 export interface CustomTournamentRulesInput {
   pairingMode: TournamentPairingMode;
   entryMode: TournamentEntryMode;
+  entryLimit?: TournamentEntryLimit;
   maxEntries: number;
   handsPerMatch: number;
   encountersPerPair: number;
   resubmissionPolicy: TournamentResubmissionPolicy;
   rewardPolicy: TournamentRewardPolicy;
+  rewardDistribution?: TournamentRewardDistribution;
   qualificationHands?: number;
 }
 
@@ -100,6 +114,7 @@ const sharedPrivacyRules = {
   engineVersion: ARENA_ENGINE_VERSION,
   revealPolicy: "loser_action_only" as const,
   strategyVisibility: "sealed" as const,
+  rewardDistribution: "winner_takes_all" as const,
 } as const;
 
 const tournamentRulesSchema = z.object({
@@ -108,8 +123,9 @@ const tournamentRulesSchema = z.object({
   templateVersion: z.union([z.literal(1), z.literal(2), z.literal(TOURNAMENT_TEMPLATE_VERSION)]),
   duplicateStrategyPolicy: z.literal("reject_exact").optional(),
   engineVersion: z.enum(SUPPORTED_ARENA_ENGINE_VERSIONS),
-  pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
+  pairingMode: z.enum(["round_robin", "sampled_rounds", "duel_series", "gauntlet"]),
   entryMode: z.enum(["open", "invite_only"]),
+  entryLimit: z.enum(["capped", "unlimited"]).optional(),
   minEntries: z.number().int(),
   maxEntries: z.number().int(),
   handsPerMatch: z.number().int(),
@@ -118,6 +134,7 @@ const tournamentRulesSchema = z.object({
   qualificationHands: z.number().int().optional(),
   resubmissionPolicy: z.enum(["replace_until_lock", "fixed"]),
   rewardPolicy: z.enum(["optional", "funded_before_start"]),
+  rewardDistribution: z.enum(["winner_takes_all", "top_3", "top_5", "top_8", "top_10"]).optional(),
   paymentRail: z.literal("strk20").optional(),
   revealPolicy: z.literal("loser_action_only"),
   strategyVisibility: z.literal("sealed"),
@@ -155,8 +172,9 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
   playground: {
     ...sharedPrivacyRules,
     templateId: "playground",
-    pairingMode: "round_robin",
+    pairingMode: "sampled_rounds",
     entryMode: "open",
+    entryLimit: "unlimited",
     minEntries: 2,
     maxEntries: 8,
     handsPerMatch: 12,
@@ -169,8 +187,9 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
   open_league: {
     ...sharedPrivacyRules,
     templateId: "open_league",
-    pairingMode: "round_robin",
+    pairingMode: "sampled_rounds",
     entryMode: "open",
+    entryLimit: "unlimited",
     minEntries: 4,
     maxEntries: 16,
     handsPerMatch: 20,
@@ -183,8 +202,9 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
   sponsored_open: {
     ...sharedPrivacyRules,
     templateId: "sponsored_open",
-    pairingMode: "round_robin",
+    pairingMode: "sampled_rounds",
     entryMode: "open",
+    entryLimit: "unlimited",
     minEntries: 4,
     maxEntries: 16,
     handsPerMatch: 20,
@@ -192,7 +212,7 @@ const templates: Record<Exclude<TournamentTemplateId, "custom">, TournamentRules
     scheduleMode: "timed_rounds",
     qualificationHands: 20_000,
     resubmissionPolicy: "replace_until_lock",
-    rewardPolicy: "funded_before_start",
+    rewardPolicy: "optional",
     paymentRail: "strk20",
   },
   duel_series: {
@@ -253,7 +273,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "playground",
     group: "quick_start",
     name: "Public freepass",
-    summary: "A public exhibition with repeated scheduled rounds and a visible sample target.",
+    summary: "A public season where agents enter before lock and meet in repeated scheduled rounds.",
     bestFor: "Fast demos and first competitions",
     rules: templates.playground,
   },
@@ -261,7 +281,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "sponsored_open",
     group: "quick_start",
     name: "Sponsored open",
-    summary: "A timed public league whose sponsor reward must be funded before play.",
+    summary: "A timed public league with a private sponsor reward and ranked payout options.",
     bestFor: "Open funded competitions",
     rules: templates.sponsored_open,
   },
@@ -269,7 +289,7 @@ export const TOURNAMENT_TEMPLATES: readonly TournamentTemplateDefinition[] = [
     id: "open_league",
     group: "advanced",
     name: "Open league",
-    summary: "A public fixed-roster league with repeated rounds against every opponent.",
+    summary: "A public long season with sampled rounds until the season locks.",
     bestFor: "Community competitions",
     rules: templates.open_league,
   },
@@ -310,6 +330,9 @@ function validateRules(rules: TournamentRules): TournamentRules {
   const exactDuel = rules.pairingMode === "duel_series"
     ? rules.minEntries === 2 && rules.maxEntries === 2
     : true;
+  const sampledRounds = rules.pairingMode === "sampled_rounds"
+    ? rules.entryMode === "open" && rules.entryLimit === "unlimited"
+    : true;
   const validReplacement = rules.resubmissionPolicy === "fixed" || rules.entryMode === "open";
   const validVersionedRules = rules.templateVersion === 3
     ? rules.duplicateStrategyPolicy === "reject_exact"
@@ -336,6 +359,7 @@ function validateRules(rules: TournamentRules): TournamentRules {
     || rules.encountersPerPair < 1
     || rules.encountersPerPair > 5
     || !exactDuel
+    || !sampledRounds
     || !validReplacement
   ) {
     throw new Error("TOURNAMENT_RULES_INVALID");
@@ -357,10 +381,12 @@ export function resolveTournamentRules(input: {
   templateId: TournamentTemplateId;
   custom?: CustomTournamentRulesInput;
   qualificationHands?: number;
+  rewardDistribution?: TournamentRewardDistribution;
 }): TournamentRules {
   if (input.templateId !== "custom") {
     const rules = structuredClone(templates[input.templateId]);
     if (input.qualificationHands !== undefined) rules.qualificationHands = input.qualificationHands;
+    if (input.rewardDistribution !== undefined) rules.rewardDistribution = input.rewardDistribution;
     return validateRules(rules);
   }
   if (!input.custom) throw new Error("CUSTOM_TOURNAMENT_RULES_REQUIRED");
@@ -371,6 +397,7 @@ export function resolveTournamentRules(input: {
     templateId: "custom",
     pairingMode: input.custom.pairingMode,
     entryMode: input.custom.entryMode,
+    entryLimit: input.custom.entryLimit ?? "capped",
     minEntries,
     maxEntries,
     handsPerMatch: input.custom.handsPerMatch,
@@ -379,6 +406,7 @@ export function resolveTournamentRules(input: {
     qualificationHands: input.custom.qualificationHands ?? input.qualificationHands ?? 1_000,
     resubmissionPolicy: input.custom.resubmissionPolicy,
     rewardPolicy: input.custom.rewardPolicy,
+    rewardDistribution: input.custom.rewardDistribution ?? input.rewardDistribution ?? "winner_takes_all",
     ...(input.custom.rewardPolicy === "funded_before_start" ? { paymentRail: "strk20" as const } : {}),
   });
 }
@@ -408,7 +436,7 @@ export function buildTournamentSchedule(input: {
 }): TournamentPairing[] {
   const rules = validateRules(input.rules);
   const entries = orderedEntries(input.entries);
-  if (entries.length < rules.minEntries || entries.length > rules.maxEntries) {
+  if (entries.length < rules.minEntries || (rules.entryLimit !== "unlimited" && entries.length > rules.maxEntries)) {
     throw new Error("TOURNAMENT_ROSTER_SIZE_INVALID");
   }
 
@@ -419,7 +447,7 @@ export function buildTournamentSchedule(input: {
     for (const challenger of entries) {
       if (challenger.agentId !== benchmark.agentId) basePairs.push([benchmark, challenger]);
     }
-  } else {
+  } else if (rules.pairingMode !== "sampled_rounds") {
     for (let leftIndex = 0; leftIndex < entries.length; leftIndex += 1) {
       for (let rightIndex = leftIndex + 1; rightIndex < entries.length; rightIndex += 1) {
         basePairs.push([entries[leftIndex], entries[rightIndex]]);
@@ -434,7 +462,7 @@ export function buildTournamentSchedule(input: {
   if (timed && (!startsAt || !endsAt || !Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt)) {
     throw new Error("TOURNAMENT_WINDOW_INVALID");
   }
-  const decisionsPerAgentPerRound = rules.pairingMode === "gauntlet"
+  const decisionsPerAgentPerRound = rules.pairingMode === "gauntlet" || rules.pairingMode === "sampled_rounds"
     ? rules.handsPerMatch * 2
     : Math.max(1, entries.length - 1) * rules.handsPerMatch * 2;
   const roundCount = timed
@@ -445,7 +473,15 @@ export function buildTournamentSchedule(input: {
     const scheduledFor = timed && startsAt && endsAt
       ? new Date(startsAt.getTime() + Math.floor(((endsAt.getTime() - startsAt.getTime()) * encounter) / roundCount))
       : undefined;
-    for (const [first, second] of basePairs) {
+    const roundPairs = rules.pairingMode === "sampled_rounds"
+      ? shuffledRoundEntries(entries, encounter + 1)
+        .slice(0, entries.length - (entries.length % 2))
+        .reduce<Array<[TournamentScheduleEntry, TournamentScheduleEntry]>>((pairs, entry, index, roundEntries) => {
+          if (index % 2 === 0) pairs.push([entry, roundEntries[index + 1]!]);
+          return pairs;
+        }, [])
+      : basePairs;
+    for (const [first, second] of roundPairs) {
       const swap = encounter % 2 === 1;
       pairings.push({
         sequence,
@@ -465,13 +501,15 @@ export function estimateTournamentWorkload(input: {
   entryCount: number;
 }): TournamentWorkload {
   const rules = validateRules(input.rules);
-  if (!Number.isInteger(input.entryCount) || input.entryCount < rules.minEntries || input.entryCount > rules.maxEntries) {
+  if (!Number.isInteger(input.entryCount) || input.entryCount < rules.minEntries || (rules.entryLimit !== "unlimited" && input.entryCount > rules.maxEntries)) {
     throw new Error("TOURNAMENT_ROSTER_SIZE_INVALID");
   }
   const basePairings = rules.pairingMode === "gauntlet"
     ? input.entryCount - 1
+    : rules.pairingMode === "sampled_rounds"
+      ? Math.floor(input.entryCount / 2)
     : (input.entryCount * (input.entryCount - 1)) / 2;
-  const decisionsPerAgentPerRound = rules.pairingMode === "gauntlet"
+  const decisionsPerAgentPerRound = rules.pairingMode === "gauntlet" || rules.pairingMode === "sampled_rounds"
     ? rules.handsPerMatch * 2
     : Math.max(1, input.entryCount - 1) * rules.handsPerMatch * 2;
   const roundCount = rules.templateVersion === 3
@@ -488,4 +526,16 @@ export function estimateTournamentWorkload(input: {
       qualificationHands: rules.qualificationHands,
     } : {}),
   };
+}
+
+function shuffledRoundEntries(entries: TournamentScheduleEntry[], roundNumber: number): TournamentScheduleEntry[] {
+  return [...entries].sort((left, right) => {
+    const leftKey = commitment({ roundNumber, agentId: left.agentId });
+    const rightKey = commitment({ roundNumber, agentId: right.agentId });
+    return leftKey.localeCompare(rightKey) || left.agentId.localeCompare(right.agentId);
+  });
+}
+
+export function rewardPercentages(rules: TournamentRules): readonly number[] {
+  return TOURNAMENT_REWARD_PRESETS[rules.rewardDistribution ?? "winner_takes_all"];
 }

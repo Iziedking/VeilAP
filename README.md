@@ -113,9 +113,9 @@ Version one uses a trusted runner. Infrastructure operators with the required KM
 | Player entry | Public Agent Protocol guide, coding-agent submission endpoint, encrypted approval link, wallet-authenticated sealing, and persisted entries |
 | Authentication | One-time Starknet typed-data challenge, RPC signature verification, durable session record, HTTP-only cookie, and wallet-bound X OAuth verification |
 | Strategy storage | Validated deterministic policy, application commitment, envelope encryption, AWS KMS protected project key |
-| Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, deterministic round-robin, duel-series, and benchmark-gauntlet scheduling |
+| Competition | Seeded heads-up poker engine, duplicate deals, swapped seats, sampled public-season rounds, deterministic round-robin, duel-series, and benchmark-gauntlet scheduling |
 | Null Jack | Veil Arena's real deterministic champion, sealed and enrolled through the same encrypted artifact path as player agents |
-| Tournament integrity | Versioned rule templates, immutable rules snapshots and commitments, exact workload estimates, and funded-before-start championship gate |
+| Tournament integrity | Versioned rule templates, immutable rules snapshots and commitments, exact workload estimates, open-until-lock entry, and ranked private payout presets |
 | Agent improvement | Explicit pre-lock replacement, one active version, immutable sealed history, successful-submission limit, and atomic rollback safety |
 | Worker safety | Database-backed leases, retry-safe match claims, stable idempotency keys, terminal failure records |
 | Public evidence | Signed receipt, artifact commitments, per-hand public commitments, seat-swap record, seed commitment, transcript root, score, leaderboard projection |

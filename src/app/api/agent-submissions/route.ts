@@ -54,8 +54,10 @@ export async function GET() {
         name: season.name,
         rulesetVersion: season.rulesetVersion,
         locksAt: season.locksAt,
-        seatsRemaining: Math.max(0, season.maxEntries - season.entryCount),
-        acceptsNewEntries: season.entryCount < season.maxEntries,
+        seatsRemaining: season.rules?.entryLimit === "unlimited"
+          ? null
+          : Math.max(0, season.maxEntries - season.entryCount),
+        acceptsNewEntries: season.rules?.entryLimit === "unlimited" || season.entryCount < season.maxEntries,
         acceptsReplacement: season.rules?.resubmissionPolicy === "replace_until_lock",
         duplicateStrategyPolicy: season.rules?.duplicateStrategyPolicy ?? "legacy",
         templateId: season.templateId ?? "legacy",

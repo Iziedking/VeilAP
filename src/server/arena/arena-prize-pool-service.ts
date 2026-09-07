@@ -10,11 +10,13 @@ import {
   type ArenaTransferAuthorization,
   type ArenaTransferPlan,
   type ArenaTransferOperation,
+  type ArenaTransferRecipient,
 } from "@/domain/arena/transfer-authorization";
 import { commitment } from "@/domain/canonical";
 import type { PublicMatchReceipt } from "@/domain/arena/poker-engine";
+import { resolveTournamentRules, rewardPercentages, type TournamentRules } from "@/domain/arena/tournament-rules";
 import { authorizeProject } from "@/server/authorization/authorize";
-import { decryptField, encryptField } from "@/server/crypto/envelope";
+import { decryptField, encryptField, type EncryptedField } from "@/server/crypto/envelope";
 import type { KeyProvider } from "@/server/crypto/key-provider";
 import type {
   ArenaPrizePoolRecord,
@@ -42,6 +44,8 @@ export type ArenaPrizePoolErrorCode =
   | "ARENA_MATCH_NOT_COMPLETE"
   | "ARENA_WINNER_TIE"
   | "ARENA_WINNER_PAYOUT_NOT_REGISTERED"
+  | "ARENA_PAYOUT_NOT_ENOUGH_WINNERS"
+  | "ARENA_PAYOUT_AMOUNT_TOO_SMALL"
   | "ARENA_SPONSOR_WALLET_REQUIRED"
   | "TRANSACTION_NOT_CONFIRMED"
   | "TRANSACTION_ALREADY_USED"
@@ -146,6 +150,7 @@ function transferPlan(
   pool: ArenaPrizePoolRecord,
   operation: ArenaTransferOperation,
   recipient: string,
+  recipients?: readonly ArenaTransferRecipient[],
 ): ArenaTransferPlan {
   const plan = {
     network: "SN_MAIN" as const,
@@ -158,6 +163,7 @@ function transferPlan(
     tokenSymbol: pool.tokenSymbol,
     amountMinor: pool.amountMinor,
     recipient,
+    ...(recipients ? { recipients } : {}),
   };
   return { ...plan, planDigest: commitment(plan) };
 }
@@ -218,9 +224,9 @@ function publicReceipt(record: { publicReceipt: unknown }): PublicMatchReceipt {
   return record.publicReceipt as PublicMatchReceipt;
 }
 
-function winnerFromMatches(
+function rankedFromMatches(
   matches: Array<{ leftAgentId: string; rightAgentId: string; publicReceipt: unknown }>,
-): ArenaPrizePoolResult<string> {
+): ArenaPrizePoolResult<ReturnType<typeof seasonStandings>> {
   try {
     for (const match of matches) {
       const receipt = publicReceipt(match);
@@ -229,8 +235,70 @@ function winnerFromMatches(
     const ranked = seasonStandings(matches.map(publicReceipt));
     if (!ranked.length) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
     if (ranked[1]?.points === ranked[0]!.points) return { ok: false, code: "ARENA_WINNER_TIE" };
-    return { ok: true, value: ranked[0]!.agentId };
+    return { ok: true, value: ranked };
   } catch { return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" }; }
+}
+
+function payoutRecipients(
+  ranked: ReturnType<typeof seasonStandings>,
+  rules: TournamentRules,
+  poolAmountMinor: string,
+  entries: Map<string, { id: string; ownerFingerprint?: string; encryptedPayoutWallet?: EncryptedField }>,
+  decryptRecipient: (entry: { id: string; ownerFingerprint?: string; encryptedPayoutWallet?: EncryptedField }) => string | undefined,
+): ArenaPrizePoolResult<ArenaTransferRecipient[]> {
+  const percentages = rewardPercentages(rules);
+  if (ranked.length < percentages.length) return { ok: false, code: "ARENA_PAYOUT_NOT_ENOUGH_WINNERS" };
+  for (let index = 1; index < percentages.length; index += 1) {
+    if (ranked[index]?.points === ranked[index - 1]?.points) return { ok: false, code: "ARENA_WINNER_TIE" };
+  }
+  if (ranked[percentages.length]?.points === ranked[percentages.length - 1]?.points) {
+    return { ok: false, code: "ARENA_WINNER_TIE" };
+  }
+  const total = BigInt(poolAmountMinor);
+  const recipients: ArenaTransferRecipient[] = [];
+  let allocated = 0n;
+  for (const [index, standing] of ranked.slice(0, percentages.length).entries()) {
+    const entry = entries.get(standing.agentId);
+    const recipient = entry ? decryptRecipient(entry) : undefined;
+    if (!entry?.ownerFingerprint || !recipient) return { ok: false, code: "ARENA_WINNER_PAYOUT_NOT_REGISTERED" };
+    const amountMinor = index === percentages.length - 1
+      ? total - allocated
+      : (total * BigInt(percentages[index]!)) / 100n;
+    if (amountMinor <= 0n) return { ok: false, code: "ARENA_PAYOUT_AMOUNT_TOO_SMALL" };
+    allocated += amountMinor;
+    recipients.push({ rank: index + 1, agentId: standing.agentId, amountMinor: amountMinor.toString(), recipient });
+  }
+  return { ok: true, value: recipients };
+}
+
+function parseStoredRecipients(value: string): ArenaTransferRecipient[] | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
+    const recipients = parsed.filter((item): item is ArenaTransferRecipient => (
+      typeof item === "object"
+      && item !== null
+      && Number.isInteger((item as Record<string, unknown>).rank)
+      && typeof (item as Record<string, unknown>).agentId === "string"
+      && typeof (item as Record<string, unknown>).amountMinor === "string"
+      && typeof (item as Record<string, unknown>).recipient === "string"
+    ));
+    return recipients.length === parsed.length ? recipients : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function decryptStoredPayout(
+  encrypted: NonNullable<ArenaPrizePoolRecord["encryptedRecipient"]>,
+  context: { projectId: string; recordId: string },
+  options: Parameters<typeof decryptField>[2],
+): string {
+  try {
+    return decryptField(encrypted, { ...context, recordType: "arena_prize_pool", fieldName: "recipients" }, options);
+  } catch {
+    return decryptField(encrypted, { ...context, recordType: "arena_prize_pool", fieldName: "recipient" }, options);
+  }
 }
 
 export class ArenaPrizePoolService {
@@ -439,35 +507,37 @@ export class ArenaPrizePoolService {
       if (scheduled.length === 0 || scheduled.some((match) => match.status !== "completed" || !match.matchId)) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
       const receipts = await Promise.all(scheduled.map((match) => this.repositories.getArenaMatchReceipt(input.projectId, match.matchId!)));
       if (receipts.some((receipt) => !receipt)) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
-      const winner = winnerFromMatches(receipts.map((receipt) => ({ leftAgentId: receipt!.leftAgentId, rightAgentId: receipt!.rightAgentId, publicReceipt: receipt!.publicReceipt })));
-      if (!winner.ok) return winner;
-      const winnerEntry = await this.repositories.getArenaSeasonEntry(input.projectId, input.seasonId, winner.value);
-      if (!winnerEntry?.ownerFingerprint || !winnerEntry.encryptedPayoutWallet) {
-        return { ok: false, code: "ARENA_WINNER_PAYOUT_NOT_REGISTERED" };
-      }
+      const ranked = rankedFromMatches(receipts.map((receipt) => ({ leftAgentId: receipt!.leftAgentId, rightAgentId: receipt!.rightAgentId, publicReceipt: receipt!.publicReceipt })));
+      if (!ranked.ok) return ranked;
+      const season = await this.repositories.getArenaSeason(input.projectId, input.seasonId);
+      if (!season) return { ok: false, code: "ARENA_MATCH_NOT_COMPLETE" };
+      const rules = season.rulesSnapshot ?? resolveTournamentRules({ templateId: "playground" });
       const project = await this.repositories.getProject(input.projectId);
       if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
       const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, input.projectId);
-      const recipient = normalizeFeltAddress(decryptField(
-        winnerEntry.encryptedPayoutWallet,
-        {
-          projectId: input.projectId,
-          recordType: "arena_season_entry",
-          recordId: winnerEntry.id,
-          fieldName: "payout_wallet",
-        },
-        { dataKey, wrappedKey: project.wrappedDataKey },
-      ));
-      if (!recipient || fingerprintWallet(recipient, this.walletHashPepper) !== winnerEntry.ownerFingerprint) {
-        return { ok: false, code: "ARENA_WINNER_PAYOUT_NOT_REGISTERED" };
-      }
+      const entries = new Map((await this.repositories.listArenaSeasonEntries(input.projectId, input.seasonId))
+        .map((entry) => [entry.agentId, entry] as const));
+      const recipientsResult = payoutRecipients(ranked.value, rules, pool.amountMinor, entries, (entry) => {
+        if (!entry.encryptedPayoutWallet) return undefined;
+        const recipient = normalizeFeltAddress(decryptField(
+          entry.encryptedPayoutWallet,
+          { projectId: input.projectId, recordType: "arena_season_entry", recordId: entry.id, fieldName: "payout_wallet" },
+          { dataKey, wrappedKey: project.wrappedDataKey },
+        ));
+        return recipient && entry.ownerFingerprint && fingerprintWallet(recipient, this.walletHashPepper) === entry.ownerFingerprint
+          ? recipient
+          : undefined;
+      });
+      if (!recipientsResult.ok) return recipientsResult;
+      const recipients = recipientsResult.value;
+      const winner = recipients[0]!;
       const updatedAt = this.now();
       const next = {
         ...pool,
         status: "settlement_pending" as const,
-        winnerAgentId: winner.value,
-        recipientFingerprint: fingerprintWallet(recipient, this.walletHashPepper),
-        encryptedRecipient: encryptField(recipient, { projectId: input.projectId, recordType: "arena_prize_pool", recordId: pool.id, fieldName: "recipient" }, { dataKey, wrappedKey: project.wrappedDataKey }),
+        winnerAgentId: winner.agentId,
+        recipientFingerprint: fingerprintWallet(winner.recipient, this.walletHashPepper),
+        encryptedRecipient: encryptField(JSON.stringify(recipients), { projectId: input.projectId, recordType: "arena_prize_pool", recordId: pool.id, fieldName: "recipients" }, { dataKey, wrappedKey: project.wrappedDataKey }),
         updatedAt,
       };
       await this.repositories.prepareArenaPrizeSettlement({
@@ -478,7 +548,7 @@ export class ArenaPrizePoolService {
           projectId: input.projectId,
           actorFingerprint: fingerprintWallet(input.actorWalletAddress, this.walletHashPepper),
           eventType: "arena_prize_settlement_prepared",
-          payloadDigest: commitment({ poolId: pool.id, winnerAgentId: winner.value, recipientFingerprint: next.recipientFingerprint }),
+          payloadDigest: commitment({ poolId: pool.id, winnerAgentId: winner.agentId, recipients: recipients.map(({ rank, agentId, amountMinor }) => ({ rank, agentId, amountMinor })) }),
           createdAt: updatedAt,
         },
       });
@@ -503,13 +573,17 @@ export class ArenaPrizePoolService {
       const project = await this.repositories.getProject(input.projectId);
       if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
       const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, input.projectId);
-      const recipient = normalizeFeltAddress(decryptField(
+      const storedRecipients = decryptStoredPayout(
         pool.encryptedRecipient,
-        { projectId: input.projectId, recordType: "arena_prize_pool", recordId: pool.id, fieldName: "recipient" },
+        { projectId: input.projectId, recordId: pool.id },
         { dataKey, wrappedKey: project.wrappedDataKey },
-      ));
-      if (!recipient) return { ok: false, code: "ENCRYPTION_FAILED" };
-      return { ok: true, value: transferPlan(pool, "strk20_transfer", recipient) };
+      );
+      const recipients = parseStoredRecipients(storedRecipients) ?? (() => {
+        const recipient = normalizeFeltAddress(storedRecipients);
+        return recipient ? [{ rank: 1, agentId: pool.winnerAgentId ?? "winner", amountMinor: pool.amountMinor, recipient }] : undefined;
+      })();
+      if (!recipients?.length) return { ok: false, code: "ENCRYPTION_FAILED" };
+      return { ok: true, value: transferPlan(pool, "strk20_transfer", recipients[0]!.recipient, recipients) };
     } catch (error) {
       return { ok: false, code: mapPersistenceError(error) };
     }
@@ -546,15 +620,19 @@ export class ArenaPrizePoolService {
       const project = await this.repositories.getProject(pool.projectId);
       if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
       const dataKey = await this.keyProvider.unwrap(project.wrappedDataKey, pool.projectId);
-      const recipient = normalizeFeltAddress(decryptField(
+      const storedRecipients = decryptStoredPayout(
         pool.encryptedRecipient,
-        { projectId: pool.projectId, recordType: "arena_prize_pool", recordId: pool.id, fieldName: "recipient" },
+        { projectId: pool.projectId, recordId: pool.id },
         { dataKey, wrappedKey: project.wrappedDataKey },
-      ));
-      if (!recipient) return { ok: false, code: "ENCRYPTION_FAILED" };
+      );
+      const recipients = parseStoredRecipients(storedRecipients) ?? (() => {
+        const recipient = normalizeFeltAddress(storedRecipients);
+        return recipient ? [{ rank: 1, agentId: pool.winnerAgentId ?? "winner", amountMinor: pool.amountMinor, recipient }] : undefined;
+      })();
+      if (!recipients?.length) return { ok: false, code: "ENCRYPTION_FAILED" };
       const transferAuthorization = await this.verifyTransferAuthorization({
         confirmation: parsed.data,
-        expectedPlan: transferPlan(pool, "strk20_transfer", recipient),
+        expectedPlan: transferPlan(pool, "strk20_transfer", recipients[0]!.recipient, recipients),
         actorWalletAddress: actorAddress,
         transactionHash: normalizedTransactionHash,
       });

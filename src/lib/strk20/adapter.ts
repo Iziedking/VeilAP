@@ -28,6 +28,7 @@ export interface PrivateTransferInput {
   token: string;
   amountMinor: string;
   recipient: string;
+  transfers?: ReadonlyArray<{ amountMinor: string; recipient: string }>;
 }
 
 export interface ShieldInput {
@@ -49,7 +50,8 @@ export class Strk20WalletAdapter {
   }
 
   async preparePrivateTransfer(input: PrivateTransferInput): Promise<Strk20Outcome> {
-    if (!validateAmount(input.amountMinor) || !hasValue(input.token) || !hasValue(input.recipient)) {
+    const transfers = input.transfers ?? [{ amountMinor: input.amountMinor, recipient: input.recipient }];
+    if (!validateAmount(input.amountMinor) || !hasValue(input.token) || !hasValue(input.recipient) || transfers.length < 1 || transfers.some((transfer) => !validateAmount(transfer.amountMinor) || !hasValue(transfer.recipient))) {
       return { kind: "error", code: "PREPARATION_FAILED" };
     }
     const actions = createPrivateTransferActions(input);
@@ -114,12 +116,12 @@ export class Strk20WalletAdapter {
 }
 
 export function createPrivateTransferActions(input: PrivateTransferInput): Strk20Action[] {
-  return [{
-    type: "transfer",
+  return (input.transfers ?? [{ amountMinor: input.amountMinor, recipient: input.recipient }]).map((transfer) => ({
+    type: "transfer" as const,
     token: input.token,
-    amount: input.amountMinor,
-    recipient: input.recipient,
-  }];
+    amount: transfer.amountMinor,
+    recipient: transfer.recipient,
+  }));
 }
 
 export function createShieldActions(input: ShieldInput): Strk20Action[] {

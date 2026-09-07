@@ -1610,7 +1610,9 @@ export function createPostgresRepositories(db: VeilapDatabase): {
                 eq(arenaSeasonEntries.projectId, input.entry.projectId),
                 eq(arenaSeasonEntries.seasonId, input.entry.seasonId),
               ));
-            if (Number(totals[0]?.value ?? 0) >= season.maxEntries) throw new Error("ARENA_SEASON_FULL");
+            if ((season.rulesSnapshot as { entryLimit?: string } | null)?.entryLimit !== "unlimited" && Number(totals[0]?.value ?? 0) >= season.maxEntries) {
+              throw new Error("ARENA_SEASON_FULL");
+            }
             await tx.insert(arenaStrategyArtifacts).values({
               ...input.artifact,
               ownerFingerprint: input.artifact.ownerFingerprint ?? null,
@@ -2436,7 +2438,9 @@ export function createMemoryRepositories(): {
         if (input.now < season.startsAt) throw new Error("ARENA_SEASON_NOT_STARTED");
         if (input.now >= season.locksAt) throw new Error("ARENA_SEASON_CLOSED");
         const entries = [...arenaSeasonEntryRows.values()].filter((row) => row.projectId === input.entry.projectId && row.seasonId === input.entry.seasonId);
-        if (entries.length >= (season.maxEntries ?? 16)) throw new Error("ARENA_SEASON_FULL");
+        if (season.rulesSnapshot?.entryLimit !== "unlimited" && entries.length >= (season.maxEntries ?? 16)) {
+          throw new Error("ARENA_SEASON_FULL");
+        }
         if (arenaStrategyArtifactRows.has(input.artifact.id) || [...arenaStrategyArtifactRows.values()].some((row) => row.projectId === input.artifact.projectId && row.agentId === input.artifact.agentId)) {
           throw new Error("ARENA_ARTIFACT_ALREADY_EXISTS");
         }

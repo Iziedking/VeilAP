@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { STRK20_CALL_AND_PROOF } from "starknet";
 
 import { sameFeltAddress, normalizeFeltAddress } from "./address";
-import { Strk20WalletAdapter, type Strk20WalletAccount } from "./adapter";
+import { createPrivateTransferActions, Strk20WalletAdapter, type Strk20WalletAccount } from "./adapter";
 import { confirmStrk20Transaction } from "./receipt";
 
 const poolAddress = "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
@@ -57,6 +57,23 @@ describe("STRK20 address and wallet adapter", () => {
     const result = await adapter.preparePrivateTransfer({ token, amountMinor: "1000", recipient });
     expect(result).toMatchObject({ kind: "prepared", liveFee: "125" });
     expect(calls).toEqual(["transfer:true"]);
+  });
+
+  it("keeps ranked payouts in one atomic wallet action", () => {
+    expect(createPrivateTransferActions({
+      token,
+      amountMinor: "1000",
+      recipient,
+      transfers: [
+        { amountMinor: "500", recipient: "0x456" },
+        { amountMinor: "300", recipient: "0x789" },
+        { amountMinor: "200", recipient: "0xabc" },
+      ],
+    })).toEqual([
+      { type: "transfer", token, amount: "500", recipient: "0x456" },
+      { type: "transfer", token, amount: "300", recipient: "0x789" },
+      { type: "transfer", token, amount: "200", recipient: "0xabc" },
+    ]);
   });
 
   it("prepares a shield deposit as a separate action", async () => {

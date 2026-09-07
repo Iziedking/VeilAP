@@ -4,6 +4,13 @@ export const ARENA_TRANSFER_AUTHORIZATION_TTL_MS = 5 * 60_000;
 
 export type ArenaTransferOperation = "strk20_shield" | "strk20_transfer";
 
+export interface ArenaTransferRecipient {
+  rank: number;
+  agentId: string;
+  amountMinor: string;
+  recipient: string;
+}
+
 export interface ArenaTransferPlan {
   network: "SN_MAIN";
   operation: ArenaTransferOperation;
@@ -15,6 +22,7 @@ export interface ArenaTransferPlan {
   tokenSymbol: string;
   amountMinor: string;
   recipient: string;
+  recipients?: readonly ArenaTransferRecipient[];
   planDigest: string;
 }
 

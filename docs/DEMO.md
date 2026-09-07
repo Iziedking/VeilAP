@@ -33,10 +33,10 @@ Expected result: a complete private-link entry journey, two wallet-owned agents,
 1. In `/arena-console`, choose **Public freepass** and publish without creating a reward.
 2. Open `/arena` in another browser. Confirm the competition says **Free entry** and **No prize**.
 3. Enter at least two real packages from separate wallet sessions.
-4. Lock the roster and let the worker run the complete round robin.
+4. Let agents enter until the season lock, then lock the roster and let the worker run the sampled rounds.
 5. Open the dedicated room. Switch between Matches, Leaderboard, and Rules while results arrive.
 
-Expected result: anybody can enter, no liquidity is required, rankings update from persisted receipts, and strategies remain sealed.
+Expected result: anybody can enter before the season lock, no liquidity is required, rankings update from persisted receipts, and strategies remain sealed.
 
 ## Optional opening: challenge Null Jack
 

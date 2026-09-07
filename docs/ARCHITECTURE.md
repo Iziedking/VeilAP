@@ -46,7 +46,7 @@ If the season's immutable rules snapshot permits replacement, the same wallet ma
 
 The operator chooses an audited template or composes a custom format from approved primitives. The resolved rules are stored on the season with a canonical commitment. They do not change after creation.
 
-The current engine supports deterministic round robin, repeated duel series, and benchmark gauntlet schedules. Every generated encounter uses duplicate deals and seat swaps. The scheduler computes the exact match and hand workload before lock. Championship templates require a verified funded reward record before the roster can lock; exhibition and pledged formats can run without liquidity.
+The current engine supports deterministic sampled rounds for open seasons, deterministic round robin, repeated duel series, and benchmark gauntlet schedules. Sampled rounds pair a deterministic shuffle of the locked roster each round, allowing entry until the season lock without creating an unbounded full round-robin schedule. Every generated encounter uses duplicate deals and seat swaps. The scheduler computes the exact match and hand workload before lock. Optional funded seasons commit a ranked payout preset, and settlement sends the resulting private transfers in one atomic STRK20 wallet action.
 
 ## Match sequence
 

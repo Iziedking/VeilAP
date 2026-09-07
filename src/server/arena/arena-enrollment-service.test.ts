@@ -406,7 +406,19 @@ describe("ArenaEnrollmentService", () => {
   });
 
   it("serializes concurrent joins at the season capacity", async () => {
-    const { repositories, projectId, season, service } = await setup();
+    const cappedRules = resolveTournamentRules({
+      templateId: "custom",
+      custom: {
+        pairingMode: "round_robin",
+        entryMode: "open",
+        maxEntries: 2,
+        handsPerMatch: 12,
+        encountersPerPair: 1,
+        resubmissionPolicy: "replace_until_lock",
+        rewardPolicy: "optional",
+      },
+    });
+    const { repositories, projectId, season, service } = await setup({ rulesSnapshot: cappedRules });
     const results = await Promise.all([
       [playerOne, "EMBER_04", "join-ember-004"],
       [playerTwo, "NOVA_004", "join-nova-0004"],

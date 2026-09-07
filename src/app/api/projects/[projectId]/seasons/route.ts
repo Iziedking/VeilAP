@@ -19,14 +19,17 @@ const requestSchema = z.object({
   maxEntries: z.number().int().min(2).max(32).default(16),
   templateId: z.enum(["friend_challenge", "champion_challenge", "playground", "open_league", "sponsored_open", "duel_series", "benchmark_gauntlet", "championship", "custom"]).optional(),
   qualificationHands: z.number().int().min(40).max(100_000).optional(),
+  rewardDistribution: z.enum(["winner_takes_all", "top_3", "top_5", "top_8", "top_10"]).optional(),
   customRules: z.object({
-    pairingMode: z.enum(["round_robin", "duel_series", "gauntlet"]),
+    pairingMode: z.enum(["round_robin", "sampled_rounds", "duel_series", "gauntlet"]),
     entryMode: z.enum(["invite_only", "open"]),
+    entryLimit: z.enum(["capped", "unlimited"]).optional(),
     maxEntries: z.number().int().min(2).max(32),
     handsPerMatch: z.number().int().min(1).max(100),
     encountersPerPair: z.number().int().min(1).max(5),
     resubmissionPolicy: z.enum(["replace_until_lock", "fixed"]),
     rewardPolicy: z.enum(["optional", "funded_before_start"]),
+    rewardDistribution: z.enum(["winner_takes_all", "top_3", "top_5", "top_8", "top_10"]).optional(),
     qualificationHands: z.number().int().min(40).max(100_000).optional(),
   }).strict().optional(),
 }).strict();
