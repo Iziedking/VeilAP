@@ -27,6 +27,8 @@ export function WalletPicker({ wallets, disabled, onSelect }: WalletPickerProps)
           key={wallet.name}
           onClick={() => onSelect(wallet)}
           type="button"
+          aria-label={wallet.name}
+          title={`Connect ${wallet.name}`}
         >
           <span aria-hidden="true">{wallet.name.slice(0, 1).toUpperCase()}</span>
           <strong>{wallet.name}</strong>

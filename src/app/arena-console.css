@@ -310,13 +310,19 @@
   .operator-nav-actions .hub-theme-toggle { width: 44px; min-width: 44px; margin-right: 0; padding-inline: 0; font-size: 0; }
   .operator-nav-wallet { min-width: 44px; max-width: 44px; border-left: 0; }
   .operator-nav-wallet .wallet-picker { padding: 0; }
+  .operator-nav:has(.wallet-empty) { grid-template-columns: auto minmax(0, 1fr); }
+  .operator-nav:has(.wallet-empty) .operator-nav-actions { grid-column: 1 / -1; width: 100%; padding: 8px 12px; border-top: 1px solid var(--rule); }
+  .operator-nav:has(.wallet-empty) .operator-nav-wallet { min-width: 0; max-width: none; flex: 1; }
+  .operator-nav-wallet .wallet-empty { margin: 0; padding: 0 0 0 8px; border: 0; font-size: 10px; overflow-wrap: anywhere; }
+  .operator-nav-wallet .wallet-empty strong { font-size: 11px; }
+  .operator-nav-wallet .wallet-empty > span { display: block; font-size: 9px; }
   .operator-nav-wallet .wallet-option { width: 44px; min-height: 44px; padding: 0; justify-content: center; }
   .operator-nav-wallet .wallet-option > span { width: 28px; height: 28px; }
   .operator-nav-wallet .wallet-option strong, .operator-nav-wallet .wallet-option small, .operator-nav-wallet .sign-in-status { display: none; }
-  .operator-nav-wallet .wallet-authenticated { min-width: 44px; width: 44px; padding: 5px; display: block; }
+  .operator-nav-wallet .wallet-authenticated { min-width: 44px; width: 44px; padding: 0; display: block; }
   .operator-nav-wallet .wallet-authenticated > strong { display: block; overflow: hidden; font-size: 7px; text-overflow: ellipsis; }
   .operator-nav-wallet .wallet-authenticated > span { display: none; }
-  .operator-nav-wallet .wallet-logout { width: 100%; padding: 0; font-size: 0; }
+  .operator-nav-wallet .wallet-logout { width: 100%; min-height: 44px; padding: 0; font-size: 0; }
   .operator-nav-wallet .wallet-logout::after { content: "×"; font-size: 14px; }
   .operator-main { width: calc(100% - 24px); padding-bottom: 60px; }
   .operator-intro { padding-bottom: 38px; }

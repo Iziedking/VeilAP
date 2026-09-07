@@ -16,6 +16,7 @@ test("shows a scannable QR code beside the private competition link", async ({ p
     maxEntries: 2,
     entryCount: 0,
     createdAt: "2026-09-06T00:00:00.000Z",
+    rules: { rewardPolicy: "optional" },
   };
   const inviteUrl = `http://localhost:3010/play?project=${projectId}&season=${seasonId}&invite=qr-test-token`;
 
@@ -37,13 +38,15 @@ test("shows a scannable QR code beside the private competition link", async ({ p
   });
 
   await page.goto(`/arena-console/${projectId}/${seasonId}`);
-  await expect(page.getByText("PRIVATE ENTRY", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "COPY PRIVATE JOIN LINK" }).click();
+  await expect(page.getByText("SHARE THE COMPETITION", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Reward and payout" })).toHaveCount(0);
+  await page.getByRole("button", { name: "CREATE JOIN LINK" }).click();
 
-  const qr = page.getByRole("img", { name: "QR code for the private competition join link" });
+  const qr = page.getByRole("img", { name: "QR code for the competition join link" });
   await expect(qr).toBeVisible();
   await expect(qr).toHaveAttribute("src", /^data:image\/png;base64,/);
   await expect(page.getByRole("button", { name: "COPY LINK" })).toBeVisible();
-  await expect(page.getByLabel("Private join link")).toHaveValue(inviteUrl);
+  await expect(page.getByLabel("Competition join link")).toHaveValue(inviteUrl);
+  await expect(page.getByRole("link", { name: /^JOIN/ })).toHaveAttribute("href", inviteUrl);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });

@@ -68,7 +68,8 @@ test("routes arena and host work away from the landing page", async ({ page }) =
   await expect(fundingDescription).toBeVisible();
   expect(await fundingDescription.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(200);
   await expect(page.getByLabel("PROJECT ID")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /publish competition/i })).toBeVisible();
+  await expect(page.locator(".operator-simple-create button[type=submit]")).toBeDisabled();
+  await expect(page.getByText("Connect your Starknet wallet above first.", { exact: false })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);
 });
 

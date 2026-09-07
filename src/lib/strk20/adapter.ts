@@ -101,9 +101,9 @@ export class Strk20WalletAdapter {
   }
 
   private async prepare(actions: Strk20Action[]): Promise<Strk20Outcome> {
-    const fee = await this.readPoolFee();
-    if (!fee.ok) return { kind: "error", code: "PREPARATION_FAILED", reason: fee.code };
     try {
+      const fee = await this.readPoolFee();
+      if (!fee.ok) return { kind: "error", code: "PREPARATION_FAILED", reason: fee.code };
       // starknet@10.4.0, WalletAccountV6.strk20PrepareInvoke in
       // node_modules/starknet/dist/index.d.ts, read 2026-08-28. Simulation
       // is used for preflight only; submit() is the separate user action.
@@ -119,7 +119,7 @@ export function createPrivateTransferActions(input: PrivateTransferInput): Strk2
   return (input.transfers ?? [{ amountMinor: input.amountMinor, recipient: input.recipient }]).map((transfer) => ({
     type: "transfer" as const,
     token: input.token,
-    amount: transfer.amountMinor,
+    amount: walletAmount(transfer.amountMinor),
     recipient: transfer.recipient,
   }));
 }
@@ -128,8 +128,17 @@ export function createShieldActions(input: ShieldInput): Strk20Action[] {
   return [{
     type: "deposit",
     token: input.token,
-    amount: input.amountMinor,
+    amount: walletAmount(input.amountMinor),
   }];
+}
+
+// @starknet-io/types-js@0.10.3 wallet-api/components.d.ts defines amounts
+// as FELT (0x-prefixed hex); starknet@10.4.0 forwards them without conversion.
+// Verified 2026-09-07 against api/components.d.ts and the STRK20 starter kit:
+// https://github.com/Akashneelesh/strk20-starter-kit/blob/main/src/app/components/client/WalletHandle/WalletAccountV6Tag.tsx
+function walletAmount(amountMinor: string): string {
+  if (!validateAmount(amountMinor)) throw new Error("STRK20_AMOUNT_INVALID");
+  return `0x${BigInt(amountMinor).toString(16)}`;
 }
 
 function validateAmount(value: string): boolean {

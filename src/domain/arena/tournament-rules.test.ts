@@ -26,6 +26,15 @@ function asLegacyV2(rules: TournamentRules, overrides: Partial<TournamentRules> 
 }
 
 describe("tournament rules", () => {
+  it.each([3, 5, 9, 33])("gives all %i entrants the qualification sample despite odd-roster byes", (count) => {
+    const rules = resolveTournamentRules({ templateId: "playground" });
+    const roster = Array.from({ length: count }, (_, i) => ({ agentId: `AGENT-${i}`, joinedAt: new Date(i * 1000) }));
+    const schedule = buildTournamentSchedule({ rules, entries: roster, startsAt: new Date("2026-09-07T15:00:00Z"), endsAt: new Date("2026-09-07T20:00:00Z") });
+    const counts = roster.map(({ agentId }) => schedule.filter((match) => match.leftAgentId === agentId || match.rightAgentId === agentId).length);
+    expect(Math.min(...counts) * rules.handsPerMatch * 2).toBeGreaterThanOrEqual(rules.qualificationHands!);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+    expect(estimateTournamentWorkload({ rules, entryCount: count }).pairingCount).toBe(schedule.length);
+  });
   it("preserves version 1 and 2 commitments while requiring the versioned fields", () => {
     const rules = resolveTournamentRules({ templateId: "playground" });
     expect(rules).toMatchObject({

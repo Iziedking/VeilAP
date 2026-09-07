@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api/client";
+import { sameFeltAddress } from "@/lib/strk20/address";
 import {
   connectSessionWallet,
   disconnectSessionWallet,
@@ -96,14 +97,21 @@ export function WalletSessionButton({ returnTo = "/play", onAuthenticated, onDis
         if (!active) return;
         if (response.ok && body.ok && body.value?.walletAddress) {
           setWalletAddress(body.value.walletAddress);
-          const wallet = wallets.find((candidate) => candidate.accounts.some((account) => account.address === body.value?.walletAddress));
+          const wallet = wallets.find((candidate) => candidate.accounts.some((account) => sameFeltAddress(account.address, body.value!.walletAddress!)));
           setConnectedWallet(wallet);
           setFlow("authenticated");
-          if (wallet) {
+          if (wallet && onAuthenticated) {
             const connected = await connectSessionWallet(wallet);
-            if (active && connected.kind === "connected") {
+            if (active && connected.kind === "connected" && sameFeltAddress(connected.account.address, body.value.walletAddress)) {
               onAuthenticated?.({ wallet, account: connected.account, walletAddress: connected.account.address });
+            } else {
+              if (connected.kind === "connected") connected.account.unsubscribeChange();
+              if (active) setFlow("idle");
             }
+          } else if (onAuthenticated) {
+            // A server cookie is not a connected signing account. Let the host
+            // reconnect instead of showing verified while all money CTAs are disabled.
+            setFlow("idle");
           }
           return;
         }
@@ -191,7 +199,7 @@ export function WalletSessionButton({ returnTo = "/play", onAuthenticated, onDis
       const response = await apiFetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error("LOGOUT_FAILED");
       const walletToDisconnect = connectedWallet ?? wallets.find((candidate) =>
-        candidate.accounts.some((account) => account.address === walletAddress),
+        candidate.accounts.some((account) => sameFeltAddress(account.address, walletAddress)),
       );
       if (walletToDisconnect) await disconnectSessionWallet(walletToDisconnect);
       setWalletAddress("");

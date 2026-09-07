@@ -37,7 +37,8 @@
 .hub-theme-toggle:hover { background: var(--signal); color: var(--signal-ink); }
 .hub-theme-toggle-icon { width: 11px; height: 11px; display: inline-block; border: 2px solid currentColor; border-radius: 50%; }
 .hub-theme-toggle[aria-pressed="true"] .hub-theme-toggle-icon { background: currentColor; box-shadow: inset 0 0 0 2px var(--paper-light); }
-.hub-sound-toggle { min-height: 40px; padding: 0 11px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; cursor: pointer; }
+.hub-sound-toggle { min-height: 44px; padding: 0 11px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; cursor: pointer; }
+.hub-sound-toggle svg { flex: 0 0 18px; }
 .hub-sound-toggle:hover, .hub-sound-toggle[aria-pressed="true"] { background: var(--signal); color: var(--signal-ink); }
 .hub-sound-toggle > span:first-child { min-width: 11px; font-size: 12px; line-height: 1; }
 .hub-sign-in { padding-bottom: 5px; border-bottom: 1px solid var(--ink); font-size: 10px; font-weight: 760; }
@@ -93,15 +94,15 @@
 }
 
 @media (max-width: 760px) {
-  .hub-nav { min-height: 72px; padding: 0 16px; grid-template-columns: 1fr auto auto; gap: 14px; }
-  .hub-nav nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; height: 58px; justify-content: stretch; border-top: 2px solid var(--ink); background: var(--paper-light); }
-  .hub-nav nav a { min-width: 0; flex: 1; }
+  .hub-nav { min-height: 72px; padding: 0 10px; grid-template-columns: minmax(44px, 1fr) auto auto; gap: 6px; }
+  .hub-nav nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; width: 100%; height: 58px; justify-self: stretch; justify-content: stretch; border-top: 2px solid var(--ink); background: var(--paper-light); }
+  .hub-nav nav a { min-width: 44px; padding-inline: 0; flex: 1; font-size: 8px; }
   .hub-back-link { font-size: 8px; }
   .hub-brand, .hub-back-link, .hub-sign-in { min-height: 44px; }
   .hub-brand { align-items: center; }
   .hub-back-link { min-width: 44px; padding-inline: 7px; justify-content: center; }
   .hub-sign-in { display: inline-flex; align-items: center; padding-bottom: 0; }
-  .hub-nav-actions { gap: 10px; }
+  .hub-nav-actions { gap: 4px; }
   .hub-nav-actions .arena-notification-trigger { min-width: 44px; width: 44px; padding-inline: 0; }
   .arena-notification-trigger { min-height: 44px; padding-inline: 8px; font-size: 7px; }
   .arena-notification-trigger > span { display: none; }
@@ -117,7 +118,7 @@
   .hub-heading-stats span { min-width: 112px; }
   .hub-toolbar { margin-top: 50px; display: block; border-bottom: 0; }
   .hub-toolbar > div { min-height: 58px; overflow-x: auto; border-bottom: 1px solid var(--ink); }
-  .hub-toolbar button { min-width: 84px; }
+  .hub-toolbar button { min-width: 84px; min-height: 44px; }
   .hub-toolbar > a { margin-top: 14px; }
   .hub-card-grid { grid-template-columns: 1fr; }
   .hub-competition-card { min-height: 400px; box-shadow: 5px 5px 0 var(--ink); }

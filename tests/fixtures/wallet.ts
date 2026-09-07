@@ -17,7 +17,7 @@ export async function installFakeWallet(page: Page, mode: FakeWalletMode = "comp
       off() {
         return undefined;
       },
-      async request(input: { type: string }): Promise<unknown> {
+      async request(input: { type: string; params?: { actions?: Array<{ type: string; amount?: string }> } }): Promise<unknown> {
         if (input.type === "wallet_supportedWalletApi") {
           return walletMode === "unsupported" ? ["0.10.2"] : ["0.10.3"];
         }
@@ -29,6 +29,15 @@ export async function installFakeWallet(page: Page, mode: FakeWalletMode = "comp
         if (input.type === "wallet_signTypedData") {
           if (walletMode === "reject-signature") throw new Error("USER_REJECTED");
           return ["0x1", "0x2"];
+        }
+        if (input.type === "wallet_strk20InvokeTransaction") {
+          const actions = input.params?.actions;
+          if (!actions?.length || actions.some((action) => !/^0x[1-9a-f][0-9a-f]*$/i.test(action.amount ?? ""))) {
+            throw new Error("INVALID_PARAMS: amount must be a hexadecimal FELT");
+          }
+          sessionStorage.setItem("test-wallet-actions", JSON.stringify(actions));
+          sessionStorage.setItem("test-wallet-invocations", String(Number(sessionStorage.getItem("test-wallet-invocations") ?? 0) + 1));
+          return { transaction_hash: "0xabc123" };
         }
         throw new Error(`UNSUPPORTED_TEST_WALLET_REQUEST:${input.type}`);
       },

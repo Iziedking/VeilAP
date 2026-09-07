@@ -17,13 +17,13 @@ Stop the demo if any prerequisite is false. Explain the boundary instead of fabr
 ## Demo one: private friend challenge
 
 1. Sign in as the host and open `/arena-console`.
-2. Choose **Friend challenge**, name the event, set the dates, and publish it.
-3. Open the saved season and choose **Copy private join link**.
+2. Choose **Friend challenge**, name the event, set its lock and end times, and publish it. For a short test, choose the 100-decision qualification sample and inspect the displayed workload. Leave **Fund this competition** off for a free test. If enabled, choose the token and exact amount, then fund on the dedicated competition page.
+3. Choose **Create join link** on the competition page. A funded event must have its funding receipt verified first; a freepass needs no transfer. Use **Copy link**, the QR code, and **Join**.
 4. Send the link to the friend. The private competition must not appear in `/arena`.
 5. The friend opens the link, signs in with their own Starknet wallet, imports the package returned by their coding agent, reviews the commitment, and approves entry.
 6. The host enters their own package through the same private link.
 7. Confirm that the operator sees two aliases and two commitments, never either policy.
-8. Lock the draw. The worker runs three real seat-swapped matches.
+8. Let the roster lock, or lock it early once both agents enter. The worker runs the persisted seat-swapped schedule; its match count follows the committed rules and qualification target.
 9. Open the competition room. Watch standings refresh, then open a match and play the verified hand-receipt replay.
 
 Expected result: a complete private-link entry journey, two wallet-owned agents, public results, and no public strategy or private cards.
@@ -121,13 +121,19 @@ No. Version one uses a sponsor-controlled private STRK20 balance and a signed ap
 
 ### Can players stake today?
 
-No. The final demo uses free friend challenges, public freepass competitions, or sponsor-funded events. Player staking, winner-takes-all custody, and top-player splits remain unavailable until an audited escrow and distribution contract can enforce them.
+No. Entry is free. Sponsor-controlled private payouts support the committed winner-takes-all or ranked-share presets in the application. They are not contract-enforced escrow; ranked multi-recipient payouts still require live wallet verification before demonstrating or claiming them as working on mainnet.
 
 ### Can the operator steal a strategy?
 
 The trusted runner and sufficiently privileged infrastructure operators can access plaintext during execution. KMS and encrypted storage reduce exposure, but version one is not operator-blind. Confidential compute is a future hardening path.
 
 ## Evidence to capture
+
+The hackathon requires at least three successful STRK20 mainnet transactions and a three-minute video. Local test-wallet hashes are fixtures, not evidence. Never put them in `strk20.json`.
+
+Before the live funding test, check the displayed pool fee separately from the chosen reward and network fee. The read-only check on September 7 returned **6 STRK**; this is not a fixed promise. A first deposit can require a token-approval prompt, and confirming the hidden funding or payout plan requires a separate typed-data signature. Do not promise one signature.
+
+If a transaction hash appears, verify that transaction instead of funding or paying again. The same tab restores saved hashes after reload. If the tab was closed, storage was cleared, or the wallet errored before returning a hash, inspect wallet activity first. Do not retry blindly. A reverted transaction requires explicit recovery after its final status is checked.
 
 - public deployment URL;
 - health and readiness success without secrets;

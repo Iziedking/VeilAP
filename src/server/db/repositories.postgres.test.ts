@@ -101,7 +101,21 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
     const now = new Date("2026-08-30T12:00:00.000Z");
     const keyProvider = createPreviewKeyProvider();
     const wrappedDataKey = await keyProvider.wrap(randomBytes(32), projectId);
-    const cappedRules = { ...resolveTournamentRules({ templateId: "playground" }), entryLimit: "capped" as const };
+    // Public sampled seasons are intentionally uncapped. Exercise capacity
+    // serialization with a valid capped format, not a mutated public template.
+    const cappedRules = resolveTournamentRules({
+      templateId: "custom",
+      custom: {
+        pairingMode: "round_robin",
+        entryMode: "open",
+        entryLimit: "capped",
+        maxEntries: 2,
+        handsPerMatch: 12,
+        encountersPerPair: 1,
+        resubmissionPolicy: "replace_until_lock",
+        rewardPolicy: "optional",
+      },
+    });
 
     try {
       await repositories.projects.saveProject({
@@ -122,8 +136,8 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
         status: "open",
         entryMode: "open",
         maxEntries: 2,
-        templateId: "playground",
-        templateVersion: 1,
+        templateId: cappedRules.templateId,
+        templateVersion: cappedRules.templateVersion,
         rulesSnapshot: cappedRules,
         rulesCommitment: tournamentRulesCommitment(cappedRules),
         createdBy: `owner-${suffix}`,

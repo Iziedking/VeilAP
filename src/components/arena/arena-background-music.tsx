@@ -35,11 +35,20 @@ export function ArenaBackgroundMusic() {
   useEffect(() => {
     const handlePreference = (event: Event) => {
       const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
-      if (typeof enabled === "boolean") setSoundEnabled(enabled);
+      if (typeof enabled === "boolean") {
+        setSoundEnabled(enabled);
+        const audio = audioRef.current;
+        if (audio && enabled && musicAllowed) {
+          // This event is dispatched synchronously by the sound button. Preserve
+          // its user activation instead of waiting for a timer or React effect.
+          audio.volume = 0.22;
+          void audio.play().catch(() => { /* a later gesture can retry */ });
+        } else if (audio && !enabled) audio.pause();
+      }
     };
     window.addEventListener("veil-arena-sound-preference", handlePreference);
     return () => window.removeEventListener("veil-arena-sound-preference", handlePreference);
-  }, []);
+  }, [musicAllowed]);
 
   useEffect(() => {
     const handleSpectatorAudio = (event: Event) => {
@@ -66,8 +75,8 @@ export function ArenaBackgroundMusic() {
       startMusic();
     }, MUSIC_DELAY_MS);
     const handleGesture = () => { if (delayElapsedRef.current) startMusic(); };
-    window.addEventListener("pointerdown", handleGesture, { once: true });
-    window.addEventListener("keydown", handleGesture, { once: true });
+    window.addEventListener("pointerdown", handleGesture);
+    window.addEventListener("keydown", handleGesture);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("pointerdown", handleGesture);

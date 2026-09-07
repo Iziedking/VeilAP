@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { STRK20_CALL_AND_PROOF } from "starknet";
 
 import { sameFeltAddress, normalizeFeltAddress } from "./address";
-import { createPrivateTransferActions, Strk20WalletAdapter, type Strk20WalletAccount } from "./adapter";
+import { createPrivateTransferActions, createShieldActions, Strk20WalletAdapter, type Strk20WalletAccount } from "./adapter";
 import { confirmStrk20Transaction } from "./receipt";
 
 const poolAddress = "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
@@ -28,6 +28,16 @@ function account(overrides: Partial<Strk20WalletAccount> = {}): Strk20WalletAcco
 }
 
 describe("STRK20 address and wallet adapter", () => {
+  it("serializes exact decimal minor units as Wallet API hex felts, including values above Number precision", () => {
+    for (const amountMinor of ["5000000", "9007199254740993", "1000000000000000000"]) {
+      const actions = createShieldActions({ token, amountMinor });
+      const action = actions[0];
+      expect(action.type).toBe("deposit");
+      if (action.type !== "deposit") throw new Error("Expected deposit");
+      expect(action.amount).toMatch(/^0x[1-9a-f][0-9a-f]*$/);
+      expect(BigInt(action.amount)).toBe(BigInt(amountMinor));
+    }
+  });
   it("compares padded, unpadded, uppercase and malformed felt values safely", () => {
     expect(sameFeltAddress("0x01", "0x1")).toBe(true);
     expect(sameFeltAddress("0xABC", "0xabc")).toBe(true);
@@ -70,9 +80,9 @@ describe("STRK20 address and wallet adapter", () => {
         { amountMinor: "200", recipient: "0xabc" },
       ],
     })).toEqual([
-      { type: "transfer", token, amount: "500", recipient: "0x456" },
-      { type: "transfer", token, amount: "300", recipient: "0x789" },
-      { type: "transfer", token, amount: "200", recipient: "0xabc" },
+      { type: "transfer", token, amount: "0x1f4", recipient: "0x456" },
+      { type: "transfer", token, amount: "0x12c", recipient: "0x789" },
+      { type: "transfer", token, amount: "0xc8", recipient: "0xabc" },
     ]);
   });
 

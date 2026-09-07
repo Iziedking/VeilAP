@@ -27,20 +27,23 @@ export async function POST(
       return serviceResponse({ ok: false, code: "ROLE_FORBIDDEN" });
     }
 
+    const schedule = await getArenaSeasonService().getPublicSchedule(projectId, seasonId);
+    if (!schedule.ok) return serviceResponse(schedule);
+    if (schedule.value.season.status !== "open" || schedule.value.season.entryMode !== "invite_only") {
+      return serviceResponse({ ok: false, code: "INVALID_INPUT" });
+    }
+
     const prizePool = await getArenaPrizePoolService().getPool({
       projectId,
       seasonId,
       actorWalletAddress: actor.walletAddress,
     });
-    if (!prizePool.ok) return serviceResponse(prizePool);
-    if (prizePool.value.status !== "funded") {
+    const freepass = !prizePool.ok
+      && prizePool.code === "ARENA_PRIZE_POOL_NOT_FOUND"
+      && schedule.value.season.rules?.rewardPolicy === "optional";
+    if (!prizePool.ok && !freepass) return serviceResponse(prizePool);
+    if (prizePool.ok && prizePool.value.status !== "funded") {
       return serviceResponse({ ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" });
-    }
-
-    const schedule = await getArenaSeasonService().getPublicSchedule(projectId, seasonId);
-    if (!schedule.ok) return serviceResponse(schedule);
-    if (schedule.value.season.status !== "open" || schedule.value.season.entryMode !== "invite_only") {
-      return serviceResponse({ ok: false, code: "INVALID_INPUT" });
     }
 
     const now = Date.now();

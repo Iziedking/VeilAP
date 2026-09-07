@@ -139,15 +139,6 @@ function MatchSpectatorView({
     return () => window.clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const handlePreference = (event: Event) => {
-      const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
-      if (typeof enabled === "boolean") setSoundEnabled(enabled);
-    };
-    window.addEventListener("veil-arena-sound-preference", handlePreference);
-    return () => window.removeEventListener("veil-arena-sound-preference", handlePreference);
-  }, []);
-
   const playTableSound = useCallback((sound: TableSound, enabled = soundEnabled) => {
     if (!enabled || typeof window === "undefined") return;
     const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -221,6 +212,18 @@ function MatchSpectatorView({
       scheduleTone();
     }
   }, [soundEnabled]);
+
+  useEffect(() => {
+    const handlePreference = (event: Event) => {
+      const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+      if (typeof enabled !== "boolean") return;
+      setSoundEnabled(enabled);
+      if (enabled) playTableSound("check", true);
+      else void audioContextRef.current?.suspend();
+    };
+    window.addEventListener("veil-arena-sound-preference", handlePreference);
+    return () => window.removeEventListener("veil-arena-sound-preference", handlePreference);
+  }, [playTableSound]);
 
   useEffect(() => {
     // Future background tracks can opt into this contract with data-veil-arena-music.

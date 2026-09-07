@@ -466,7 +466,7 @@ export function buildTournamentSchedule(input: {
     ? rules.handsPerMatch * 2
     : Math.max(1, entries.length - 1) * rules.handsPerMatch * 2;
   const roundCount = timed
-    ? Math.ceil((rules.qualificationHands ?? decisionsPerAgentPerRound) / decisionsPerAgentPerRound)
+    ? timedRoundCount(rules, entries.length, decisionsPerAgentPerRound)
     : rules.encountersPerPair;
   let sequence = 1;
   for (let encounter = 0; encounter < roundCount; encounter += 1) {
@@ -474,8 +474,7 @@ export function buildTournamentSchedule(input: {
       ? new Date(startsAt.getTime() + Math.floor(((endsAt.getTime() - startsAt.getTime()) * encounter) / roundCount))
       : undefined;
     const roundPairs = rules.pairingMode === "sampled_rounds"
-      ? shuffledRoundEntries(entries, encounter + 1)
-        .slice(0, entries.length - (entries.length % 2))
+      ? shuffledRoundEntries(entries.length % 2 === 0 ? entries : entries.filter((_, index) => index !== encounter % entries.length), encounter + 1)
         .reduce<Array<[TournamentScheduleEntry, TournamentScheduleEntry]>>((pairs, entry, index, roundEntries) => {
           if (index % 2 === 0) pairs.push([entry, roundEntries[index + 1]!]);
           return pairs;
@@ -513,7 +512,7 @@ export function estimateTournamentWorkload(input: {
     ? rules.handsPerMatch * 2
     : Math.max(1, input.entryCount - 1) * rules.handsPerMatch * 2;
   const roundCount = rules.templateVersion === 3
-    ? Math.ceil((rules.qualificationHands ?? decisionsPerAgentPerRound) / decisionsPerAgentPerRound)
+    ? timedRoundCount(rules, input.entryCount, decisionsPerAgentPerRound)
     : rules.encountersPerPair;
   const pairingCount = basePairings * roundCount;
   return {
@@ -522,10 +521,21 @@ export function estimateTournamentWorkload(input: {
     totalHands: pairingCount * rules.handsPerMatch,
     ...(rules.templateVersion === 3 ? {
       roundCount,
-      decisionsPerAgent: roundCount * decisionsPerAgentPerRound,
+      decisionsPerAgent: (rules.pairingMode === "sampled_rounds" && input.entryCount % 2 !== 0
+        ? roundCount - Math.ceil(roundCount / input.entryCount)
+        : roundCount) * decisionsPerAgentPerRound,
       qualificationHands: rules.qualificationHands,
     } : {}),
   };
+}
+
+function timedRoundCount(rules: TournamentRules, entryCount: number, decisionsPerRound: number): number {
+  const playingRounds = Math.ceil((rules.qualificationHands ?? decisionsPerRound) / decisionsPerRound);
+  // Rotate one bye through the ordered roster. Randomly dropping an entrant
+  // each round can leave them short of the committed qualification sample.
+  return rules.pairingMode === "sampled_rounds" && entryCount % 2 !== 0
+    ? Math.ceil(playingRounds * entryCount / (entryCount - 1))
+    : playingRounds;
 }
 
 function shuffledRoundEntries(entries: TournamentScheduleEntry[], roundNumber: number): TournamentScheduleEntry[] {
