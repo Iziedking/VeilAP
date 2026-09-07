@@ -38,7 +38,6 @@ import {
 import type { Strk20Outcome } from "@/lib/strk20/types";
 import { type ConnectedSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
 import { createClientReceiptProvider, readLivePoolFee } from "@/components/wallet/strk20-desk-utils";
-import { WalletPicker } from "@/components/wallet/wallet-picker";
 import { WalletSessionButton } from "@/components/wallet/wallet-session-button";
 
 type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
@@ -233,7 +232,7 @@ function walletOutcomeCopy(outcome: Strk20Outcome | null): string | null {
     case "insufficient_private_balance": return "The wallet has no private balance for this exact reward. Fund the wallet privately, then retry.";
     case "recipient_not_ready": return "The STRK20 pool is not ready yet. Retry after the pool configuration is available.";
     case "user_rejected": return "The wallet request was declined. Nothing was submitted.";
-    case "error": return `Wallet ${outcome.code === "PREPARATION_FAILED" ? "preflight" : "submission"} failed. Nothing was submitted.`;
+    case "error": return `Wallet ${outcome.code === "PREPARATION_FAILED" ? "preflight" : "submission"} failed${outcome.reason ? `: ${outcome.reason}` : ""}. Nothing was submitted.`;
     case "reverted": return `The wallet transaction reverted: ${outcome.reason}`;
     case "expired": return `The wallet authorization expired: ${outcome.reason}`;
     case "unknown": return outcome.reason ? `The wallet returned an unknown result: ${outcome.reason}` : "The wallet result is not confirmed yet. Check the wallet before retrying.";
@@ -269,7 +268,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [fundingPlan, setFundingPlan] = useState<FundingPlan | null>(null);
   const [fundingAccount, setFundingAccount] = useState<FundingAccount | null>(null);
   const [fundingWalletName, setFundingWalletName] = useState("");
-  const [fundingPrepared, setFundingPrepared] = useState(false);
   const [fundingWalletOutcome, setFundingWalletOutcome] = useState<Strk20Outcome | null>(null);
   const [settlementPlan, setSettlementPlan] = useState<FundingPlan | null>(null);
   const [settlementPrepared, setSettlementPrepared] = useState(false);
@@ -302,7 +300,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const handleWalletAuthenticated = useCallback(({ wallet, account }: { wallet: WalletStandardWallet; account: ConnectedSessionWallet }) => {
     setFundingAccount(account);
     setFundingWalletName(wallet.name);
-    setFundingPrepared(false);
     setFundingWalletOutcome(null);
     setNotice(`${wallet.name} is connected. You can now publish or fund a competition.`);
   }, []);
@@ -311,7 +308,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     setFundingAccount(null);
     setFundingWalletName("");
     setFundingPlan(null);
-    setFundingPrepared(false);
     setFundingWalletOutcome(null);
   }, []);
 
@@ -373,7 +369,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     setLatestMatch(null);
     setPrizePool(null);
     setFundingPlan(null);
-    setFundingPrepared(false);
     setFundingWalletOutcome(null);
     setSettlementPlan(null);
     setSettlementPrepared(false);
@@ -449,7 +444,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       if (response.status === 404 && !body.ok && body.code === "ARENA_PRIZE_POOL_NOT_FOUND") {
         setPrizePool(null);
         setFundingPlan(null);
-        setFundingPrepared(false);
         setFundingWalletOutcome(null);
         setSettlementPlan(null);
         setSettlementPrepared(false);
@@ -468,7 +462,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       }
       setPrizePool(body.value);
       setFundingPlan(null);
-      setFundingPrepared(false);
       setFundingWalletOutcome(null);
       setSettlementPlan(nextSettlementPlan);
       setSettlementPrepared(false);
@@ -746,7 +739,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       }
       const plan = body.value;
       setFundingPlan(plan);
-      setFundingPrepared(false);
       const adapter = createFundingAdapter(fundingAccount, pool.poolAddress);
       const prepared = await adapter.prepareShield({ token: plan.tokenAddress, amountMinor: plan.amountMinor });
       setFundingWalletOutcome(prepared);
@@ -754,7 +746,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         setError(walletOutcomeCopy(prepared) ?? "The wallet could not prepare funding. Nothing was submitted.");
         return;
       }
-      setFundingPrepared(true);
       setNotice("Approve the reward in your wallet. Veil Arena will verify the receipt automatically.");
       const submitted = await adapter.submit(createShieldActions({ token: plan.tokenAddress, amountMinor: plan.amountMinor }));
       setFundingWalletOutcome(submitted);
@@ -805,7 +796,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setPrizePool(body.value);
       setFundingHash("");
       setFundingPlan(null);
-      setFundingPrepared(false);
       setFundingWalletOutcome(null);
       setNotice("Reward funded. Create the join link below to share the competition.");
     } catch {
@@ -1120,7 +1110,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
               {!prizePool ? <form className="operator-form operator-pool-form" onSubmit={(event) => void createPrizePool(event)}>
                 <label>PRIZE TOKEN<select value={prizeTokenId} onChange={(event) => setPrizeTokenId(event.target.value as ArenaPrizeTokenId)}><option value="USDC">USDC / USD Coin</option><option value="STRK">STRK / Starknet Token</option></select><small>Starknet Mainnet token. The wallet will approve this choice.</small></label>
                 <label>PRIZE AMOUNT<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="decimal" placeholder={prizeTokenId === "USDC" ? "10.00" : "1.00"} aria-describedby="prize-amount-help" required /><small id="prize-amount-help">Enter {selectedPrizeToken.symbol} in normal units. The exact on-chain amount is prepared automatically.</small></label>
-                <button className="operator-button operator-button-signal" type="submit" disabled={busy !== ""}>{busy === "pool-create" ? "PREPARING" : "SET REWARD"}<span>→</span></button>
+                <button className="operator-button operator-button-signal" type="submit" disabled={busy !== "" || !fundingAccount}>{busy === "pool-create" || busy === "funding" ? "FUNDING" : "FUND REWARD"}<span>↗</span></button>
               </form> : null}
               {prizePool && (prizePool.status === "funding_pending" || prizePool.status === "unknown") ? (
                 <div className="operator-chain-step">

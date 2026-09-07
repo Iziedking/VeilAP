@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api/client";
 import {
   connectSessionWallet,
   disconnectSessionWallet,
+  type ConnectedSessionWallet,
   type WalletStandardWallet,
 } from "@/lib/wallet/account";
 import { useDiscoveredWallets } from "@/lib/wallet/wallet-store";
@@ -70,7 +71,13 @@ function messageFor(code: string): string {
   return "We could not verify this wallet session. No payment or transfer was approved.";
 }
 
-export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string }) {
+type WalletSessionButtonProps = {
+  returnTo?: string;
+  onAuthenticated?: (input: { wallet: WalletStandardWallet; account: ConnectedSessionWallet; walletAddress: string }) => void;
+  onDisconnected?: () => void;
+};
+
+export function WalletSessionButton({ returnTo = "/play", onAuthenticated, onDisconnected }: WalletSessionButtonProps) {
   const wallets = useDiscoveredWallets();
   const [flow, setFlow] = useState<FlowState>("checking-session");
   const [message, setMessage] = useState("");
@@ -89,12 +96,15 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
         if (!active) return;
         if (response.ok && body.ok && body.value?.walletAddress) {
           setWalletAddress(body.value.walletAddress);
-          setConnectedWallet(
-            wallets.find((candidate) =>
-              candidate.accounts.some((account) => account.address === body.value?.walletAddress),
-            ),
-          );
+          const wallet = wallets.find((candidate) => candidate.accounts.some((account) => account.address === body.value?.walletAddress));
+          setConnectedWallet(wallet);
           setFlow("authenticated");
+          if (wallet) {
+            const connected = await connectSessionWallet(wallet);
+            if (active && connected.kind === "connected") {
+              onAuthenticated?.({ wallet, account: connected.account, walletAddress: connected.account.address });
+            }
+          }
           return;
         }
         setFlow("idle");
@@ -105,7 +115,7 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
     return () => {
       active = false;
     };
-  }, [wallets]);
+  }, [onAuthenticated, wallets]);
 
   async function authenticate(wallet: WalletStandardWallet) {
     setMessage("");
@@ -165,13 +175,14 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
       setWalletAddress(verified.walletAddress);
       setConnectedWallet(wallet);
       setFlow("authenticated");
+      onAuthenticated?.({ wallet, account: connected.account, walletAddress: verified.walletAddress });
     } catch (error) {
       const code = error instanceof Error ? error.message : "AUTH_FAILED";
       setErrorCode(code);
       setMessage(messageFor(code));
       setFlow("error");
     } finally {
-      if (connected?.kind === "connected") connected.account.unsubscribeChange();
+      if (connected?.kind === "connected" && !onAuthenticated) connected.account.unsubscribeChange();
     }
   }
 
@@ -188,6 +199,7 @@ export function WalletSessionButton({ returnTo = "/play" }: { returnTo?: string 
       setMessage("");
       setErrorCode("");
       setFlow("idle");
+      onDisconnected?.();
     } catch {
       setMessage("The wallet could not be disconnected. Try again or disconnect it in the wallet.");
       setFlow("error");

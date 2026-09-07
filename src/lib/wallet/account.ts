@@ -46,6 +46,8 @@ export type SessionWalletConnection =
   | { kind: "wrong-network"; required: "SN_MAIN" }
   | { kind: "connected"; account: WalletAccountV6 };
 
+export type ConnectedSessionWallet = Extract<SessionWalletConnection, { kind: "connected" }>['account'];
+
 export async function connectSessionWallet(
   wallet: WalletWithStarknetFeatures,
 ): Promise<SessionWalletConnection> {

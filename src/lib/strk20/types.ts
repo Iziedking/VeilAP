@@ -13,7 +13,7 @@ export type Strk20Outcome =
   | { kind: "reverted"; transactionHash: string; reason: string }
   | { kind: "expired"; reason: string }
   | { kind: "unknown"; transactionHash?: string; reason?: string }
-  | { kind: "error"; code: "PREPARATION_FAILED" | "SUBMISSION_FAILED" };
+  | { kind: "error"; code: "PREPARATION_FAILED" | "SUBMISSION_FAILED"; reason?: string };
 
 export type Strk20Operation = "shield" | "private_transfer";
 

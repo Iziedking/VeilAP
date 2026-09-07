@@ -102,7 +102,7 @@ export class Strk20WalletAdapter {
 
   private async prepare(actions: Strk20Action[]): Promise<Strk20Outcome> {
     const fee = await this.readPoolFee();
-    if (!fee.ok) return { kind: "error", code: "PREPARATION_FAILED" };
+    if (!fee.ok) return { kind: "error", code: "PREPARATION_FAILED", reason: fee.code };
     try {
       // starknet@10.4.0, WalletAccountV6.strk20PrepareInvoke in
       // node_modules/starknet/dist/index.d.ts, read 2026-08-28. Simulation
@@ -151,7 +151,8 @@ function mapWalletError(
   if (/(recipient|viewing key|registration).*(missing|required|not found|not registered)|not registered/.test(text)) {
     return { kind: "recipient_not_ready" };
   }
-  return { kind: "error", code: fallback };
+  const reason = errorText(error).slice(0, 160);
+  return reason ? { kind: "error", code: fallback, reason } : { kind: "error", code: fallback };
 }
 
 function errorText(error: unknown): string {
