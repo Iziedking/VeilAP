@@ -206,6 +206,15 @@ function toIso(value: string): string | undefined {
   return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }
 
+function defaultCompetitionWindow(): { startsAt: string; locksAt: string; endsAt: string } {
+  const now = Date.now();
+  return {
+    startsAt: new Date(now + 10 * 60_000).toISOString(),
+    locksAt: new Date(now + 70 * 60_000).toISOString(),
+    endsAt: new Date(now + 24 * 60 * 60_000).toISOString(),
+  };
+}
+
 function friendlyError(code: string): string {
   return errorCopy[code] ?? `The arena server returned ${code}.`;
 }
@@ -246,7 +255,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [settlementPrepared, setSettlementPrepared] = useState(false);
   const [settlementWalletOutcome, setSettlementWalletOutcome] = useState<Strk20Outcome | null>(null);
   const [seasonName, setSeasonName] = useState("");
-  const [templateId, setTemplateId] = useState<TournamentTemplateId>("playground");
+  const [templateId, setTemplateId] = useState<TournamentTemplateId>("sponsored_open");
   const [startsAt, setStartsAt] = useState("");
   const [locksAt, setLocksAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
@@ -255,12 +264,12 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [customPairingMode, setCustomPairingMode] = useState<TournamentPairingMode>("round_robin");
   const [customHands, setCustomHands] = useState("20");
   const customEncounters = "1";
-  const [qualificationHands, setQualificationHands] = useState("500");
+  const [qualificationHands, setQualificationHands] = useState("20000");
   const [customResubmission, setCustomResubmission] = useState<TournamentResubmissionPolicy>("replace_until_lock");
   const [customReward, setCustomReward] = useState<TournamentRewardPolicy>("optional");
   const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
   const [prizeTokenId, setPrizeTokenId] = useState<ArenaPrizeTokenId>("USDC");
-  const [prizeAmount, setPrizeAmount] = useState("");
+  const [prizeAmount, setPrizeAmount] = useState("15.00");
   const [fundingHash, setFundingHash] = useState("");
   const [settlementHash, setSettlementHash] = useState("");
   const [busy, setBusy] = useState("");
@@ -268,6 +277,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [notice, setNotice] = useState("");
   const [privateInvitation, setPrivateInvitation] = useState("");
   const [privateInvitationQr, setPrivateInvitationQr] = useState<{ invitation: string; dataUrl: string } | null>(null);
+  const [fundingPageQr, setFundingPageQr] = useState<string | null>(null);
   const selectedPrizeToken = ARENA_PRIZE_TOKENS[prizeTokenId];
 
   const openSeasons = useMemo(() => seasons.filter((season) => season.status === "open"), [seasons]);
@@ -310,6 +320,16 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     });
     return () => { cancelled = true; };
   }, [privateInvitation]);
+
+  useEffect(() => {
+    if (!manageMode) return;
+    void QRCode.toDataURL(window.location.href, {
+      width: 240,
+      margin: 2,
+      errorCorrectionLevel: "M",
+      color: { dark: "#211f2a", light: "#f7f1e6" },
+    }).then(setFundingPageQr).catch(() => setFundingPageQr(null));
+  }, [manageMode, managedProjectId, managedSeasonId]);
 
   const loadProject = useCallback(async (nextProjectId: string) => {
     const normalized = nextProjectId.trim();
@@ -434,9 +454,10 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
 
   async function createSeason(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const starts = toIso(startsAt);
-    const locks = toIso(locksAt);
-    const ends = toIso(endsAt);
+    const defaults = defaultCompetitionWindow();
+    const starts = toIso(startsAt) ?? defaults.startsAt;
+    const locks = toIso(locksAt) ?? defaults.locksAt;
+    const ends = toIso(endsAt) ?? defaults.endsAt;
     if (!seasonName.trim() || !starts || !locks || !ends || !(starts < locks && locks < ends) || !draftRules) {
       setError("Add a name, choose valid tournament rules, and set the dates in this order: start, lock, end.");
       return;
@@ -490,6 +511,15 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setSeasons((current) => [body.value, ...current.filter((season) => season.id !== body.value.id)]);
       setSeasonName("");
       setSchedule({ season: body.value, entries: [], matches: [] });
+      if (templateId === "sponsored_open") {
+        const rewardResponse = await apiFetch(`/api/projects/${encodeURIComponent(targetProjectId)}/seasons/${encodeURIComponent(body.value.id)}/prize-pool`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": freshKey("pool") },
+          body: JSON.stringify({ tokenAddress: ARENA_PRIZE_TOKENS.USDC.address, tokenSymbol: "USDC", amountMinor: "15000000" }),
+        });
+        const rewardBody = await readEnvelope<PrizePool>(rewardResponse);
+        if (rewardResponse.ok && rewardBody.ok) setPrizePool(rewardBody.value);
+      }
       router.push(`/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`);
       setPrivateInvitation("");
       recordArenaNotification({
@@ -993,16 +1023,41 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         <section className="operator-intro" aria-labelledby="operator-title">
           <div className="operator-kicker"><i /> COMPETITION CONTROL / STARKNET</div>
           <h1 id="operator-title">{manageMode ? "Run a competition." : "Host a competition."}</h1>
-          <p>{manageMode ? "Manage the sealed roster, run the matches, and settle the reward from one competition workspace." : "Choose a format, name the competition, and set the entry window. Veil Arena creates the private workspace when you publish."}</p>
+          <p>{manageMode ? "Your competition is ready. Fund the private 15 USDC reward pool to open it for players." : "Name your competition and we will take you straight to the funding page."}</p>
           {manageMode && managedProjectId && managedSeasonId ? <div className="operator-live-links"><Link href={`/arena/${encodeURIComponent(managedProjectId)}/${encodeURIComponent(managedSeasonId)}`}>Watch public competition →</Link><Link href="/arena">Browse all competitions</Link></div> : null}
         </section>
 
         {(error || notice) ? <div className={`operator-feedback ${error ? "is-error" : "is-notice"}`} role={error ? "alert" : "status"}>{error || notice}</div> : null}
 
-        <div className="operator-grid">
+        {manageMode ? (schedule ? <section className="operator-simple-funding" aria-labelledby="simple-funding-title">
+          <div className="operator-simple-funding-copy">
+            <span className="operator-simple-kicker">COMPETITION CREATED</span>
+            <h2 id="simple-funding-title">Fund the prize pool.</h2>
+            <p>One private reward. One wallet approval. Players can enter after the pool is funded.</p>
+            <div className="operator-simple-reward"><span>REWARD</span><strong>{prizePool ? formatTokenAmountFromMinor(prizePool.amountMinor, prizePool.tokenSymbol === "STRK" ? 18 : 6) : "15.00"} {prizePool?.tokenSymbol ?? "USDC"}</strong><small>STRK20 private reward on Starknet Mainnet</small></div>
+            {prizePool?.status === "funded" ? <div className="operator-simple-success" role="status"><strong>Pool funded.</strong><span>The competition is ready for entries.</span></div> : <div className="operator-simple-funding-actions">
+              {fundingPlan ? <div className="operator-simple-details"><span>POOL</span><code>{shortCommitment(fundingPlan.poolAddress)}</code><small>{fundingPlan.network} / {fundingPlan.tokenSymbol}</small></div> : null}
+              {!fundingPlan ? <button type="button" className="operator-button operator-button-signal" onClick={() => void prepareFundingPlan()} disabled={busy !== ""}>{busy === "pool-plan" ? "LOADING" : "SHOW FUNDING DETAILS"}<span>→</span></button> : null}
+              {fundingPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}
+              {fundingPlan && fundingAccount ? <button type="button" className="operator-button operator-button-signal operator-simple-primary" onClick={() => void prepareWalletFunding()} disabled={busy !== "" || fundingPrepared}>{busy === "funding-prepare" ? "CHECKING WALLET" : "FUND POOL"}<span>→</span></button> : null}
+              {fundingPrepared ? <button type="button" className="operator-button operator-button-dark operator-simple-primary" onClick={() => void submitWalletFunding()} disabled={busy !== ""}>{busy === "funding-submit" ? "OPENING WALLET" : "OPEN WALLET TO APPROVE"}<span>→</span></button> : null}
+              {fundingHash ? <label className="operator-simple-hash">TRANSACTION HASH<input value={fundingHash} onChange={(event) => setFundingHash(event.target.value)} placeholder="Paste the wallet hash" /></label> : null}
+              {fundingHash ? <button type="button" className="operator-button operator-button-dark operator-simple-primary" onClick={() => void confirmFunding()} disabled={busy !== ""}>{busy === "pool-funding" ? "VERIFYING" : "VERIFY FUNDING"}<span>→</span></button> : null}
+            </div>}
+            {fundingShieldedBalance?.kind === "loaded" ? <small className="operator-simple-note">Wallet balance check: {formatTokenAmountFromMinor(fundingShieldedBalance.balanceMinor, fundingPlan?.tokenSymbol === "STRK" ? 18 : 6)} {fundingPlan?.tokenSymbol ?? "USDC"}. No transaction was submitted by this check.</small> : null}
+            {fundingWalletOutcome?.kind === "error" ? <small className="operator-simple-error">The wallet could not prepare or submit the funding action. No arena state was changed.</small> : null}
+          </div>
+          <div className="operator-simple-qr-card">
+            <div className="operator-simple-qr">{fundingPageQr ? <Image src={fundingPageQr} alt="QR code to open this funding page on a phone" width={240} height={240} unoptimized /> : <span>QR READY AFTER LOAD</span>}</div>
+            <strong>Fund from your phone</strong>
+            <small>Scan to open this same funding page on another device.</small>
+          </div>
+        </section> : <div className="operator-simple-loading" role="status">Loading your competition...</div>) : null}
+
+        {!manageMode ? <div className="operator-grid">
             {!manageMode ? <section className="operator-panel operator-panel-wide" aria-labelledby="season-create-title">
               <header className="operator-panel-head"><div><span>01 / FORMAT AND ENTRY</span><h2 id="season-create-title">Create a competition</h2></div><strong>{seasons.length} SAVED</strong></header>
-              <form className="operator-form" onSubmit={(event) => void createSeason(event)}>
+              <form className="operator-form operator-simple-create" onSubmit={(event) => void createSeason(event)}>
                 <fieldset className="operator-template-fieldset">
                   <legend>WHAT ARE YOU HOSTING?</legend>
                   <div className="operator-template-grid">
@@ -1163,7 +1218,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
               {prizePool?.status === "settlement_pending" ? <div className="operator-chain-step"><div><span>WINNER SELECTED / {prizePool.winnerAgentId?.toUpperCase()}</span><strong>Approve the private winner payment</strong><small>The winning participant receives the reward at the wallet recorded when their agent entered.</small></div><div className="operator-chain-actions">{settlementPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}{settlementPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletSettlement()} disabled={busy !== "" || settlementPrepared}>{busy === "settlement-prepare" ? "CHECKING" : settlementPrepared ? "PREPARED" : "REVIEW PAYOUT"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletSettlement()} disabled={busy !== "" || !settlementPrepared}>{busy === "settlement-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}<label className="operator-inline-field">SETTLEMENT TRANSACTION HASH<input value={settlementHash} onChange={(event) => setSettlementHash(event.target.value)} placeholder="0x..." /></label><button type="button" className="operator-button operator-button-dark" onClick={() => void confirmSettlement()} disabled={busy !== "" || !settlementPlan || !fundingAccount || !settlementHash.trim()}>{busy === "pool-settlement-confirm" ? "SIGNING" : "VERIFY PAYMENT"}<span>↗</span></button></div>{settlementPlan ? <div className="operator-plan" aria-label="Prepared private winner payment"><span>{settlementPlan.network} / PRIVATE WINNER PAYMENT</span><code>{formatTokenAmountFromMinor(settlementPlan.amountMinor, settlementPlan.tokenSymbol === "STRK" ? 18 : 6)} {settlementPlan.tokenSymbol} / winning participant</code><small>{fundingAccount ? "Review and approve this exact payment in the connected wallet." : "Connect the sponsor wallet to review and approve the payment."}</small></div> : null}<small className="operator-wallet-note">The winner receives a private payment after the receipt is verified. The recipient stays sealed.</small>{settlementWalletOutcome?.kind === "error" ? <small className="operator-wallet-note">Wallet preflight or submission failed. No arena state was changed.</small> : null}</div> : null}
               {prizePool?.status === "settled" ? <div className="operator-chain-complete"><span>SETTLEMENT COMPLETE</span><strong>{prizePool.winnerAgentId?.toUpperCase()} / PRIVATE REWARD VERIFIED</strong><small>The receipt and sponsor authorization are confirmed. The amount and recipient remain private.</small></div> : null}
             </section> : null}
-        </div>
+        </div> : null}
       </main>
 
       <footer className="operator-footer"><VeilLogo /><span>VEIL ARENA / OPERATOR DESK</span><span>YOUR WALLET SIGNS AND SUBMITS TRANSACTIONS</span></footer>
