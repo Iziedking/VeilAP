@@ -6,7 +6,6 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useSta
 import { VeilLogo } from "@/components/veil-logo";
 import { XMark } from "@/components/brand/x-mark";
 import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
-import { ArenaNotificationBell } from "@/components/arena/arena-notification-bell";
 import {
   agentPackageCommitment,
   parseAgentPackage,
@@ -173,12 +172,6 @@ function enrollmentMessage(code: string): string {
   return messages[code] ?? "The agent could not be entered. Nothing was submitted. Try again.";
 }
 
-function savedAgentErrorMessage(code: string): string {
-  if (code === "CONFIGURATION_MISSING") return "Private agent storage is not configured on this deployment. Your reviewed package is still here; ask the operator to configure the independent vault key ring, then retry.";
-  if (code === "INVALID_INPUT") return "The reviewed package is no longer valid for saving. Review the package again before retrying.";
-  return "The private agent library could not save this package. Your reviewed package is still here; retry when the service is available.";
-}
-
 type PackageReview =
   | { status: "empty" }
   | { status: "invalid"; message: string }
@@ -253,7 +246,6 @@ export function VeilArenaPlay({
   const [entry, setEntry] = useState<Enrollment | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [agentPackageText, setAgentPackageText] = useState("");
-  const [guideCopyState, setGuideCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [claimState, setClaimState] = useState<ClaimState>("idle");
   const [claimMessage, setClaimMessage] = useState("");
   const [claimedPackage, setClaimedPackage] = useState<Extract<PackageReview, { status: "ready" }> | null>(null);
@@ -459,6 +451,8 @@ export function VeilArenaPlay({
     ? seasons.filter((season) => season.id === invitedSeasonId)
     : seasons;
   const selectedSeason = seasons.find((season) => season.id === selectedSeasonId);
+  const primarySeason = selectedSeason ?? visibleSeasons[0] ?? null;
+  const alternateSeasons = visibleSeasons.filter((season) => season.id !== primarySeason?.id);
   const selectedSeasonRequiresX = selectedSeason ? requiresXVerification(selectedSeason) : false;
   const selectedSeasonJoinable = selectedSeason ? isJoinable(selectedSeason, now, invitedSeasonId) : false;
   const localPackageReview = useMemo(() => reviewAgentPackage(agentPackageText), [agentPackageText]);
@@ -513,33 +507,6 @@ export function VeilArenaPlay({
     }).catch(()=>{if(!controller.signal.aborted)setSaveMessage("Your selected saved agent could not be reached. Use Retry loading agent below.");});
     return ()=>controller.abort();
   },[defaultAgentId,sessionState]);
-
-  async function saveAgent() {
-    if (sessionState !== "authenticated" || packageReview.status !== "ready" || !packageReview.agentPackage || saveState === "saving") return;
-    setSaveState("saving");
-    setSaveMessage("");
-    try {
-      const response = await apiFetch("/api/profile/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentPackage: packageReview.agentPackage }),
-      });
-      const body = await response.json() as ApiEnvelope<typeof savedAgents[number]>;
-      if (!response.ok || !body.ok) {
-        setSaveState("error");
-        setSaveMessage(savedAgentErrorMessage(body.ok ? "PERSISTENCE_FAILED" : body.code));
-        return;
-      }
-      setSavedAgents((current) => [body.value, ...current.filter((agent) => agent.agentId !== body.value.agentId)]);
-      setSaveState("saved");
-      setSaveMessage(joinableSeasons.length > 0
-        ? "Saved to your private agent library. Choose an open arena above, or pass for now."
-        : "Saved to your private agent library. No open arena is required to keep it here.");
-    } catch {
-      setSaveState("error");
-      setSaveMessage("The agent library could not be reached. Nothing was entered.");
-    }
-  }
 
   useEffect(() => {
     if (sessionState !== "authenticated" || !projectId || !selectedSeasonId) {
@@ -627,15 +594,6 @@ export function VeilArenaPlay({
     }
     updateAgentPackage(await file.text());
     event.target.value = "";
-  }
-
-  async function copyAgentGuide() {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/AGENT.md`);
-      setGuideCopyState("copied");
-    } catch {
-      setGuideCopyState("error");
-    }
   }
 
   async function connectXAccount() {
@@ -731,7 +689,7 @@ export function VeilArenaPlay({
           ? invitationToken ? "This private competition could not be found." : "No public season has been created yet."
             : joinableSeasons.length === 0
               ? invitationToken ? "This private challenge is no longer accepting an agent." : "No public season is accepting agents right now."
-              : invitationToken ? "Your private challenge is ready. Build an agent, then approve its entry." : "Choose a competition, give AGENT.md to a coding agent, then approve the package it returns.";
+              : invitationToken ? "Your private challenge is ready. Review the selected arena, then approve entry." : "The first open arena is selected for you. Review it, then approve entry.";
   let submitLabel = "APPROVE, SEAL AND ENTER";
   if (submitting) {
     submitLabel = "SEALING APPROVED PACKAGE...";
@@ -751,18 +709,54 @@ export function VeilArenaPlay({
     submitLabel = "APPROVE AND REPLACE ACTIVE AGENT";
   }
 
+  const nextStep = !selectedSeason
+    ? "Waiting for a real competition"
+    : sessionState === "checking"
+      ? "Checking your wallet"
+      : sessionState !== "authenticated"
+        ? "Sign in with your wallet"
+        : packageReview.status !== "ready"
+          ? usingSavedAgent ? "Loading your saved agent" : "Add your agent package"
+          : selectedSeasonRequiresX && !xIdentity
+            ? "Verify your X account"
+            : currentEntry && !replacementConfirmed
+              ? "Confirm the agent replacement"
+              : "Approve entry and seal the strategy";
+
+  const renderSeasonOption = (season: ArenaSeason) => {
+    const joinable = isJoinable(season, now, invitedSeasonId);
+    const replacementOpen = acceptsReplacement(season, now);
+    const available = joinable || replacementOpen;
+    const selected = season.id === selectedSeasonId;
+    return (
+      <button
+        className={`play-season${selected ? " is-selected" : ""}${available ? "" : " is-unavailable"}`}
+        type="button"
+        key={season.id}
+        aria-pressed={selected}
+        aria-disabled={!available}
+        onClick={() => {
+          setSelectedSeasonId(season.id);
+          setEntry(null);
+          setEntryState("idle");
+          setReplacementMode(false);
+          resetSubmission();
+        }}
+      >
+        <span className="play-season-index">{String(visibleSeasons.indexOf(season) + 1).padStart(2, "0")}</span>
+        <span className="play-season-name"><strong>{season.name}</strong><small>{(season.templateId ?? season.rulesetVersion).replaceAll("_", " ")}</small></span>
+        <span><strong>{season.entryCount} / {season.maxEntries}</strong><small>AGENTS</small></span>
+        <span><strong>{seasonStateLabel(season, now, invitedSeasonId)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "FREE CHALLENGE"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
+      </button>
+    );
+  };
+
   return (
     <div className="play-page">
       <header className="play-nav">
         <Link className="play-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
         <Link className="play-back" href={invitationToken ? "/arena" : "/"}>← {invitationToken ? "Back to arena" : "Back to home"}</Link>
-          <div className="play-nav-actions">
-          <nav aria-label="Player navigation">
-            <Link href="/arena">Watch arena</Link>
-            <Link href="/sign-in">Wallet access</Link>
-            <Link href="/profile">Profile</Link>
-          </nav>
-          <ArenaNotificationBell />
+        <div className="play-nav-actions">
           <ArenaThemeToggle />
         </div>
       </header>
@@ -770,58 +764,36 @@ export function VeilArenaPlay({
       <main>
         <section className="play-hero" aria-labelledby="play-title">
           <span className="play-kicker">AGENT ENTRY</span>
-          <h1 id="play-title">{usingSavedAgent ? "Choose where your agent competes." : "Prepare an agent for competition."}</h1>
-          <p>{usingSavedAgent ? "Your saved agent is ready. Choose a competition, check the short summary, then approve entry." : "Give AGENT.md to a coding agent of your choice. Bring the completed package here, review it once, then choose where it competes."}</p>
-          <ol className="play-steps" aria-label="How to enter">
-            <li><span>01</span><strong>{usingSavedAgent ? "Choose an open competition" : "Give AGENT.md to a coding agent"}</strong></li>
-            <li><span>02</span><strong>{usingSavedAgent ? "Use your saved agent" : "Have it build and validate the package"}</strong></li>
-            <li><span>03</span><strong>{selectedSeasonRequiresX ? "Verify your X account if required" : "Sign in with your wallet"}</strong></li>
-            <li><span>04</span><strong>Approve entry</strong></li>
-          </ol>
+          <h1 id="play-title">{usingSavedAgent ? "Enter the next arena." : "Bring your agent."}</h1>
+          <p>{usingSavedAgent ? "Your saved agent is selected. Review the arena, then approve entry." : "Choose your package once. Veil Arena checks it before entry."}</p>
+          <div className="play-next-step" aria-live="polite">
+            <span>NEXT STEP</span>
+            <strong>{nextStep}</strong>
+            <small>{statusMessage}</small>
+          </div>
         </section>
 
         <div className="play-workspace">
           <section className="play-seasons" aria-labelledby="season-title">
             <header>
-              <div><span>01 / LIVE SEASONS</span><h2 id="season-title">Choose your arena</h2></div>
+              <div><span>ARENA</span><h2 id="season-title">Your next arena</h2></div>
               <strong>{joinableSeasons.length} OPEN</strong>
             </header>
-            <p className="play-status" aria-live="polite">{statusMessage}</p>
 
-            <div className="play-season-list">
-              {visibleSeasons.map((season) => {
-                const joinable = isJoinable(season, now, invitedSeasonId);
-                const replacementOpen = acceptsReplacement(season, now);
-                const available = joinable || replacementOpen;
-                const selected = season.id === selectedSeasonId;
-                return (
-                  <button
-                    className={`play-season${selected ? " is-selected" : ""}${available ? "" : " is-unavailable"}`}
-                    type="button"
-                    key={season.id}
-                    aria-pressed={selected}
-                    aria-disabled={!available}
-                    onClick={() => {
-                      setSelectedSeasonId(season.id);
-                      setEntry(null);
-                      setEntryState("idle");
-                      setReplacementMode(false);
-                      resetSubmission();
-                    }}
-                  >
-                    <span className="play-season-index">{String(visibleSeasons.indexOf(season) + 1).padStart(2, "0")}</span>
-                    <span className="play-season-name"><strong>{season.name}</strong><small>{(season.templateId ?? season.rulesetVersion).replaceAll("_", " ")}</small></span>
-                    <span><strong>{season.entryCount} / {season.maxEntries}</strong><small>AGENTS</small></span>
-                    <span><strong>{seasonStateLabel(season, now, invitedSeasonId)}</strong><small>{season.prizeStatus === "funded" ? "FUNDED PRIVATE REWARD" : season.prizeStatus === "funding_pending" ? "REWARD PLEDGED" : "FREE CHALLENGE"} / {joinable ? remainingLabel(season, now) : timeLabel(season.locksAt)}</small></span>
-                  </button>
-                );
-              })}
+            <div className="play-season-list play-season-list-primary">
+              {primarySeason ? renderSeasonOption(primarySeason) : null}
             </div>
+            {alternateSeasons.length > 0 ? <details className="play-alternate-seasons">
+              <summary>Choose a different competition ({alternateSeasons.length})</summary>
+              <div className="play-season-list">
+                {alternateSeasons.map(renderSeasonOption)}
+              </div>
+            </details> : null}
           </section>
 
           <section className="play-builder" aria-labelledby="builder-title">
             <header>
-              <div><span>02 / AGENT ENTRY</span><h2 id="builder-title">{usingSavedAgent ? "Your saved agent" : "Bring your agent package"}</h2></div>
+              <div><span>AGENT</span><h2 id="builder-title">{usingSavedAgent ? "Your saved agent" : "Your agent package"}</h2></div>
               <strong>{selectedSeasonJoinable ? "OPEN FOR ENTRY" : selectedSeason ? "VIEW ONLY" : "WAITING FOR SEASON"}</strong>
             </header>
             {selectedSeason?.rules?.duplicateStrategyPolicy === "reject_exact" && <p className="play-roster-note">One entry per exact strategy. Changing its name or ID does not make it a different strategy.</p>}
@@ -878,13 +850,11 @@ export function VeilArenaPlay({
                     <div>
                       <span>START HERE</span>
                       <h3 id="agent-guide-title">Start with AGENT.md.</h3>
-                      <p>Give the guide to a coding agent and ask for one <code>.veil-agent.json</code> package. The package contains the strategy Veil Arena checks before entry.</p>
+                      <p>Give this guide to your coding agent, then bring back one package.</p>
                     </div>
                     <div className="play-agent-guide-actions">
-                      <button type="button" onClick={copyAgentGuide}>[{guideCopyState === "copied" ? " GUIDE LINK COPIED " : " COPY AGENT.MD LINK "}]</button>
                       <a href="/AGENT.md" download>[ DOWNLOAD GUIDE ]</a>
                     </div>
-                    {guideCopyState === "error" && <p className="play-inline-error" role="alert">Copy was blocked. Download the guide instead.</p>}
                   </section>
 
                   <section className="play-package-import" aria-labelledby="package-import-title">
@@ -895,7 +865,7 @@ export function VeilArenaPlay({
                         [ CHOOSE PACKAGE ]
                       </label>
                     </div>
-                    <p className="play-package-intro">Importing starts a safety review. Save the sealed package to your private agent library first; entering a competition is a separate choice. Other players see its name and commitment. The trusted backend and privileged operators can access its strategy.</p>
+                    <p className="play-package-intro">Choose or paste one package. The strategy stays sealed from other players.</p>
                     {savedAgents.length > 0 && (
                       <div className="play-saved-agents" aria-label="Saved agents">
                         <span>SAVED IN YOUR PRIVATE LIBRARY</span>
@@ -945,8 +915,8 @@ export function VeilArenaPlay({
                     </>
                   )}
                   <div className="play-privacy-grid">
-                    <p><span>PUBLIC</span> Agent name, entry commitment, match score, and rank.</p>
-                    <p><span>PRIVATE</span> Strategy rules, package contents, and the wallet that receives a reward.</p>
+                    <p><span>PUBLIC</span> Name, result, commitment.</p>
+                    <p><span>SEALED</span> Strategy and reward recipient.</p>
                   </div>
                   <details>
                     <summary>How privacy works</summary>
@@ -1010,26 +980,29 @@ export function VeilArenaPlay({
                   )
                 )}
                 {sessionState === "authenticated" && !selectedSeasonRequiresX && (
-                  <div className="play-wallet-state">
-                    <div>
-                      <span>X ACCOUNT OPTIONAL FOR THIS MODE</span>
-                      <small>Wallet access is enough to test exhibition and optional-reward competitions. Connect X if you want to associate an account.</small>
-                    </div>
-                    {xIdentity ? (
-                      <div className="play-x-optional-identity">
-                        <span className="play-x-label"><XMark /> @{xIdentity.username}</span>
-                        {xConfigured ? (
-                          <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
-                            [ {xConnecting ? "OPENING X" : "REFRESH X PROFILE"} ]
-                          </button>
-                        ) : null}
+                  <details className="play-optional-check">
+                    <summary>{xIdentity ? `X account connected: @${xIdentity.username}` : "Optional: connect an X account"}</summary>
+                    <div className="play-wallet-state">
+                      <div>
+                        <span>X ACCOUNT OPTIONAL FOR THIS MODE</span>
+                        <small>Wallet access is enough to enter. Connect X only if you want to associate an account.</small>
                       </div>
-                    ) : xConfigured ? (
-                      <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
-                        [ {xConnecting ? "OPENING X" : "CONNECT X ACCOUNT"} ]
-                      </button>
-                    ) : null}
-                  </div>
+                      {xIdentity ? (
+                        <div className="play-x-optional-identity">
+                          <span className="play-x-label"><XMark /> @{xIdentity.username}</span>
+                          {xConfigured ? (
+                            <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
+                              [ {xConnecting ? "OPENING X" : "REFRESH X PROFILE"} ]
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : xConfigured ? (
+                        <button type="button" className="play-inline-action" onClick={connectXAccount} disabled={xConnecting}>
+                          [ {xConnecting ? "OPENING X" : "CONNECT X ACCOUNT"} ]
+                        </button>
+                      ) : null}
+                    </div>
+                  </details>
                 )}
                 {xMessage && <p className="play-claim-status" role="status">{xMessage}</p>}
                 {saveMessage && <p className={`play-save-message${saveState === "error" ? " is-error" : ""}`} role="status">{saveMessage}</p>}
@@ -1038,15 +1011,6 @@ export function VeilArenaPlay({
                 {entryState === "error" && <div className="play-error play-entry-error" role="alert"><span>Your existing entry could not be checked. Nothing new was submitted.</span><button type="button" onClick={() => { setEntryState("loading"); setEntryRefresh((current) => current + 1); }}>CHECK AGAIN</button></div>}
 
                 <div className="play-submit-actions">
-                {!defaultAgentId && <button
-                  className="play-save"
-                  type="button"
-                  onClick={() => void saveAgent()}
-                  disabled={sessionState !== "authenticated" || packageReview.status !== "ready" || !packageReview.agentPackage || submitting || saveState === "saving"}
-                >
-                  <span>{saveState === "saving" ? "VALIDATING AND SAVING..." : saveState === "saved" ? "AGENT SAVED TO PROFILE" : "SAVE AGENT TO PROFILE"}</span>
-                  <strong aria-hidden="true">↓</strong>
-                </button>}
                 <button
                   className="play-submit"
                   type="submit"

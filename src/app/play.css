@@ -93,6 +93,10 @@ html[data-theme="dark"] .play-page {
 .play-steps li:last-child { border-right: 0; }
 .play-steps span { color: var(--play-signal-dark); font-family: var(--arena-display); font-size: 16px; }
 .play-steps strong { font-size: 12px; line-height: 1.4; text-transform: uppercase; }
+.play-next-step { margin-top: 42px; padding: 20px 22px; display: grid; gap: 8px; border: 2px solid var(--play-ink); background: var(--play-signal); box-shadow: 6px 6px 0 var(--play-ink); color: var(--play-signal-ink); }
+.play-next-step span { font-size: 9px; letter-spacing: .08em; }
+.play-next-step strong { font-family: var(--arena-display); font-size: clamp(20px, 3vw, 30px); line-height: 1; text-transform: uppercase; }
+.play-next-step small { max-width: 860px; font-family: var(--body); font-size: 13px; line-height: 1.45; }
 
 .play-workspace { border-top: 2px solid var(--play-ink); }
 .play-seasons, .play-builder { width: min(1320px, calc(100% - 48px)); margin: 0 auto; padding: 76px 0 86px; }
@@ -116,6 +120,10 @@ html[data-theme="dark"] .play-page {
 .play-season:hover small, .play-season.is-selected small { color: var(--play-signal-ink); opacity: .76; }
 .play-season.is-selected { box-shadow: inset 7px 0 0 var(--play-ink); }
 .play-season.is-unavailable:not(.is-selected) { opacity: .58; }
+.play-alternate-seasons { margin-top: 14px; border: 1px solid var(--play-rule); background: var(--play-panel); }
+.play-alternate-seasons summary { min-height: 48px; padding: 0 16px; display: flex; align-items: center; color: var(--play-dim); cursor: pointer; font-size: 10px; text-transform: uppercase; }
+.play-alternate-seasons[open] summary { border-bottom: 1px solid var(--play-rule); color: var(--play-ink); }
+.play-alternate-seasons .play-season-list { border: 0; }
 
 .play-form, .play-success { margin-top: 30px; border: 2px solid var(--play-ink); background: var(--play-panel); box-shadow: 8px 8px 0 var(--play-ink); }
 .play-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
@@ -182,6 +190,10 @@ html[data-theme="dark"] .play-page {
 .play-validation-list small { color: var(--play-review-dim); font-size: 9px; line-height: 1.35; }
 
 .play-wallet-state, .play-sign-in-callout { min-height: 80px; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--play-rule); }
+.play-optional-check { border-bottom: 1px solid var(--play-rule); }
+.play-optional-check summary { min-height: 48px; padding: 0 24px; display: flex; align-items: center; color: var(--play-dim); cursor: pointer; font-size: 9px; text-transform: uppercase; }
+.play-optional-check[open] summary { color: var(--play-ink); }
+.play-optional-check .play-wallet-state { border-bottom: 0; }
 .play-wallet-state span, .play-wallet-state strong, .play-wallet-state small { display: block; }
 .play-wallet-state span { color: var(--play-signal-dark); font-size: 9px; }
 .play-wallet-state strong { font-size: 11px; }
@@ -280,6 +292,7 @@ html[data-theme="dark"] .play-page {
   .play-steps { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--play-ink); }
   .play-steps li { min-height: 70px; border-right: 0; border-bottom: 1px solid var(--play-ink); }
   .play-steps li:last-child { border-bottom: 0; }
+  .play-next-step { margin-top: 34px; padding: 18px; box-shadow: 5px 5px 0 var(--play-ink); }
   .play-seasons, .play-builder { padding: 56px 0 66px; }
   .play-seasons > header, .play-builder > header { align-items: flex-start; flex-direction: column; gap: 16px; }
   .play-seasons h2, .play-builder h2 { font-size: 29px; }
@@ -300,6 +313,8 @@ html[data-theme="dark"] .play-page {
   .play-validation-list { grid-template-columns: 1fr; }
   .play-privacy-grid { grid-template-columns: 1fr; }
   .play-wallet-state, .play-sign-in-callout { align-items: flex-start; flex-direction: column; }
+  .play-optional-check summary { min-height: 52px; padding-inline: 16px; }
+  .play-optional-check .play-wallet-state { padding-inline: 16px; }
   .play-x-optional-identity { width: 100%; justify-content: space-between; }
   .play-entry-error { align-items: flex-start; flex-direction: column; }
   .play-sign-in-callout a, .play-sign-in-callout button { width: 100%; justify-content: center; }

@@ -68,8 +68,6 @@ export function VeilArenaLanding() {
 
   const featured = useMemo(() => featuredCompetition(competitions), [competitions]);
   const match = featuredMatch(schedule);
-  const openCount = competitions.filter((competition) => competitionPhase(competition) === "open").length;
-  const liveCount = competitions.filter((competition) => competitionPhase(competition) === "live").length;
   const roomHref = featured ? `/arena/${encodeURIComponent(featured.projectId)}/${encodeURIComponent(featured.id)}` : "/arena";
   const matchHref = featured && match ? `${roomHref}/match/${encodeURIComponent(match.id)}` : roomHref;
 
@@ -79,16 +77,12 @@ export function VeilArenaLanding() {
         <div className="arena-nav-inner">
           <Link className="arena-brand" href="/" aria-label="Veil Arena home"><VeilLogo /></Link>
           <nav aria-label="Main navigation">
-            <Link href="/arena">Arena</Link>
-            <Link href="/champion">Champion</Link>
-            <a href="#how-to-play">How to play</a>
-            <Link href="/arena-console">Host</Link>
-            <Link href="/profile">Profile</Link>
+            <Link href="/arena">Watch arena</Link>
           </nav>
           <div className="arena-nav-actions">
             <ArenaThemeToggle />
             <ArenaNotificationBell />
-            <Link className="arena-nav-cta" href="/play">Build your agent</Link>
+            <Link className="arena-nav-cta" href="/play">Enter next arena</Link>
           </div>
         </div>
       </header>
@@ -98,33 +92,14 @@ export function VeilArenaLanding() {
           <div className="arena-home-copy">
             <span className="arena-home-kicker"><i /> PRIVATE AGENT POKER / STARKNET</span>
             <h1 id="arena-hero-title">Your agent plays. Its strategy stays sealed.</h1>
-            <p>Build a poker agent with any coding assistant, enter an open competition, and watch every result. Opponents never see how your agent thinks.</p>
-            <div className="arena-home-actions" aria-label="Choose what to do">
-              <Link className="arena-action-card arena-button arena-button-signal" href={match ? matchHref : "/arena"}>
-                <span>01 / WATCH</span>
-                <strong>{match?.status === "completed" ? "Watch a result" : "Browse the arena"}</strong>
-                <small>{match?.status === "completed" ? "Open a real verified replay." : "See real competitions and their status."}</small>
-              </Link>
-              <Link className="arena-action-card arena-button" href="/play">
-                <span>02 / ENTER</span>
-                <strong>Build and enter</strong>
-                <small>Use a saved agent automatically, or add one once.</small>
-              </Link>
-              <Link className="arena-action-card arena-button" href="/arena-console">
-                <span>03 / HOST</span>
-                <strong>Host a competition</strong>
-                <small>Create a private duel or open exhibition.</small>
+            <p>Bring an agent. Enter a real competition. The result is public. The strategy stays sealed.</p>
+            <div className="arena-home-actions" aria-label="Start here">
+              <Link className="arena-action-card arena-button arena-button-signal" href="/play">
+                <span>START HERE</span>
+                <strong>Enter the next arena</strong>
+                <small>{joinableCountLabel(competitions, state)} We will select the first real eligible competition for you.</small>
               </Link>
             </div>
-            <div className="arena-home-secondary-actions">
-              <Link href="/champion">Challenge the champion</Link>
-              <a href="#how-to-play">How it works</a>
-            </div>
-            <dl className="arena-home-stats">
-              <div><dt>Open now</dt><dd>{state === "loading" ? "--" : String(openCount).padStart(2, "0")}</dd></div>
-              <div><dt>Live tables</dt><dd>{state === "loading" ? "--" : String(liveCount).padStart(2, "0")}</dd></div>
-              <div><dt>Public strategies</dt><dd>00</dd></div>
-            </dl>
           </div>
 
           <article className="arena-home-preview" aria-label="Featured competition">
@@ -155,38 +130,11 @@ export function VeilArenaLanding() {
               <div className="arena-preview-empty">
                 <strong>{state === "error" ? "Arena unavailable" : "The next table is being prepared"}</strong>
                 <p>No sample scores are shown here. A real competition appears as soon as an operator publishes it.</p>
-                <Link href="/arena-console">Host a competition →</Link>
               </div>
             )}
           </article>
         </section>
 
-        <section className="arena-home-how" id="how-to-play" aria-labelledby="how-title">
-          <header>
-            <span>HOW TO ENTER</span>
-            <h2 id="how-title">One guide. Any coding agent.</h2>
-            <p>You do not need to write the package by hand.</p>
-          </header>
-          <ol>
-            <li><span>01</span><strong>Copy AGENT.md</strong><p>It contains the game interface, legal inputs, and package rules.</p><a href="/AGENT.md" download>Download guide ↘</a></li>
-            <li><span>02</span><strong>Give it to your coding agent</strong><p>Ask it to build, test, and return one private Veil agent package.</p></li>
-            <li><span>03</span><strong>Approve the entry</strong><p>Choose a competition, review the commitment, and sign with your wallet.</p><Link href="/play">Start your entry →</Link></li>
-          </ol>
-        </section>
-
-        <section className="arena-home-privacy" aria-label="Privacy boundary">
-          <div><span>PUBLIC</span><strong>Scores, standings, receipts</strong></div>
-          <div><span>SEALED</span><strong>Policy, cards, reasoning</strong></div>
-          <div><span>AUDIT</span><strong>One losing action when authorized</strong></div>
-          <div><span>REWARD</span><strong>Optional and privately settled</strong></div>
-        </section>
-
-        <section className="arena-home-host">
-          <span>RUN THE NEXT TABLE</span>
-          <h2>Choose a format. Open the doors.</h2>
-          <p>Start with a playground, open league, duel, gauntlet, championship, or your own approved rules. A reward is optional.</p>
-          <Link className="arena-button arena-button-signal" href="/arena-console">Host a competition</Link>
-        </section>
       </main>
 
       <footer className="arena-footer">
@@ -196,4 +144,11 @@ export function VeilArenaLanding() {
       </footer>
     </div>
   );
+}
+
+function joinableCountLabel(competitions: CompetitionSummary[], state: "loading" | "ready" | "error"): string {
+  if (state === "loading") return "Loading the next real competition.";
+  if (state === "error") return "The arena is temporarily unavailable.";
+  const count = competitions.filter((competition) => competitionPhase(competition) === "open").length;
+  return count > 0 ? `${count} competition${count === 1 ? " is" : "s are"} open.` : "No competition is open yet.";
 }
