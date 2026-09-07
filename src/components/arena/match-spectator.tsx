@@ -139,6 +139,15 @@ function MatchSpectatorView({
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const handlePreference = (event: Event) => {
+      const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+      if (typeof enabled === "boolean") setSoundEnabled(enabled);
+    };
+    window.addEventListener("veil-arena-sound-preference", handlePreference);
+    return () => window.removeEventListener("veil-arena-sound-preference", handlePreference);
+  }, []);
+
   const playTableSound = useCallback((sound: TableSound, enabled = soundEnabled) => {
     if (!enabled || typeof window === "undefined") return;
     const AudioContextConstructor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -560,15 +569,6 @@ function MatchSpectatorView({
             <span>Match {String(scheduledMatch.sequence).padStart(2, "0")}</span>
           </div>
           <div className="spectator-header-tools">
-            <button type="button" className="spectator-sound" aria-pressed={soundEnabled} onClick={() => {
-              const next = !soundEnabled;
-              setSoundEnabled(next);
-              try { window.localStorage.setItem("veil-arena-sound", next ? "on" : "off"); } catch { /* preference is optional */ }
-              window.dispatchEvent(new CustomEvent("veil-arena-sound-preference", { detail: { enabled: next } }));
-              if (next) playTableSound("check", next);
-            }} aria-label={soundEnabled ? "Mute table sounds" : "Enable table sounds"}>
-              {soundEnabled ? "◉ SOUND ON" : "○ SOUND OFF"}
-            </button>
             <strong><i /> {executionState}</strong>
           </div>
         </header>

@@ -101,6 +101,7 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
     const now = new Date("2026-08-30T12:00:00.000Z");
     const keyProvider = createPreviewKeyProvider();
     const wrappedDataKey = await keyProvider.wrap(randomBytes(32), projectId);
+    const cappedRules = { ...resolveTournamentRules({ templateId: "playground" }), entryLimit: "capped" as const };
 
     try {
       await repositories.projects.saveProject({
@@ -123,8 +124,8 @@ describe.skipIf(!databaseUrl)("Postgres repository integration", () => {
         maxEntries: 2,
         templateId: "playground",
         templateVersion: 1,
-        rulesSnapshot: resolveTournamentRules({ templateId: "playground" }),
-        rulesCommitment: tournamentRulesCommitment(resolveTournamentRules({ templateId: "playground" })),
+        rulesSnapshot: cappedRules,
+        rulesCommitment: tournamentRulesCommitment(cappedRules),
         createdBy: `owner-${suffix}`,
         createdAt: now,
       });

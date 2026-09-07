@@ -10,6 +10,7 @@ import type { TypedData } from "starknet";
 import { VeilLogo } from "@/components/veil-logo";
 import { ArenaThemeToggle } from "@/components/arena/arena-theme-toggle";
 import { ArenaNotificationBell, recordArenaNotification } from "@/components/arena/arena-notification-bell";
+import { ArenaSoundToggle } from "@/components/arena/arena-sound-toggle";
 import {
   buildArenaTransferAuthorizationTypedData,
   createArenaTransferAuthorization,
@@ -950,6 +951,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         <Link className="operator-back" href={manageMode && managedProjectId && managedSeasonId ? `/arena/${encodeURIComponent(managedProjectId)}/${encodeURIComponent(managedSeasonId)}` : "/"}>← {manageMode ? "Public room" : "Home"}</Link>
         <div className="operator-nav-meta"><span>OPERATOR DESK</span><strong>LIVE COMPETITION CONTROL</strong></div>
         <div className="operator-nav-actions">
+          <ArenaSoundToggle />
           <ArenaThemeToggle />
           <ArenaNotificationBell />
           <span className="operator-nav-wallet"><WalletSessionButton returnTo="/arena-console" onAuthenticated={handleWalletAuthenticated} onDisconnected={handleWalletDisconnected} /></span>

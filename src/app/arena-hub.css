@@ -37,6 +37,9 @@
 .hub-theme-toggle:hover { background: var(--signal); color: var(--signal-ink); }
 .hub-theme-toggle-icon { width: 11px; height: 11px; display: inline-block; border: 2px solid currentColor; border-radius: 50%; }
 .hub-theme-toggle[aria-pressed="true"] .hub-theme-toggle-icon { background: currentColor; box-shadow: inset 0 0 0 2px var(--paper-light); }
+.hub-sound-toggle { min-height: 40px; padding: 0 11px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font-family: var(--arena-mono); font-size: 8px; text-transform: uppercase; cursor: pointer; }
+.hub-sound-toggle:hover, .hub-sound-toggle[aria-pressed="true"] { background: var(--signal); color: var(--signal-ink); }
+.hub-sound-toggle > span:first-child { min-width: 11px; font-size: 12px; line-height: 1; }
 .hub-sign-in { padding-bottom: 5px; border-bottom: 1px solid var(--ink); font-size: 10px; font-weight: 760; }
 .hub-main { width: min(1500px, calc(100% - 36px)); margin: 0 auto; padding: clamp(54px, 8vw, 112px) 0 100px; }
 .hub-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 48px; align-items: end; }
@@ -102,6 +105,9 @@
   .hub-nav-actions .arena-notification-trigger { min-width: 44px; width: 44px; padding-inline: 0; }
   .arena-notification-trigger { min-height: 44px; padding-inline: 8px; font-size: 7px; }
   .arena-notification-trigger > span { display: none; }
+  .hub-sound-toggle { min-width: 44px; width: 44px; min-height: 44px; padding-inline: 0; justify-content: center; font-size: 0; }
+  .hub-sound-toggle > span:first-child { font-size: 14px; }
+  .hub-sound-toggle > span:last-child { display: none; }
   .hub-theme-toggle { min-width: 44px; width: 44px; min-height: 44px; padding-inline: 0; font-size: 0; }
   .hub-sign-in { font-size: 8px; }
   .hub-brand .veil-logo-wordmark { display: none; }

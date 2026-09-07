@@ -23,6 +23,7 @@
 .operator-nav-meta span { color: var(--signal-dark); }
 .operator-nav-meta strong { font-size: 11px; }
 .operator-nav-actions { display: flex; align-items: center; justify-self: end; }
+.operator-nav-actions .hub-sound-toggle { margin-right: 14px; }
 .operator-nav-actions .hub-theme-toggle { margin-right: 14px; }
 .operator-nav-wallet { max-width: 320px; min-width: 180px; border-left: 1px solid var(--ink); }
 .operator-nav-wallet .wallet-picker { display: flex; gap: 6px; padding: 8px; }
@@ -303,6 +304,9 @@
   .operator-back { min-width: 44px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
   .operator-nav-link { min-width: 44px; width: 44px; padding-inline: 0; justify-content: center; overflow: hidden; font-size: 0; }
   .operator-nav-actions { min-width: 0; gap: 6px; }
+  .operator-nav-actions .hub-sound-toggle { width: 44px; min-width: 44px; margin-right: 0; padding-inline: 0; justify-content: center; font-size: 0; }
+  .operator-nav-actions .hub-sound-toggle > span:first-child { font-size: 14px; }
+  .operator-nav-actions .hub-sound-toggle > span:last-child { display: none; }
   .operator-nav-actions .hub-theme-toggle { width: 44px; min-width: 44px; margin-right: 0; padding-inline: 0; font-size: 0; }
   .operator-nav-wallet { min-width: 44px; max-width: 44px; border-left: 0; }
   .operator-nav-wallet .wallet-picker { padding: 0; }

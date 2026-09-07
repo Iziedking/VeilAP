@@ -4,6 +4,7 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 
 ## Change log
 
+- 2026-09-07: Added one persistent sound control to the shared Arena navigation. The same `Sound on` / `Sound off` preference controls arena background music and match replay cues, so judges do not need to search inside a table view for audio settings.
 - 2026-09-07: Removed the host-facing start-time field. Publishing opens a competition for eligible agent entries immediately; the host chooses only the roster lock cutoff and competition end. The persisted start timestamp records publication time for scheduling compatibility, but it is not a separate user decision.
 - 2026-09-07: The public competition floor removes open seasons that reach their roster lock with zero entries. The season record remains available to operators and audit history, while populated and active competitions stay discoverable.
 - 2026-09-07: Publishing now opens the dedicated operator competition page. Private join-link creation is gated behind verified reward funding; the resulting share block has one copy action, a QR code, and a compact Join action.
