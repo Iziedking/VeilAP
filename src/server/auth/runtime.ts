@@ -87,9 +87,12 @@ export function getWalletHashPepper(): string {
 }
 
 export function expectedOrigin(request: Request): string {
-  const candidate = process.env.VEILAP_APP_ORIGIN ?? new URL(request.url).origin;
+  const candidate = (process.env.VEILAP_APP_ORIGIN ?? new URL(request.url).origin).trim();
   const parsed = new URL(candidate);
-  if (parsed.origin !== candidate) throw new Error("VEILAP_APP_ORIGIN_INVALID");
+  // Environment files often keep the trailing slash from a copied website URL.
+  // Origins do not include that slash, so compare the parsed origin rather than
+  // rejecting an otherwise valid production configuration.
+  if (parsed.origin !== candidate && `${parsed.origin}/` !== candidate) throw new Error("VEILAP_APP_ORIGIN_INVALID");
   const incoming = requestOrigin(request);
   if (readServerConfig().mode === "preview" && incoming && isLoopbackOrigin(parsed.origin) && isLoopbackOrigin(incoming)) {
     return incoming;

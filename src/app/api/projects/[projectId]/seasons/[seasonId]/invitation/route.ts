@@ -74,6 +74,9 @@ export async function POST(
     if (error instanceof Error && error.message.endsWith("_REQUIRED")) {
       return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });
     }
+    if (error instanceof Error && (error.message === "VEILAP_APP_ORIGIN_INVALID" || error.message === "ARENA_INVITATION_SECRET_INVALID")) {
+      return serviceResponse({ ok: false, code: "CONFIGURATION_MISSING" });
+    }
     return serviceResponse({ ok: false, code: "INVALID_INPUT" });
   }
 }
