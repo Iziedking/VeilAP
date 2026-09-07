@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import QRCode from "qrcode";
 import Image from "next/image";
@@ -34,7 +33,6 @@ import {
   createShieldActions,
   Strk20WalletAdapter,
   type Strk20WalletAccount,
-  type ShieldedBalanceOutcome,
 } from "@/lib/strk20/adapter";
 import type { Strk20Outcome } from "@/lib/strk20/types";
 import { connectSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
@@ -235,7 +233,6 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
 }
 
 export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { managedProjectId?: string; managedSeasonId?: string } = {}) {
-  const router = useRouter();
   const manageMode = Boolean(managedProjectId && managedSeasonId);
   const wallets = useDiscoveredWallets();
   const [projectId, setProjectId] = useState("");
@@ -250,7 +247,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [fundingWalletName, setFundingWalletName] = useState("");
   const [fundingPrepared, setFundingPrepared] = useState(false);
   const [fundingWalletOutcome, setFundingWalletOutcome] = useState<Strk20Outcome | null>(null);
-  const [fundingShieldedBalance, setFundingShieldedBalance] = useState<ShieldedBalanceOutcome | null>(null);
   const [settlementPlan, setSettlementPlan] = useState<FundingPlan | null>(null);
   const [settlementPrepared, setSettlementPrepared] = useState(false);
   const [settlementWalletOutcome, setSettlementWalletOutcome] = useState<Strk20Outcome | null>(null);
@@ -269,7 +265,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [customReward, setCustomReward] = useState<TournamentRewardPolicy>("optional");
   const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
   const [prizeTokenId, setPrizeTokenId] = useState<ArenaPrizeTokenId>("USDC");
-  const [prizeAmount, setPrizeAmount] = useState("15.00");
+  const [prizeAmount, setPrizeAmount] = useState("");
   const [fundingHash, setFundingHash] = useState("");
   const [settlementHash, setSettlementHash] = useState("");
   const [busy, setBusy] = useState("");
@@ -277,7 +273,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [notice, setNotice] = useState("");
   const [privateInvitation, setPrivateInvitation] = useState("");
   const [privateInvitationQr, setPrivateInvitationQr] = useState<{ invitation: string; dataUrl: string } | null>(null);
-  const [fundingPageQr, setFundingPageQr] = useState<string | null>(null);
   const selectedPrizeToken = ARENA_PRIZE_TOKENS[prizeTokenId];
 
   const openSeasons = useMemo(() => seasons.filter((season) => season.status === "open"), [seasons]);
@@ -302,6 +297,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       return null;
     }
   }, [customHands, customPairingMode, customResubmission, customReward, entryMode, maxEntries, qualificationHands, templateId]);
+  const draftRequiresFunding = draftRules?.rewardPolicy === "funded_before_start";
 
   useEffect(() => () => fundingAccount?.unsubscribeChange?.(), [fundingAccount]);
 
@@ -321,16 +317,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     return () => { cancelled = true; };
   }, [privateInvitation]);
 
-  useEffect(() => {
-    if (!manageMode) return;
-    void QRCode.toDataURL(window.location.href, {
-      width: 240,
-      margin: 2,
-      errorCorrectionLevel: "M",
-      color: { dark: "#211f2a", light: "#f7f1e6" },
-    }).then(setFundingPageQr).catch(() => setFundingPageQr(null));
-  }, [manageMode, managedProjectId, managedSeasonId]);
-
   const loadProject = useCallback(async (nextProjectId: string) => {
     const normalized = nextProjectId.trim();
     if (!normalized) {
@@ -346,7 +332,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     setFundingPlan(null);
     setFundingPrepared(false);
     setFundingWalletOutcome(null);
-    setFundingShieldedBalance(null);
     setSettlementPlan(null);
     setSettlementPrepared(false);
     setSettlementWalletOutcome(null);
@@ -423,7 +408,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         setFundingPlan(null);
         setFundingPrepared(false);
         setFundingWalletOutcome(null);
-        setFundingShieldedBalance(null);
         setSettlementPlan(null);
         setSettlementPrepared(false);
         setSettlementWalletOutcome(null);
@@ -443,7 +427,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setFundingPlan(null);
       setFundingPrepared(false);
       setFundingWalletOutcome(null);
-      setFundingShieldedBalance(null);
       setSettlementPlan(nextSettlementPlan);
       setSettlementPrepared(false);
       setSettlementWalletOutcome(null);
@@ -460,6 +443,11 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     const ends = toIso(endsAt) ?? defaults.endsAt;
     if (!seasonName.trim() || !starts || !locks || !ends || !(starts < locks && locks < ends) || !draftRules) {
       setError("Add a name, choose valid tournament rules, and set the dates in this order: start, lock, end.");
+      return;
+    }
+    const amountMinor = draftRequiresFunding ? parseTokenAmountToMinor(prizeAmount, selectedPrizeToken.decimals) : null;
+    if (draftRequiresFunding && !amountMinor) {
+      setError("Choose the reward token and enter the amount before publishing. There is no default reward.");
       return;
     }
     setBusy("create");
@@ -509,27 +497,31 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       }
       setProjectId(targetProjectId);
       setSeasons((current) => [body.value, ...current.filter((season) => season.id !== body.value.id)]);
-      setSeasonName("");
       setSchedule({ season: body.value, entries: [], matches: [] });
-      if (templateId === "sponsored_open") {
+      if (draftRequiresFunding && amountMinor) {
         const rewardResponse = await apiFetch(`/api/projects/${encodeURIComponent(targetProjectId)}/seasons/${encodeURIComponent(body.value.id)}/prize-pool`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Idempotency-Key": freshKey("pool") },
-          body: JSON.stringify({ tokenAddress: ARENA_PRIZE_TOKENS.USDC.address, tokenSymbol: "USDC", amountMinor: "15000000" }),
+          body: JSON.stringify({ tokenAddress: selectedPrizeToken.address, tokenSymbol: selectedPrizeToken.symbol, amountMinor }),
         });
         const rewardBody = await readEnvelope<PrizePool>(rewardResponse);
-        if (rewardResponse.ok && rewardBody.ok) setPrizePool(rewardBody.value);
+        if (!rewardResponse.ok || !rewardBody.ok) {
+          setError(friendlyError(rewardBody.ok ? "PRIZE_POOL_CREATE_FAILED" : rewardBody.code));
+          return;
+        }
+        setPrizePool(rewardBody.value);
       }
-      router.push(`/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`);
       setPrivateInvitation("");
       recordArenaNotification({
-        title: "Competition created",
-        body: body.value.entryMode === "invite_only" ? "Create the private link, then use it yourself to join the ring." : "Your competition is open for agent entries.",
+        title: draftRequiresFunding ? "Competition prepared" : "Competition published",
+        body: draftRequiresFunding ? "Fund the exact reward below to make the competition ready for entries." : body.value.entryMode === "invite_only" ? "Create the private link, then use it yourself to join the ring." : "Your competition is open for agent entries.",
         href: `/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`,
       });
-      setNotice(body.value.entryMode === "invite_only"
-        ? `${body.value.name} is ready. Copy its private join link next.`
-        : `${body.value.name} is open for entries.`);
+      setNotice(draftRequiresFunding
+        ? `${body.value.name} is prepared. Fund the reward below to publish it for entries.`
+        : body.value.entryMode === "invite_only"
+          ? `${body.value.name} is ready. Copy its private join link next.`
+          : `${body.value.name} is open for entries.`);
     } catch {
       setError("The season could not be created.");
     } finally {
@@ -728,7 +720,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setFundingPlan(null);
       setFundingPrepared(false);
       setFundingWalletOutcome(null);
-      setFundingShieldedBalance(null);
       setNotice("The sponsor reserve is verified. The wallet authorization and STRK20 transaction both match this prize.");
     } catch {
       setError("The funding receipt could not be checked.");
@@ -765,7 +756,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     setError("");
     setNotice("");
     setFundingWalletOutcome(null);
-    setFundingShieldedBalance(null);
     try {
       const result = await connectSessionWallet(wallet);
       if (result.kind === "unsupported") {
@@ -779,32 +769,12 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setFundingAccount(result.account);
       setFundingWalletName(wallet.name);
       setFundingPrepared(false);
-      setFundingShieldedBalance(null);
       setNotice(`${wallet.name} is connected. Check the reserve or payout details before opening the wallet prompt.`);
     } catch {
       setError("The sponsor wallet could not be connected.");
     } finally {
       setBusy("");
     }
-  }
-
-  async function readFundingShieldedBalance() {
-    if (!fundingAccount || !fundingPlan || !prizePool) return;
-    setBusy("funding-balance");
-    setError("");
-    setNotice("");
-    const result = await createFundingAdapter(fundingAccount, prizePool.poolAddress).readShieldedBalance(fundingPlan.tokenAddress);
-    setFundingShieldedBalance(result);
-    if (result.kind === "loaded") {
-      setNotice(result.balanceMinor === "0"
-        ? "The wallet returned an empty STRK20 shielded balance for this reward token."
-        : "The wallet returned the current STRK20 shielded balance. No transaction was submitted.");
-    } else if (result.kind === "user_rejected") {
-      setNotice("The wallet balance request was declined. No arena state was changed.");
-    } else {
-      setNotice("The wallet could not return a shielded balance. Retry from the connected wallet.");
-    }
-    setBusy("");
   }
 
   async function prepareWalletFunding() {
@@ -1023,36 +993,11 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         <section className="operator-intro" aria-labelledby="operator-title">
           <div className="operator-kicker"><i /> COMPETITION CONTROL / STARKNET</div>
           <h1 id="operator-title">{manageMode ? "Run a competition." : "Host a competition."}</h1>
-          <p>{manageMode ? "Your competition is ready. Fund the private 15 USDC reward pool to open it for players." : "Name your competition and we will take you straight to the funding page."}</p>
+          <p>{manageMode ? "Run the draw, keep strategies sealed, and verify any private reward from the same desk." : "Choose the format, lock time, and reward. One publish action creates the competition."}</p>
           {manageMode && managedProjectId && managedSeasonId ? <div className="operator-live-links"><Link href={`/arena/${encodeURIComponent(managedProjectId)}/${encodeURIComponent(managedSeasonId)}`}>Watch public competition →</Link><Link href="/arena">Browse all competitions</Link></div> : null}
         </section>
 
         {(error || notice) ? <div className={`operator-feedback ${error ? "is-error" : "is-notice"}`} role={error ? "alert" : "status"}>{error || notice}</div> : null}
-
-        {manageMode ? (schedule ? <section className="operator-simple-funding" aria-labelledby="simple-funding-title">
-          <div className="operator-simple-funding-copy">
-            <span className="operator-simple-kicker">COMPETITION CREATED</span>
-            <h2 id="simple-funding-title">Fund the prize pool.</h2>
-            <p>One private reward. One wallet approval. Players can enter after the pool is funded.</p>
-            <div className="operator-simple-reward"><span>REWARD</span><strong>{prizePool ? formatTokenAmountFromMinor(prizePool.amountMinor, prizePool.tokenSymbol === "STRK" ? 18 : 6) : "15.00"} {prizePool?.tokenSymbol ?? "USDC"}</strong><small>STRK20 private reward on Starknet Mainnet</small></div>
-            {prizePool?.status === "funded" ? <div className="operator-simple-success" role="status"><strong>Pool funded.</strong><span>The competition is ready for entries.</span><Link className="operator-button operator-button-dark operator-simple-primary" href="#operator-controls">OPEN COMPETITION CONTROLS <span>→</span></Link></div> : <div className="operator-simple-funding-actions">
-              {fundingPlan ? <div className="operator-simple-details"><span>POOL</span><code>{shortCommitment(fundingPlan.poolAddress)}</code><small>{fundingPlan.network} / {fundingPlan.tokenSymbol}</small></div> : null}
-              {!fundingPlan ? <button type="button" className="operator-button operator-button-signal" onClick={() => void prepareFundingPlan()} disabled={busy !== ""}>{busy === "pool-plan" ? "LOADING" : "SHOW FUNDING DETAILS"}<span>→</span></button> : null}
-              {fundingPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}
-              {fundingPlan && fundingAccount ? <button type="button" className="operator-button operator-button-signal operator-simple-primary" onClick={() => void prepareWalletFunding()} disabled={busy !== "" || fundingPrepared}>{busy === "funding-prepare" ? "CHECKING WALLET" : "FUND POOL"}<span>→</span></button> : null}
-              {fundingPrepared ? <button type="button" className="operator-button operator-button-dark operator-simple-primary" onClick={() => void submitWalletFunding()} disabled={busy !== ""}>{busy === "funding-submit" ? "OPENING WALLET" : "OPEN WALLET TO APPROVE"}<span>→</span></button> : null}
-              {fundingHash ? <label className="operator-simple-hash">TRANSACTION HASH<input value={fundingHash} onChange={(event) => setFundingHash(event.target.value)} placeholder="Paste the wallet hash" /></label> : null}
-              {fundingHash ? <button type="button" className="operator-button operator-button-dark operator-simple-primary" onClick={() => void confirmFunding()} disabled={busy !== ""}>{busy === "pool-funding" ? "VERIFYING" : "VERIFY FUNDING"}<span>→</span></button> : null}
-            </div>}
-            {fundingShieldedBalance?.kind === "loaded" ? <small className="operator-simple-note">Wallet balance check: {formatTokenAmountFromMinor(fundingShieldedBalance.balanceMinor, fundingPlan?.tokenSymbol === "STRK" ? 18 : 6)} {fundingPlan?.tokenSymbol ?? "USDC"}. No transaction was submitted by this check.</small> : null}
-            {fundingWalletOutcome?.kind === "error" ? <small className="operator-simple-error">The wallet could not prepare or submit the funding action. No arena state was changed.</small> : null}
-          </div>
-          <div className="operator-simple-qr-card">
-            <div className="operator-simple-qr">{fundingPageQr ? <Image src={fundingPageQr} alt="QR code to open this funding page on a phone" width={240} height={240} unoptimized /> : <span>QR READY AFTER LOAD</span>}</div>
-            <strong>Fund from your phone</strong>
-            <small>Scan to open this same funding page on another device.</small>
-          </div>
-        </section> : <div className="operator-simple-loading" role="status">Loading your competition...</div>) : null}
 
         <div className="operator-grid" id="operator-controls">
             {!manageMode ? <section className="operator-panel operator-panel-wide" aria-labelledby="season-create-title">
@@ -1077,16 +1022,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                         <small>{template.bestFor}</small>
                       </button>
                     ))}
-                    <article className="operator-template-card is-blocked">
-                      <span>Stake match</span>
-                      <strong>Both players stake. Winner takes the pool.</strong>
-                      <small>Unavailable until the escrow contract is audited.</small>
-                    </article>
-                    <article className="operator-template-card is-blocked">
-                      <span>Split rewards</span>
-                      <strong>Share a funded pool across the top finishers.</strong>
-                      <small>Unavailable until multi-recipient settlement is enforced.</small>
-                    </article>
                   </div>
                   <details className="operator-advanced-formats">
                     <summary>Advanced formats</summary>
@@ -1127,6 +1062,14 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                   <label>AGENT UPDATES<select value={customResubmission} onChange={(event) => setCustomResubmission(event.target.value as TournamentResubmissionPolicy)}><option value="replace_until_lock" disabled={entryMode === "invite_only"}>REPLACE UNTIL LOCK</option><option value="fixed">FIXED AFTER ENTRY</option></select></label>
                   <label>REWARD RULE<select value={customReward} onChange={(event) => setCustomReward(event.target.value as TournamentRewardPolicy)}><option value="optional">OPTIONAL REWARD</option><option value="funded_before_start">FUND BEFORE PLAY</option></select></label>
                 </> : null}
+                {draftRequiresFunding ? <fieldset className="operator-reward-fieldset">
+                  <legend>REWARD</legend>
+                  <div className="operator-reward-fields">
+                    <label>PAYMENT TOKEN<select value={prizeTokenId} onChange={(event) => setPrizeTokenId(event.target.value as ArenaPrizeTokenId)}><option value="USDC">USDC / USD Coin</option><option value="STRK">STRK / Starknet Token</option></select></label>
+                    <label>AMOUNT<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="decimal" placeholder={prizeTokenId === "USDC" ? "Enter amount" : "Enter amount"} aria-describedby="create-reward-help" required /><small id="create-reward-help">You choose the exact amount. Wallet approval uses this value.</small></label>
+                    <div className="operator-reward-note"><strong>Winner takes all</strong><span>Private payout is verified after the result. Split payouts are not enabled until multi-recipient settlement is audited.</span></div>
+                  </div>
+                </fieldset> : <div className="operator-freepass-note"><strong>Freepass competition</strong><span>No reward pool or wallet transaction. Players can enter before the lock time.</span></div>}
                 {draftRules ? <div className="operator-rule-preview" role="status">
                   <span>{draftRules.pairingMode.replaceAll("_", " ").toUpperCase()}</span>
                   <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} duplicate deals per match / {(draftRules.qualificationHands ?? 0).toLocaleString()} decisions to qualify</strong>
@@ -1185,13 +1128,13 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
 
             {latestMatch && schedule ? <section className="operator-result" aria-labelledby="result-title"><header><span>04 / LAST EXECUTION</span><strong>PUBLIC RECEIPT READY</strong></header><div><h2 id="result-title">{latestMatch.players.map((player) => player.displayName.toUpperCase()).join(" / ")}</h2><p><b>{latestMatch.players.map((player) => latestMatch.score[player.agentId] ?? 0).join(" : ")}</b> score / {latestMatch.signedReceipt ? "signed receipt" : "receipt committed"}</p><code>TRANSCRIPT {shortCommitment(latestMatch.transcriptRoot)}</code></div><Link className="operator-button operator-button-dark" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(schedule.season.id)}`}>OPEN COMPETITION ROOM <span>↗</span></Link></section> : null}
 
-            {schedule && (schedule.season.status === "open" || schedule.season.status === "locked") ? <section className="operator-panel operator-panel-wide" aria-labelledby="pool-title">
-              <header className="operator-panel-head"><div><span>05 / REWARD{schedule.season.rules && usesStrk20RewardRail(schedule.season.rules) ? " / STRK20 PRIVATE RAIL" : ""}</span><h2 id="pool-title">Sponsor the winner</h2></div><strong>{prizePool?.status.replaceAll("_", " ").toUpperCase() ?? "NOT CREATED"}</strong></header>
-              <p className="operator-panel-copy">Fund a private STRK20 reward in STRK or USDC. Your Starknet wallet approves the exact amount, and the winner receives a private payment after the result is verified. Veil Arena never holds the funds.</p>
+            {schedule && (schedule.season.status === "open" || schedule.season.status === "locked") && (schedule.season.rules?.rewardPolicy === "funded_before_start" || prizePool) ? <section className="operator-panel operator-panel-wide" aria-labelledby="pool-title">
+              <header className="operator-panel-head"><div><span>05 / REWARD{schedule.season.rules && usesStrk20RewardRail(schedule.season.rules) ? " / STRK20 PRIVATE RAIL" : ""}</span><h2 id="pool-title">Reward and payout</h2></div><strong>{prizePool?.status.replaceAll("_", " ").toUpperCase() ?? "FREEPASS"}</strong></header>
+              <p className="operator-panel-copy">For a funded competition, the connected Starknet wallet approves the exact amount. Veil Arena verifies the STRK20 receipt and never holds the sponsor balance. Freepass competitions skip this section.</p>
               {!prizePool ? <form className="operator-form operator-pool-form" onSubmit={(event) => void createPrizePool(event)}>
                 <label>PRIZE TOKEN<select value={prizeTokenId} onChange={(event) => setPrizeTokenId(event.target.value as ArenaPrizeTokenId)}><option value="USDC">USDC / USD Coin</option><option value="STRK">STRK / Starknet Token</option></select><small>Starknet Mainnet token. The wallet will approve this choice.</small></label>
                 <label>PRIZE AMOUNT<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="decimal" placeholder={prizeTokenId === "USDC" ? "10.00" : "1.00"} aria-describedby="prize-amount-help" required /><small id="prize-amount-help">Enter {selectedPrizeToken.symbol} in normal units. The exact on-chain amount is prepared automatically.</small></label>
-                <button className="operator-button operator-button-signal" type="submit" disabled={busy !== ""}>{busy === "pool-create" ? "CREATING" : "CREATE REWARD"}<span>+</span></button>
+                <button className="operator-button operator-button-signal" type="submit" disabled={busy !== ""}>{busy === "pool-create" ? "PREPARING" : "SET REWARD"}<span>→</span></button>
               </form> : null}
               {prizePool && (prizePool.status === "funding_pending" || prizePool.status === "unknown") ? (
                 <div className="operator-chain-step">
@@ -1201,14 +1144,13 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                     <small>{formatTokenAmountFromMinor(prizePool.amountMinor, prizePool.tokenSymbol === "STRK" ? 18 : 6)} {prizePool.tokenSymbol} / Starknet private reward pool</small>
                   </div>
                   <div className="operator-chain-actions">
-                    <button type="button" className="operator-button operator-button-signal" onClick={() => void prepareFundingPlan()} disabled={busy !== ""}>{busy === "pool-plan" ? "PREPARING" : "REVIEW REWARD"}<span>→</span></button>
-                    {fundingPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}
-                    {fundingPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-dark" onClick={() => void readFundingShieldedBalance()} disabled={busy !== ""}>{busy === "funding-balance" ? "READING" : "CHECK SHIELDED BALANCE"}<span>↻</span></button><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletFunding()} disabled={busy !== "" || fundingPrepared}>{busy === "funding-prepare" ? "CHECKING" : fundingPrepared ? "PREPARED" : "CHECK WALLET"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletFunding()} disabled={busy !== "" || !fundingPrepared}>{busy === "funding-submit" ? "WAITING" : "REQUEST WALLET"}<span>↗</span></button></> : null}
+                    {!fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}
+                    {fundingAccount && !fundingPlan ? <button type="button" className="operator-button operator-button-signal" onClick={() => void prepareFundingPlan()} disabled={busy !== ""}>{busy === "pool-plan" ? "PREPARING" : "FUND REWARD"}<span>→</span></button> : null}
+                    {fundingPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletFunding()} disabled={busy !== "" || fundingPrepared}>{busy === "funding-prepare" ? "CHECKING" : fundingPrepared ? "PREPARED" : "CHECK WALLET"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletFunding()} disabled={busy !== "" || !fundingPrepared}>{busy === "funding-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}
                     <label className="operator-inline-field">TRANSACTION HASH<input value={fundingHash} onChange={(event) => setFundingHash(event.target.value)} placeholder="0x..." /></label>
                     <button type="button" className="operator-button operator-button-dark" onClick={() => void confirmFunding()} disabled={busy !== "" || !fundingPlan || !fundingAccount || !fundingHash.trim()}>{busy === "pool-funding" ? "SIGNING" : "SIGN AND VERIFY"}<span>↗</span></button>
                   </div>
                   {fundingPlan ? <div className="operator-plan" aria-label="Prepared reward approval"><span>{fundingPlan.network} / WALLET APPROVAL</span><code>{formatTokenAmountFromMinor(fundingPlan.amountMinor, fundingPlan.tokenSymbol === "STRK" ? 18 : 6)} {fundingPlan.tokenSymbol} / reward funding</code><small>{fundingAccount ? "Review and approve this exact reward in the connected wallet." : "Connect the sponsor wallet to review and approve the reward."}</small></div> : null}
-                  {fundingShieldedBalance ? <small className="operator-wallet-note">{fundingShieldedBalance.kind === "loaded" ? `${formatTokenAmountFromMinor(fundingShieldedBalance.balanceMinor, fundingPlan?.tokenSymbol === "STRK" ? 18 : 6)} ${fundingPlan?.tokenSymbol ?? "token"} shielded balance returned by the wallet. This is a read only checkpoint.` : fundingShieldedBalance.kind === "user_rejected" ? "Shielded balance read declined. Retry when you are ready." : "Shielded balance is unavailable from this wallet. The reward flow can still be retried after wallet support is restored."}</small> : null}
                   <small className="operator-wallet-note">Your wallet approves the reward. Veil Arena verifies the receipt and never holds the balance.</small>
                   {fundingWalletOutcome?.kind === "error" ? <small className="operator-wallet-note">Wallet preflight or submission failed. No arena state was changed.</small> : null}
                 </div>

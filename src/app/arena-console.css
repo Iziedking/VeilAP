@@ -108,6 +108,14 @@
 .operator-template-fieldset { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; }
 .operator-template-fieldset legend { margin-bottom: 10px; color: var(--ink-soft); font-size: 8px; letter-spacing: .9px; }
 .operator-template-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.operator-reward-fieldset { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 14px 0 0; border: 0; border-top: 1px solid var(--rule); }
+.operator-reward-fieldset legend { margin-bottom: 10px; color: var(--ink-soft); font-size: 8px; letter-spacing: .9px; }
+.operator-reward-fields { display: grid; grid-template-columns: minmax(150px, .6fr) minmax(180px, .8fr) minmax(240px, 1.4fr); gap: 14px; align-items: end; }
+.operator-reward-fields label { display: grid; gap: 8px; }
+.operator-reward-fields small, .operator-reward-note span, .operator-freepass-note span { color: var(--ink-soft); font-size: 9px; line-height: 1.45; }
+.operator-reward-note { min-height: 44px; padding: 11px 13px; display: grid; gap: 5px; border-left: 4px solid var(--signal); background: rgba(242,165,114,.12); }
+.operator-reward-note strong, .operator-freepass-note strong { font-family: var(--arena-display); font-size: 13px; text-transform: uppercase; }
+.operator-freepass-note { grid-column: 1 / -1; padding: 13px 15px; display: grid; gap: 5px; border-left: 4px solid var(--green); background: rgba(102,135,108,.1); }
 .operator-template-card { min-height: 126px; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; text-align: left; }
 .operator-template-card:hover, .operator-template-card.is-selected { background: rgba(242,165,114,.2); box-shadow: inset 5px 0 var(--signal); }
 .operator-template-card span { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; letter-spacing: .7px; text-transform: uppercase; }
@@ -233,6 +241,8 @@
   .operator-panel-wide { grid-column: auto; }
   .operator-form { grid-template-columns: 1fr 1fr; }
   .operator-template-grid { grid-template-columns: 1fr 1fr; }
+  .operator-reward-fields { grid-template-columns: 1fr 1fr; }
+  .operator-reward-note { grid-column: 1 / -1; }
   .operator-form label:first-child { grid-column: 1 / -1; }
   .operator-form .operator-button { grid-column: 1 / -1; }
   .operator-schedule-meta { grid-template-columns: 1fr 1fr; gap: 12px 0; padding-block: 15px; }
@@ -274,6 +284,9 @@
   .operator-form { display: block; padding-inline: 14px; }
   .operator-template-grid { display: grid; grid-template-columns: 1fr; }
   .operator-template-card { min-height: 112px; }
+  .operator-reward-fields { display: block; }
+  .operator-reward-fields label, .operator-reward-note { margin-top: 15px; }
+  .operator-reward-fields label:first-child { margin-top: 0; }
   .operator-rule-preview { margin-top: 16px; }
   .operator-form label { margin-top: 15px; }
   .operator-form label:first-child { margin-top: 0; }
