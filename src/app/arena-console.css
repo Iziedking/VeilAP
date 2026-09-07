@@ -187,7 +187,8 @@
 .operator-invite-link { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; align-items: end; }
 .operator-invite-link label { grid-column: 1 / -1; color: var(--signal-dark); font-size: 8px; letter-spacing: .8px; }
 .operator-invite-link input { grid-column: auto; min-width: 0; }
-.operator-invite-link .operator-button { width: auto; min-height: 44px; }
+.operator-invite-actions { display: flex; gap: 9px; }
+.operator-invite-actions .operator-button { width: auto; min-height: 44px; }
 .operator-next-action { padding: 18px 19px; display: flex; align-items: center; justify-content: space-between; gap: 22px; border-bottom: 1px solid var(--rule); background: color-mix(in srgb, var(--signal) 12%, var(--paper-light)); }
 .operator-next-action > div { min-width: 0; }
 .operator-next-action span, .operator-next-action strong, .operator-next-action small { display: block; }
@@ -326,7 +327,8 @@
   .operator-invite-qr { width: 136px; height: 136px; justify-self: center; }
   .operator-invite-link { display: block; }
   .operator-invite-link input { margin-top: 8px; }
-  .operator-invite-link .operator-button { width: 100%; margin-top: 10px; }
+  .operator-invite-actions { margin-top: 10px; }
+  .operator-invite-actions .operator-button { flex: 1; width: 100%; }
   .operator-match-row { grid-template-columns: 34px 1fr auto; gap: 9px; }
   .operator-match-row strong { font-size: 11px; }
   .operator-run-button { min-width: 57px; }

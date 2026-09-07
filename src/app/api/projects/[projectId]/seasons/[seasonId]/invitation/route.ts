@@ -4,7 +4,7 @@ import { getSessionSecret, expectedOrigin } from "@/server/auth/runtime";
 import { readRequestActor } from "@/server/auth/request-actor";
 import { sealArenaInvitation } from "@/server/arena/arena-invitation-token";
 import { serviceResponse } from "@/server/http/service-response";
-import { getArenaSeasonService, getProjectService } from "@/server/projects/runtime";
+import { getArenaPrizePoolService, getArenaSeasonService, getProjectService } from "@/server/projects/runtime";
 
 export const runtime = "nodejs";
 
@@ -25,6 +25,16 @@ export async function POST(
     if (!project.ok) return serviceResponse(project);
     if (!project.value.roles.includes("company")) {
       return serviceResponse({ ok: false, code: "ROLE_FORBIDDEN" });
+    }
+
+    const prizePool = await getArenaPrizePoolService().getPool({
+      projectId,
+      seasonId,
+      actorWalletAddress: actor.walletAddress,
+    });
+    if (!prizePool.ok) return serviceResponse(prizePool);
+    if (prizePool.value.status !== "funded") {
+      return serviceResponse({ ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" });
     }
 
     const schedule = await getArenaSeasonService().getPublicSchedule(projectId, seasonId);

@@ -239,6 +239,56 @@ describe("ArenaSeasonService", () => {
     });
   });
 
+  it("removes expired empty public seasons while keeping active and populated seasons", async () => {
+    const { projectId, service, advance } = await setup();
+    const active = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-active-empty",
+      templateId: "playground",
+      ...seasonInput,
+      locksAt: "2026-09-03T00:00:00.000Z",
+      endsAt: "2026-09-05T00:00:00.000Z",
+      name: "Active public season",
+    });
+    const emptyExpired = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-expired-empty",
+      templateId: "playground",
+      ...seasonInput,
+      name: "Expired empty season",
+    });
+    const populatedExpired = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-expired-populated",
+      templateId: "playground",
+      ...seasonInput,
+      name: "Expired populated season",
+    });
+    expect(active.ok && emptyExpired.ok && populatedExpired.ok).toBe(true);
+    if (!active.ok || !emptyExpired.ok || !populatedExpired.ok) throw new Error("TEST_SEASON_CREATE_FAILED");
+
+    advance(2 * 24 * 60 * 60 * 1000);
+    await expect(service.registerEntry({
+      projectId,
+      seasonId: populatedExpired.value.id,
+      actorWalletAddress: contributor,
+      agentId: "CINDER",
+      idempotencyKey: "entry-expired-populated",
+    })).resolves.toMatchObject({ ok: true });
+    advance(24 * 60 * 60 * 1000 + 1);
+
+    const listed = await service.listAllPublicSeasons();
+    expect(listed).toMatchObject({ ok: true });
+    if (!listed.ok) throw new Error(listed.code);
+    const names = listed.value.map((season) => season.name);
+    expect(names).toHaveLength(2);
+    expect(names).toEqual(expect.arrayContaining(["Expired populated season", "Active public season"]));
+    expect(names).not.toContain("Expired empty season");
+  });
+
   it("claims, executes, and safely retries a scheduled pairing", async () => {
     const { repositories, projectId, service, advance } = await setup();
     const created = await service.createSeason({

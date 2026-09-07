@@ -13,6 +13,7 @@ import {
   type CustomTournamentRulesInput,
   type TournamentRules,
   type TournamentTemplateId,
+  type TournamentRewardDistribution,
   type TournamentWorkload,
 } from "@/domain/arena/tournament-rules";
 import { authorizeProject } from "@/server/authorization/authorize";
@@ -68,6 +69,7 @@ export interface ArenaSeasonView {
   status: ArenaSeasonRecord["status"];
   entryMode: "invite_only" | "open";
   maxEntries: number;
+  entryLimit: "capped" | "unlimited";
   templateId?: TournamentTemplateId;
   templateVersion?: number;
   rules?: TournamentRules;
@@ -207,6 +209,7 @@ function normalizeSchedule(
       status: season.status,
       entryMode: season.entryMode ?? "invite_only",
       maxEntries: season.maxEntries ?? 16,
+      entryLimit: season.rulesSnapshot?.entryLimit ?? "capped",
       templateId: season.templateId,
       templateVersion: season.templateVersion,
       rules: season.rulesSnapshot,
@@ -274,6 +277,7 @@ export class ArenaSeasonService {
     maxEntries?: number;
     templateId?: TournamentTemplateId;
     qualificationHands?: number;
+    rewardDistribution?: TournamentRewardDistribution;
     customRules?: CustomTournamentRulesInput;
   }): Promise<ArenaSeasonServiceResult<ArenaSeasonView>> {
     const projectId = input.projectId.trim();
@@ -287,6 +291,7 @@ export class ArenaSeasonService {
       rules = resolveTournamentRules({
         templateId: input.templateId ?? "custom",
         qualificationHands: input.qualificationHands,
+        rewardDistribution: input.rewardDistribution,
         custom: input.templateId
           ? input.customRules
           : {
@@ -412,7 +417,9 @@ export class ArenaSeasonService {
       const artifact = await this.repositories.getArenaStrategyArtifact(projectId, agentId);
       if (!artifact) return { ok: false, code: "STRATEGY_ARTIFACT_NOT_FOUND" };
       const entries = await this.repositories.listArenaSeasonEntries(projectId, seasonId);
-      if (entries.length >= (season.maxEntries ?? 16)) return { ok: false, code: "ARENA_SEASON_FULL" };
+      if (season.rulesSnapshot?.entryLimit !== "unlimited" && entries.length >= (season.maxEntries ?? 16)) {
+        return { ok: false, code: "ARENA_SEASON_FULL" };
+      }
       const ownerBoundEntry = (season.entryMode ?? "invite_only") === "open";
       if (ownerBoundEntry && artifact.ownerFingerprint) {
         const ownerEntry = await this.repositories.getArenaSeasonEntryByOwnerFingerprint(projectId, seasonId, artifact.ownerFingerprint);
@@ -797,6 +804,10 @@ export class ArenaSeasonService {
           this.repositories.listArenaScheduledMatches(record.projectId, record.id),
           this.repositories.getArenaPrizePool(record.projectId, record.id),
         ]);
+        // A public season with no entries expires when its entry window closes.
+        // Keep the record for operators and audit history, but do not leave an
+        // empty dead table on the public Arena floor.
+        if (record.status === "open" && entries.length === 0 && this.now() >= record.locksAt) return null;
         const season = normalizeSchedule(record, entries, matches, prizePool?.status).season;
         return {
           ...season,
@@ -806,7 +817,7 @@ export class ArenaSeasonService {
           runningMatchCount: matches.filter((match) => match.status === "running").length,
         } satisfies ArenaCompetitionSummaryView;
       }));
-      return { ok: true, value: values };
+      return { ok: true, value: values.filter((value): value is ArenaCompetitionSummaryView => value !== null) };
     } catch {
       return { ok: false, code: "PERSISTENCE_FAILED" };
     }

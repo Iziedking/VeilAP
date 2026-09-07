@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import QRCode from "qrcode";
 import Image from "next/image";
@@ -18,6 +19,7 @@ import {
   TOURNAMENT_TEMPLATES,
   resolveTournamentRules,
   type TournamentPairingMode,
+  type TournamentRewardDistribution,
   type TournamentResubmissionPolicy,
   type TournamentRules,
   type TournamentTemplateId,
@@ -34,10 +36,10 @@ import {
   type Strk20WalletAccount,
 } from "@/lib/strk20/adapter";
 import type { Strk20Outcome } from "@/lib/strk20/types";
-import { connectSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
-import { useDiscoveredWallets } from "@/lib/wallet/wallet-store";
+import { type ConnectedSessionWallet, type WalletStandardWallet } from "@/lib/wallet/account";
 import { createClientReceiptProvider, readLivePoolFee } from "@/components/wallet/strk20-desk-utils";
 import { WalletPicker } from "@/components/wallet/wallet-picker";
+import { WalletSessionButton } from "@/components/wallet/wallet-session-button";
 
 type ApiEnvelope<T> = { ok: true; value: T } | { ok: false; code: string };
 
@@ -62,6 +64,7 @@ type Season = {
   status: "open" | "locked" | "completed" | "cancelled";
   entryMode: "invite_only" | "open";
   maxEntries: number;
+  entryLimit: "capped" | "unlimited";
   templateId?: TournamentTemplateId;
   templateVersion?: number;
   rules?: TournamentRules;
@@ -163,8 +166,10 @@ const errorCopy: Record<string, string> = {
   ARENA_PRIZE_POOL_NOT_SETTLEMENT_READY: "Prepare the winner settlement before confirming its transaction.",
   ARENA_PRIZE_POOL_ALREADY_SETTLED: "This prize pool has already been settled.",
   ARENA_MATCH_NOT_COMPLETE: "Finish every pairing before selecting the winner.",
-  ARENA_WINNER_TIE: "The competition is tied. Resolve the tie before paying a winner.",
+  ARENA_WINNER_TIE: "A paid rank is tied. The payout waits for an unambiguous result.",
   ARENA_WINNER_PAYOUT_NOT_REGISTERED: "The winning agent has no verified payout wallet. Do not prepare a manual replacement.",
+  ARENA_PAYOUT_NOT_ENOUGH_WINNERS: "This payout preset needs more ranked agents than entered the season. Choose a smaller top-N payout or wait for more entries.",
+  ARENA_PAYOUT_AMOUNT_TOO_SMALL: "The reward is too small to split across every selected rank. Choose fewer winners or a larger reward.",
   TRANSACTION_NOT_CONFIRMED: "The Starknet receipt is not confirmed for the configured STRK20 pool yet.",
   FUNDING_PLAN_FAILED: "The sponsor reserve plan could not be prepared.",
   FUNDING_PLAN_CHANGED: "The sponsor reserve changed. Review the refreshed shield action before continuing.",
@@ -196,6 +201,11 @@ function shortCommitment(value: string): string {
 function readableDate(value: string): string {
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : value;
+}
+
+function rewardDistributionCopy(value: TournamentRewardDistribution): string {
+  if (value === "winner_takes_all") return "Winner takes all";
+  return `Top ${value.replace("top_", "")} share the pool by rank`;
 }
 
 function toIso(value: string): string | undefined {
@@ -248,7 +258,7 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
 
 export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { managedProjectId?: string; managedSeasonId?: string } = {}) {
   const manageMode = Boolean(managedProjectId && managedSeasonId);
-  const wallets = useDiscoveredWallets();
+  const router = useRouter();
   const [projectId, setProjectId] = useState("");
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -277,6 +287,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [customResubmission, setCustomResubmission] = useState<TournamentResubmissionPolicy>("replace_until_lock");
   const [benchmarkAgentId, setBenchmarkAgentId] = useState("");
   const [fundingEnabled, setFundingEnabled] = useState(false);
+  const [rewardDistribution, setRewardDistribution] = useState<TournamentRewardDistribution>("winner_takes_all");
   const [prizeTokenId, setPrizeTokenId] = useState<ArenaPrizeTokenId>("USDC");
   const [prizeAmount, setPrizeAmount] = useState("");
   const [fundingHash, setFundingHash] = useState("");
@@ -288,6 +299,22 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [privateInvitationQr, setPrivateInvitationQr] = useState<{ invitation: string; dataUrl: string } | null>(null);
   const selectedPrizeToken = ARENA_PRIZE_TOKENS[prizeTokenId];
 
+  const handleWalletAuthenticated = useCallback(({ wallet, account }: { wallet: WalletStandardWallet; account: ConnectedSessionWallet }) => {
+    setFundingAccount(account);
+    setFundingWalletName(wallet.name);
+    setFundingPrepared(false);
+    setFundingWalletOutcome(null);
+    setNotice(`${wallet.name} is connected. You can now publish or fund a competition.`);
+  }, []);
+
+  const handleWalletDisconnected = useCallback(() => {
+    setFundingAccount(null);
+    setFundingWalletName("");
+    setFundingPlan(null);
+    setFundingPrepared(false);
+    setFundingWalletOutcome(null);
+  }, []);
+
   const openSeasons = useMemo(() => seasons.filter((season) => season.status === "open"), [seasons]);
   const lockedMatches = schedule?.matches ?? [];
   const draftRules = useMemo(() => {
@@ -295,21 +322,24 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       return resolveTournamentRules({
         templateId,
         qualificationHands: Number(qualificationHands),
+        rewardDistribution,
         custom: templateId === "custom" ? {
           pairingMode: customPairingMode,
           entryMode,
+          entryLimit: customPairingMode === "sampled_rounds" ? "unlimited" : "capped",
           maxEntries: Number(maxEntries),
           handsPerMatch: Number(customHands),
           encountersPerPair: Number(customEncounters),
           resubmissionPolicy: customResubmission,
           rewardPolicy: fundingEnabled ? "funded_before_start" : "optional",
+          rewardDistribution,
           qualificationHands: Number(qualificationHands),
         } : undefined,
       });
     } catch {
       return null;
     }
-  }, [customHands, customPairingMode, customResubmission, entryMode, fundingEnabled, maxEntries, qualificationHands, templateId]);
+  }, [customHands, customPairingMode, customResubmission, entryMode, fundingEnabled, maxEntries, qualificationHands, rewardDistribution, templateId]);
   const draftRequiresFunding = fundingEnabled || draftRules?.rewardPolicy === "funded_before_start";
 
   useEffect(() => () => fundingAccount?.unsubscribeChange?.(), [fundingAccount]);
@@ -494,11 +524,13 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
           customRules: templateId === "custom" ? {
             pairingMode: customPairingMode,
             entryMode,
+            entryLimit: customPairingMode === "sampled_rounds" ? "unlimited" : "capped",
             maxEntries: Number(maxEntries),
             handsPerMatch: Number(customHands),
             encountersPerPair: Number(customEncounters),
             resubmissionPolicy: customResubmission,
             rewardPolicy: fundingEnabled ? "funded_before_start" : "optional",
+            rewardDistribution,
             qualificationHands: Number(qualificationHands),
           } : undefined,
         }),
@@ -524,17 +556,12 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         }
         setPrizePool(rewardBody.value);
       }
-      setPrivateInvitation("");
       recordArenaNotification({
         title: draftRequiresFunding ? "Competition prepared" : "Competition published",
-        body: draftRequiresFunding ? "Fund the exact reward below to make the competition ready for entries." : body.value.entryMode === "invite_only" ? "Create the private link, then use it yourself to join the ring." : "Your competition is open for agent entries.",
+        body: draftRequiresFunding ? "Fund the exact reward on the competition page to make it ready for entries." : body.value.entryMode === "invite_only" ? "Fund the reward to unlock the private join link." : "Your competition is open for agent entries.",
         href: `/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`,
       });
-      setNotice(draftRequiresFunding
-        ? `${body.value.name} is prepared. Fund the reward below to publish it for entries.`
-        : body.value.entryMode === "invite_only"
-          ? `${body.value.name} is ready. Copy its private join link next.`
-          : `${body.value.name} is open for entries.`);
+      router.push(`/arena-console/${encodeURIComponent(targetProjectId)}/${encodeURIComponent(body.value.id)}`);
     } catch {
       setError("The season could not be created.");
     } finally {
@@ -542,8 +569,8 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     }
   }
 
-  async function copyPrivateInvitation() {
-    if (!schedule || schedule.season.entryMode !== "invite_only") return;
+  async function createPrivateInvitation() {
+    if (!schedule || schedule.season.entryMode !== "invite_only" || prizePool?.status !== "funded") return;
     setBusy("invitation");
     setError("");
     setNotice("");
@@ -673,7 +700,10 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
 
   async function createPrizePool(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!schedule) return;
+    if (!schedule || !fundingAccount) {
+      setNotice("Connect your wallet above before funding this competition.");
+      return;
+    }
     const amountMinor = parseTokenAmountToMinor(prizeAmount, selectedPrizeToken.decimals);
     if (!amountMinor) {
       setError("Enter a positive token amount with no more decimal places than the token supports. USDC uses 6 decimals.");
@@ -694,7 +724,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         return;
       }
       setPrizePool(body.value);
-      setNotice("The prize record is ready. Fund it from the sponsor wallet, then verify the transaction here.");
+      await fundPool(body.value);
     } catch {
       setError("The sponsor pool could not be created.");
     } finally {
@@ -702,17 +732,61 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
     }
   }
 
+  async function fundPool(pool: PrizePool) {
+    if (!schedule || !fundingAccount) return;
+    setBusy("funding");
+    setError("");
+    setNotice("Preparing the exact reward in your connected wallet...");
+    try {
+      const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(pool.seasonId)}/prize-pool/funding`);
+      const body = await readEnvelope<FundingPlan>(response);
+      if (!response.ok || !body.ok) {
+        setError(friendlyError(body.ok ? "FUNDING_PLAN_FAILED" : body.code));
+        return;
+      }
+      const plan = body.value;
+      setFundingPlan(plan);
+      setFundingPrepared(false);
+      const adapter = createFundingAdapter(fundingAccount, pool.poolAddress);
+      const prepared = await adapter.prepareShield({ token: plan.tokenAddress, amountMinor: plan.amountMinor });
+      setFundingWalletOutcome(prepared);
+      if (prepared.kind !== "prepared") {
+        setError(walletOutcomeCopy(prepared) ?? "The wallet could not prepare funding. Nothing was submitted.");
+        return;
+      }
+      setFundingPrepared(true);
+      setNotice("Approve the reward in your wallet. Veil Arena will verify the receipt automatically.");
+      const submitted = await adapter.submit(createShieldActions({ token: plan.tokenAddress, amountMinor: plan.amountMinor }));
+      setFundingWalletOutcome(submitted);
+      if (submitted.kind !== "submitted") {
+        setError(walletOutcomeCopy(submitted) ?? "The wallet did not submit funding. No pool state was changed.");
+        return;
+      }
+      setFundingHash(submitted.transactionHash);
+      await confirmFundingWith(plan, submitted.transactionHash, fundingAccount);
+    } catch {
+      setError("The wallet could not prepare funding. Nothing was submitted.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function confirmFunding() {
-    if (!schedule || !fundingPlan || !fundingAccount || !fundingHash.trim()) return;
+    if (!fundingPlan || !fundingAccount || !fundingHash.trim()) return;
+    await confirmFundingWith(fundingPlan, fundingHash.trim(), fundingAccount);
+  }
+
+  async function confirmFundingWith(plan: FundingPlan, transactionHash: string, account: FundingAccount) {
+    if (!schedule) return;
     setBusy("pool-funding");
     setError("");
     setNotice("");
     try {
       let signature: string[];
-      const authorization = createArenaTransferAuthorization(fundingPlan, fundingHash.trim());
+      const authorization = createArenaTransferAuthorization(plan, transactionHash);
       try {
         signature = signatureStrings(
-          await fundingAccount.signMessage(buildArenaTransferAuthorizationTypedData(authorization)),
+          await account.signMessage(buildArenaTransferAuthorizationTypedData(authorization)),
         );
       } catch {
         setNotice("The reserve authorization was declined or unavailable. No arena state was changed.");
@@ -733,124 +807,12 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       setFundingPlan(null);
       setFundingPrepared(false);
       setFundingWalletOutcome(null);
-      setNotice("The sponsor reserve is verified. The wallet authorization and STRK20 transaction both match this prize.");
+      setNotice("Reward funded. Create the join link below to share the competition.");
     } catch {
       setError("The funding receipt could not be checked.");
     } finally {
       setBusy("");
     }
-  }
-
-  async function prepareFundingPlan() {
-    if (!schedule) return;
-    setBusy("pool-plan");
-    setError("");
-    setNotice("");
-    try {
-      const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(schedule.season.id)}/prize-pool/funding`);
-      const body = await readEnvelope<FundingPlan>(response);
-      if (!response.ok || !body.ok) {
-        setError(friendlyError(body.ok ? "FUNDING_PLAN_FAILED" : body.code));
-        return;
-      }
-      setFundingPlan(body.value);
-      setFundingPrepared(false);
-      setFundingWalletOutcome(null);
-      setNotice("Review the reserve action in the sponsor wallet. After it is submitted, verify its transaction hash here.");
-    } catch {
-      setError("The funding plan could not be reached.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function connectFundingWallet(wallet: WalletStandardWallet) {
-    setBusy("funding-wallet");
-    setError("");
-    setNotice("");
-    setFundingWalletOutcome(null);
-    try {
-      const result = await connectSessionWallet(wallet);
-      if (result.kind === "unsupported") {
-        setError(`This wallet needs STRK20 Wallet API ${result.minimum} or newer.`);
-        return;
-      }
-      if (result.kind === "wrong-network") {
-        setError("Switch the sponsor wallet to Starknet Mainnet, then try again.");
-        return;
-      }
-      setFundingAccount(result.account);
-      setFundingWalletName(wallet.name);
-      setFundingPrepared(false);
-      setNotice(`${wallet.name} is connected. Check the reserve or payout details before opening the wallet prompt.`);
-    } catch {
-      setError("The sponsor wallet could not be connected.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function prepareWalletFunding() {
-    if (!fundingAccount || !fundingPlan || !prizePool) return;
-    setBusy("funding-prepare");
-    setError("");
-    setNotice("");
-    const currentResponse = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(prizePool.seasonId)}/prize-pool/funding`);
-    const currentBody = await readEnvelope<FundingPlan>(currentResponse);
-    if (!currentResponse.ok || !currentBody.ok) {
-      setFundingPrepared(false);
-      setFundingWalletOutcome(null);
-      setError(friendlyError(currentBody.ok ? "FUNDING_PLAN_FAILED" : currentBody.code));
-      setBusy("");
-      return;
-    }
-    if (!sameFundingPlan(fundingPlan, currentBody.value)) {
-      setFundingPlan(currentBody.value);
-      setFundingPrepared(false);
-      setFundingWalletOutcome(null);
-      setNotice("The sponsor reserve changed. Review the refreshed shield action before continuing.");
-      setBusy("");
-      return;
-    }
-    const result = await createFundingAdapter(fundingAccount, prizePool.poolAddress).prepareShield({
-      token: fundingPlan.tokenAddress,
-      amountMinor: fundingPlan.amountMinor,
-    });
-    setFundingWalletOutcome(result);
-    setFundingPrepared(result.kind === "prepared");
-    setNotice(result.kind === "prepared" ? "The wallet accepted the reserve details. Review them once more before submitting." : "The wallet could not prepare the reserve. Nothing was submitted.");
-    setBusy("");
-  }
-
-  async function submitWalletFunding() {
-    if (!fundingAccount || !fundingPlan || !prizePool || !fundingPrepared) return;
-    setBusy("funding-submit");
-    setError("");
-    setNotice("");
-    const currentResponse = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/seasons/${encodeURIComponent(prizePool.seasonId)}/prize-pool/funding`);
-    const currentBody = await readEnvelope<FundingPlan>(currentResponse);
-    if (!currentResponse.ok || !currentBody.ok || !sameFundingPlan(fundingPlan, currentBody.value)) {
-      if (currentBody.ok) setFundingPlan(currentBody.value);
-      setFundingPrepared(false);
-      setFundingWalletOutcome(null);
-      setError(friendlyError(currentBody.ok ? "FUNDING_PLAN_CHANGED" : currentBody.code));
-      setBusy("");
-      return;
-    }
-    const result = await createFundingAdapter(fundingAccount, prizePool.poolAddress).submit(createShieldActions({
-      token: fundingPlan.tokenAddress,
-      amountMinor: fundingPlan.amountMinor,
-    }));
-    setFundingWalletOutcome(result);
-    if (result.kind === "submitted") {
-      setFundingHash(result.transactionHash);
-      setNotice("The wallet submitted the reserve. Wait for Starknet finality, then sign the authorization.");
-    } else if (result.kind === "user_rejected") {
-      setNotice("The wallet request was declined. No funding transaction was submitted.");
-    } else {
-      setNotice("The wallet did not submit funding. No pool state was changed.");
-    }
-    setBusy("");
   }
 
   async function prepareSettlement() {
@@ -911,6 +873,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       token: settlementPlan.tokenAddress,
       amountMinor: settlementPlan.amountMinor,
       recipient: settlementPlan.recipient,
+      transfers: settlementPlan.recipients?.map((recipient) => ({ amountMinor: recipient.amountMinor, recipient: recipient.recipient })),
     });
     setSettlementWalletOutcome(result);
     setSettlementPrepared(result.kind === "prepared");
@@ -937,6 +900,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
       token: settlementPlan.tokenAddress,
       amountMinor: settlementPlan.amountMinor,
       recipient: settlementPlan.recipient,
+      transfers: settlementPlan.recipients?.map((recipient) => ({ amountMinor: recipient.amountMinor, recipient: recipient.recipient })),
     }));
     setSettlementWalletOutcome(result);
     if (result.kind === "submitted") {
@@ -998,7 +962,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
         <div className="operator-nav-actions">
           <ArenaThemeToggle />
           <ArenaNotificationBell />
-          <Link className="operator-nav-link" href="/sign-in">Wallet sign in</Link>
+          <span className="operator-nav-wallet"><WalletSessionButton returnTo="/arena-console" onAuthenticated={handleWalletAuthenticated} onDisconnected={handleWalletDisconnected} /></span>
         </div>
       </header>
 
@@ -1070,7 +1034,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 <label>ENDS AT<input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} /></label>
                 <label>QUALIFICATION SAMPLE<select value={qualificationHands} onChange={(event) => setQualificationHands(event.target.value)}><option value="100">100 DECISIONS / QUICK TEST</option><option value="500">500 DECISIONS / EXHIBITION</option><option value="1000">1,000 DECISIONS / CHALLENGE</option><option value="5000">5,000 DECISIONS / LEAGUE</option><option value="20000">20,000 DECISIONS / PRIZE SEASON</option></select><small>Veil Arena calculates repeated rounds from the final roster and spreads them across the competition window.</small></label>
                 {templateId === "custom" ? <>
-                  <label>PAIRING STYLE<select value={customPairingMode} onChange={(event) => setCustomPairingMode(event.target.value as TournamentPairingMode)}><option value="round_robin">EVERY AGENT MEETS</option><option value="duel_series">TWO-AGENT SERIES</option><option value="gauntlet">BENCHMARK GAUNTLET</option></select></label>
+                  <label>PAIRING STYLE<select value={customPairingMode} onChange={(event) => setCustomPairingMode(event.target.value as TournamentPairingMode)}><option value="sampled_rounds">RANDOM ROUNDS UNTIL LOCK</option><option value="round_robin">EVERY AGENT MEETS</option><option value="duel_series">TWO-AGENT SERIES</option><option value="gauntlet">BENCHMARK GAUNTLET</option></select></label>
                   <label>WHO CAN ENTER<select value={entryMode} onChange={(event) => {
                     const nextEntryMode = event.target.value as Season["entryMode"];
                     setEntryMode(nextEntryMode);
@@ -1085,19 +1049,20 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                   <div className="operator-reward-fields">
                     <label>PAYMENT TOKEN<select value={prizeTokenId} onChange={(event) => setPrizeTokenId(event.target.value as ArenaPrizeTokenId)}><option value="USDC">USDC / USD Coin</option><option value="STRK">STRK / Starknet Token</option></select></label>
                     <label>AMOUNT<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="decimal" placeholder={prizeTokenId === "USDC" ? "Enter amount" : "Enter amount"} aria-describedby="create-reward-help" required /><small id="create-reward-help">You choose the exact amount. Wallet approval uses this value.</small></label>
-                    <div className="operator-reward-note"><strong>Winner takes all</strong><span>Private payout is verified after the result. Split payouts are not enabled until multi-recipient settlement is audited.</span></div>
+                    <label>PAYOUT<select value={rewardDistribution} onChange={(event) => setRewardDistribution(event.target.value as TournamentRewardDistribution)}><option value="winner_takes_all">WINNER TAKES ALL</option><option value="top_3">TOP 3 / 50 · 30 · 20%</option><option value="top_5">TOP 5 / 40 · 25 · 15 · 10 · 10%</option><option value="top_8">TOP 8 / 30 · 20 · 15 · 10 · 8 · 7 · 5 · 5%</option><option value="top_10">TOP 10 / RANKED SHARE</option></select><small>Ranked agents receive the pool in this order after the season ends.</small></label>
+                    <div className="operator-reward-note"><strong>{rewardDistributionCopy(rewardDistribution)}</strong><span>Percentages are committed with the season rules. Payouts stay private through STRK20.</span></div>
                   </div>
                 </fieldset> : <div className="operator-freepass-note"><strong>Freepass competition</strong><span>No reward pool or wallet transaction. Players can enter before the lock time.</span></div>}
                 {draftRules ? <div className="operator-rule-preview" role="status">
                   <span>{draftRules.pairingMode.replaceAll("_", " ").toUpperCase()}</span>
-                  <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} duplicate deals per match / {(draftRules.qualificationHands ?? 0).toLocaleString()} decisions to qualify</strong>
-                  <small>Entry opens when you publish. After the roster locks, rounds run until the competition ends. One entry per exact strategy. Strategies and detailed table playback stay sealed from non-participants.</small>
+                  <strong>{draftRules.entryLimit === "unlimited" ? `${draftRules.minEntries}+ agents until lock` : `${draftRules.minEntries}-${draftRules.maxEntries} agents`} / {draftRules.handsPerMatch} duplicate deals per match / {(draftRules.qualificationHands ?? 0).toLocaleString()} decisions to qualify</strong>
+                  <small>Publish opens entry immediately. Agents meet in sampled rounds after the season locks. One entry per exact strategy. Strategies and detailed table playback stay sealed from non-participants.</small>
                 </div> : <div className="operator-rule-preview is-error" role="alert">The custom limits do not form a valid tournament.</div>}
                 <button className="operator-button operator-button-dark" type="submit" disabled={busy !== ""}>{busy === "create" ? "PUBLISHING" : "PUBLISH COMPETITION"}<span>+</span></button>
               </form>
               {projectId ? <div className="operator-season-list">
                 <div className="operator-subhead"><span>YOUR SEASONS</span><small>{openSeasons.length} OPEN</small></div>
-                {seasons.map((season) => <button type="button" key={season.id} className={`operator-season-row ${schedule?.season.id === season.id ? "is-selected" : ""}`} onClick={() => void loadSchedule(season.id)}><span>{season.status.toUpperCase()}</span><strong>{season.name}</strong><small>{season.entryCount}/{season.maxEntries} ENTRIES / {(season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</small></button>)}
+                {seasons.map((season) => <button type="button" key={season.id} className={`operator-season-row ${schedule?.season.id === season.id ? "is-selected" : ""}`} onClick={() => void loadSchedule(season.id)}><span>{season.status.toUpperCase()}</span><strong>{season.name}</strong><small>{season.entryCount}{season.entryLimit === "unlimited" ? "+" : `/${season.maxEntries}`} ENTRIES / {(season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</small></button>)}
                 {!seasons.length ? <p className="operator-muted">No seasons are recorded for this project.</p> : null}
               </div> : <p className="operator-create-note">Sign in with the operator wallet. Your private competition workspace is created when you publish.</p>}
             </section> : null}
@@ -1115,24 +1080,26 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
             {schedule ? <section className="operator-panel operator-panel-wide" aria-labelledby="schedule-title">
               <header className="operator-panel-head"><div><span>03 / DRAW CONTROL</span><h2 id="schedule-title">{schedule.season.name}</h2></div><strong>{schedule.season.status.toUpperCase()}</strong></header>
               <div className="operator-schedule-meta"><span>{schedule.entries.length} AGENTS</span><span>{schedule.season.workload?.pairingCount ?? schedule.matches.length} PAIRINGS</span><span>{(schedule.season.templateId ?? "LEGACY").replaceAll("_", " ").toUpperCase()}</span>{schedule.season.rules && usesStrk20RewardRail(schedule.season.rules) ? <span>STRK20 REWARD RAIL</span> : null}<span>LOCK {readableDate(schedule.season.locksAt)}</span>{schedule.season.rulesCommitment ? <span>RULES {shortCommitment(schedule.season.rulesCommitment)}</span> : null}</div>
-              {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" ? <div className="operator-invite-bar">
-                <div><span>PRIVATE ENTRY</span><strong>Send one expiring link to your challenger.</strong><small>The link grants entry to this competition only. Strategies and payout details remain sealed.</small></div>
-                <button type="button" className="operator-button operator-button-signal" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : privateInvitation ? "COPY A FRESH LINK" : "COPY PRIVATE JOIN LINK"}<span>↗</span></button>
+              {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" && prizePool?.status !== "funded" ? <aside className="operator-next-action" role="status">
+                <div><span>PRIVATE ENTRY</span><strong>Fund the reward to unlock the join link.</strong><small>The private link is created only after the pool is successfully funded. The reward section below is the next step.</small></div>
+              </aside> : null}
+              {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" && prizePool?.status === "funded" ? <div className="operator-invite-bar">
+                <div><span>SHARE THE COMPETITION</span><strong>One join link. Copy it, share it, or join now.</strong><small>The link grants entry to this competition only. Strategies and payout details remain sealed.</small></div>
+                {!privateInvitation ? <button type="button" className="operator-button operator-button-signal" onClick={() => void createPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : "CREATE JOIN LINK"}<span>↗</span></button> : null}
                 {privateInvitation ? <div className="operator-invite-share">
                   <div className="operator-invite-qr">
-                    {privateInvitationQr?.invitation === privateInvitation ? <Image src={privateInvitationQr.dataUrl} alt="QR code for the private competition join link" width={220} height={220} unoptimized /> : <span>PREPARING QR</span>}
+                    {privateInvitationQr?.invitation === privateInvitation ? <Image src={privateInvitationQr.dataUrl} alt="QR code for the competition join link" width={220} height={220} unoptimized /> : <span>PREPARING QR</span>}
                   </div>
                   <div className="operator-invite-link">
-                    <label htmlFor="private-join-link">PRIVATE JOIN LINK</label>
-                    <input id="private-join-link" aria-label="Private join link" value={privateInvitation} readOnly onFocus={(event) => event.currentTarget.select()} />
-                    <button type="button" className="operator-button operator-button-dark" onClick={() => void copyExistingInvitation()}>COPY LINK <span>↗</span></button>
+                    <label htmlFor="private-join-link">JOIN LINK</label>
+                    <input id="private-join-link" aria-label="Competition join link" value={privateInvitation} readOnly onFocus={(event) => event.currentTarget.select()} />
+                    <div className="operator-invite-actions">
+                      <button type="button" className="operator-button operator-button-dark" onClick={() => void copyExistingInvitation()}>COPY LINK <span>↗</span></button>
+                      <Link className="operator-button operator-button-dark" href={privateInvitation}>JOIN <span>→</span></Link>
+                    </div>
                   </div>
                 </div> : null}
               </div> : null}
-              {schedule.season.status === "open" && schedule.season.entryMode === "invite_only" ? <aside className="operator-next-action" role="status">
-                <div><span>NEXT ACTION</span><strong>{privateInvitation ? "Join the ring with your own agent." : "Create the link, then join the ring yourself."}</strong><small>The challenger&apos;s entry does not add your agent. Use the private link from this competition to open player entry for your own wallet.</small></div>
-                {privateInvitation ? <Link className="operator-button operator-button-dark" href={privateInvitation}>JOIN PRIVATE RING <span>↗</span></Link> : <button type="button" className="operator-button operator-button-dark" onClick={() => void copyPrivateInvitation()} disabled={busy !== ""}>{busy === "invitation" ? "CREATING LINK" : "CREATE LINK TO JOIN"}<span>→</span></button>}
-              </aside> : null}
               {schedule.season.status === "open" ? <div className="operator-lock-bar">
                 {schedule.season.rules?.pairingMode === "gauntlet" ? <label htmlFor="benchmark-agent">SEALED BENCHMARK<select id="benchmark-agent" value={benchmarkAgentId} onChange={(event) => setBenchmarkAgentId(event.target.value)}><option value="">CHOOSE AN ENROLLED AGENT</option>{schedule.entries.map((entry) => <option value={entry.agentId} key={entry.id}>{entry.displayName.toUpperCase()}</option>)}</select></label> : null}
                 <p>Locking freezes the roster and committed rules, then creates the exact match list. The worker locks automatically when the deadline arrives; this button is available if you want to lock early. Strategies remain sealed.</p>
@@ -1146,9 +1113,9 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
 
             {latestMatch && schedule ? <section className="operator-result" aria-labelledby="result-title"><header><span>04 / LAST EXECUTION</span><strong>PUBLIC RECEIPT READY</strong></header><div><h2 id="result-title">{latestMatch.players.map((player) => player.displayName.toUpperCase()).join(" / ")}</h2><p><b>{latestMatch.players.map((player) => latestMatch.score[player.agentId] ?? 0).join(" : ")}</b> score / {latestMatch.signedReceipt ? "signed receipt" : "receipt committed"}</p><code>TRANSCRIPT {shortCommitment(latestMatch.transcriptRoot)}</code></div><Link className="operator-button operator-button-dark" href={`/arena/${encodeURIComponent(projectId)}/${encodeURIComponent(schedule.season.id)}`}>OPEN COMPETITION ROOM <span>↗</span></Link></section> : null}
 
-            {schedule && (schedule.season.status === "open" || schedule.season.status === "locked") && (schedule.season.rules?.rewardPolicy === "funded_before_start" || prizePool) ? <section className="operator-panel operator-panel-wide" aria-labelledby="pool-title">
+            {schedule && (schedule.season.status === "open" || schedule.season.status === "locked") && (schedule.season.rules?.rewardPolicy === "funded_before_start" || prizePool || schedule.season.entryMode === "invite_only") ? <section className="operator-panel operator-panel-wide" aria-labelledby="pool-title">
               <header className="operator-panel-head"><div><span>05 / REWARD{schedule.season.rules && usesStrk20RewardRail(schedule.season.rules) ? " / STRK20 PRIVATE RAIL" : ""}</span><h2 id="pool-title">Reward and payout</h2></div><strong>{prizePool?.status.replaceAll("_", " ").toUpperCase() ?? "FREEPASS"}</strong></header>
-              <p className="operator-panel-copy">For a funded competition, the connected Starknet wallet approves the exact amount. Veil Arena verifies the STRK20 receipt and never holds the sponsor balance. Freepass competitions skip this section.</p>
+              <p className="operator-panel-copy">The connected Starknet wallet approves the exact amount. Veil Arena verifies the STRK20 receipt and never holds the sponsor balance. Public freepass competitions skip this section; private join links unlock after funding.</p>
               {!prizePool ? <form className="operator-form operator-pool-form" onSubmit={(event) => void createPrizePool(event)}>
                 <label>PRIZE TOKEN<select value={prizeTokenId} onChange={(event) => setPrizeTokenId(event.target.value as ArenaPrizeTokenId)}><option value="USDC">USDC / USD Coin</option><option value="STRK">STRK / Starknet Token</option></select><small>Starknet Mainnet token. The wallet will approve this choice.</small></label>
                 <label>PRIZE AMOUNT<input value={prizeAmount} onChange={(event) => setPrizeAmount(event.target.value)} inputMode="decimal" placeholder={prizeTokenId === "USDC" ? "10.00" : "1.00"} aria-describedby="prize-amount-help" required /><small id="prize-amount-help">Enter {selectedPrizeToken.symbol} in normal units. The exact on-chain amount is prepared automatically.</small></label>
@@ -1174,7 +1141,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 </div>
               ) : null}
               {prizePool?.status === "funded" && schedule.season.status === "open" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>The competition now shows a funded reward</strong><small>Entry stays open until you lock the draw. The sponsor keeps custody until payout.</small></div></div> : null}
-              {prizePool?.status === "funded" && schedule.season.status === "locked" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>Finish every pairing before selecting the winner</strong><small>The payout goes to the wallet linked when the winning agent entered.</small></div><button type="button" className="operator-button operator-button-dark" onClick={() => void prepareSettlement()} disabled={busy !== ""}>{busy === "pool-settlement" ? "SELECTING" : "SELECT WINNER"}<span>→</span></button></div> : null}
+              {prizePool?.status === "funded" && schedule.season.status === "locked" ? <div className="operator-chain-step"><div><span>REWARD FUNDED</span><strong>Finish every pairing before preparing the ranked payout</strong><small>The configured ranks receive the pool through private STRK20 transfers.</small></div><button type="button" className="operator-button operator-button-dark" onClick={() => void prepareSettlement()} disabled={busy !== ""}>{busy === "pool-settlement" ? "SELECTING" : "PREPARE PAYOUT"}<span>→</span></button></div> : null}
               {prizePool?.status === "settlement_pending" ? <div className="operator-chain-step"><div><span>WINNER SELECTED / {prizePool.winnerAgentId?.toUpperCase()}</span><strong>Approve the private winner payment</strong><small>The winning participant receives the reward at the wallet recorded when their agent entered.</small></div><div className="operator-chain-actions">{settlementPlan && !fundingAccount ? <WalletPicker wallets={wallets} disabled={busy !== ""} onSelect={(wallet) => void connectFundingWallet(wallet)} /> : null}{settlementPlan && fundingAccount ? <><span className="operator-wallet-connected">{fundingWalletName.toUpperCase()} READY</span><button type="button" className="operator-button operator-button-signal" onClick={() => void prepareWalletSettlement()} disabled={busy !== "" || settlementPrepared}>{busy === "settlement-prepare" ? "CHECKING" : settlementPrepared ? "PREPARED" : "REVIEW PAYOUT"}<span>→</span></button><button type="button" className="operator-button operator-button-dark" onClick={() => void submitWalletSettlement()} disabled={busy !== "" || !settlementPrepared}>{busy === "settlement-submit" ? "WAITING" : "OPEN WALLET"}<span>↗</span></button></> : null}<label className="operator-inline-field">SETTLEMENT TRANSACTION HASH<input value={settlementHash} onChange={(event) => setSettlementHash(event.target.value)} placeholder="0x..." /></label><button type="button" className="operator-button operator-button-dark" onClick={() => void confirmSettlement()} disabled={busy !== "" || !settlementPlan || !fundingAccount || !settlementHash.trim()}>{busy === "pool-settlement-confirm" ? "SIGNING" : "VERIFY PAYMENT"}<span>↗</span></button></div>{settlementPlan ? <div className="operator-plan" aria-label="Prepared private winner payment"><span>{settlementPlan.network} / PRIVATE WINNER PAYMENT</span><code>{formatTokenAmountFromMinor(settlementPlan.amountMinor, settlementPlan.tokenSymbol === "STRK" ? 18 : 6)} {settlementPlan.tokenSymbol} / winning participant</code><small>{fundingAccount ? "Review and approve this exact payment in the connected wallet." : "Connect the sponsor wallet to review and approve the payment."}</small></div> : null}<small className="operator-wallet-note">The winner receives a private payment after the receipt is verified. The recipient stays sealed.</small>{walletOutcomeCopy(settlementWalletOutcome) ? <small className="operator-wallet-note">{walletOutcomeCopy(settlementWalletOutcome)}</small> : null}</div> : null}
               {prizePool?.status === "settled" ? <div className="operator-chain-complete"><span>SETTLEMENT COMPLETE</span><strong>{prizePool.winnerAgentId?.toUpperCase()} / PRIVATE REWARD VERIFIED</strong><small>The receipt and sponsor authorization are confirmed. The amount and recipient remain private.</small></div> : null}
             </section> : null}
