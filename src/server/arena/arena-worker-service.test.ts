@@ -217,6 +217,35 @@ describe("ArenaWorkerService", () => {
     expect(runCalls).toEqual(["match-1"]);
   });
 
+  it("expires a due empty competition instead of leaving it open", async () => {
+    const expireCalls: string[] = [];
+    const service = new ArenaWorkerService({
+      repositories: {
+        listAllArenaSeasons: async () => [{
+          projectId: "project-empty",
+          id: "season-empty",
+          status: "open",
+          locksAt: new Date("2026-08-30T12:00:00.000Z"),
+          createdAt: new Date("2026-08-30T00:00:00.000Z"),
+        }] as never,
+        listArenaScheduledMatches: async () => [],
+      },
+      seasonService: {
+        expireEmptySeason: async (input: { projectId: string; seasonId: string; actorWalletAddress: string; idempotencyKey: string }) => {
+          expireCalls.push(`${input.projectId}:${input.seasonId}:${input.idempotencyKey}`);
+          return { ok: true, value: { expired: true } };
+        },
+        lockSeason: async () => { throw new Error("LOCK_SHOULD_NOT_RUN"); },
+        runScheduledMatch: async () => ({ ok: false, code: "PERSISTENCE_FAILED" }),
+      } as never,
+      workerWalletAddress: "0xworker",
+      now: () => new Date("2026-08-30T13:00:00.000Z"),
+    });
+
+    await expect(service.runDueBatch()).resolves.toEqual({ status: "idle", results: [] });
+    expect(expireCalls).toEqual(["project-empty:season-empty:auto-expire-season-empty"]);
+  });
+
   it("keeps expected auto-lock blocks from poisoning the worker heartbeat", async () => {
     const service = new ArenaWorkerService({
       repositories: {

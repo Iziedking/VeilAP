@@ -15,6 +15,7 @@ export type AuthorizationAction =
   | "register_arena_entry"
   | "lock_arena_season"
   | "auto_lock_full_duel"
+  | "auto_expire_empty_season"
   | "manage_arena_prize_pool"
   | "submit_checkpoint"
   | "read_checkpoint";
@@ -60,6 +61,7 @@ export async function authorizeProject(
     || (input.action === "register_arena_entry" && (hasRole(roles, "company") || hasRole(roles, "reviewer") || hasRole(roles, "contributor")))
     || (input.action === "lock_arena_season" && (hasRole(roles, "company") || hasRole(roles, "reviewer")))
     || (input.action === "auto_lock_full_duel" && (hasRole(roles, "company") || hasRole(roles, "reviewer") || hasRole(roles, "contributor")))
+    || (input.action === "auto_expire_empty_season" && (hasRole(roles, "company") || hasRole(roles, "reviewer") || hasRole(roles, "contributor")))
     || (input.action === "manage_arena_prize_pool" && hasRole(roles, "company"))
     || (input.action === "submit_checkpoint" && hasRole(roles, "contributor"));
 

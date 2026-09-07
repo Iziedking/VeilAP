@@ -615,6 +615,49 @@ export class ArenaSeasonService {
     }
   }
 
+  async expireEmptySeason(input: {
+    projectId: string;
+    actorWalletAddress: string;
+    seasonId: string;
+    idempotencyKey: string;
+  }): Promise<ArenaSeasonServiceResult<{ expired: boolean }>> {
+    const projectId = input.projectId.trim();
+    const seasonId = input.seasonId.trim();
+    if (!projectId || !seasonId || !validKey(input.idempotencyKey)) return { ok: false, code: "INVALID_INPUT" };
+
+    try {
+      const project = await this.repositories.getProject(projectId);
+      if (!project) return { ok: false, code: "PROJECT_NOT_FOUND" };
+      const season = await this.repositories.getArenaSeason(projectId, seasonId);
+      if (!season) return { ok: false, code: "ARENA_SEASON_NOT_FOUND" };
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      const authorized = await authorizeProject(this.repositories, {
+        projectId,
+        walletFingerprint: actorFingerprint,
+        action: "auto_expire_empty_season",
+      });
+      if (!authorized.ok) return { ok: false, code: mapAuthorizationCode(authorized.code) };
+
+      if (season.status !== "open" || this.now() < season.locksAt) return { ok: true, value: { expired: false } };
+      const entries = await this.repositories.listArenaSeasonEntries(projectId, seasonId);
+      if (entries.length > 0) return { ok: true, value: { expired: false } };
+
+      const now = this.now();
+      await this.repositories.updateArenaSeason({ ...season, status: "cancelled" });
+      await this.repositories.saveAuditEvent({
+        id: this.idFactory(),
+        projectId,
+        actorFingerprint,
+        eventType: "arena_season_expired_empty",
+        payloadDigest: commitment({ seasonId, locksAt: season.locksAt.toISOString(), entryCount: 0 }),
+        createdAt: now,
+      });
+      return { ok: true, value: { expired: true } };
+    } catch (error) {
+      return { ok: false, code: mapPersistenceError(error) };
+    }
+  }
+
   async getPublicSchedule(projectId: string, seasonId: string): Promise<ArenaSeasonServiceResult<ArenaSeasonScheduleView>> {
     try {
       const season = await this.repositories.getArenaSeason(projectId.trim(), seasonId.trim());
@@ -794,7 +837,7 @@ export class ArenaSeasonService {
   async listAllPublicSeasons(): Promise<ArenaSeasonServiceResult<ArenaCompetitionSummaryView[]>> {
     try {
       const records = (await this.repositories.listAllArenaSeasons())
-        .filter((record) => (record.entryMode ?? "invite_only") === "open");
+        .filter((record) => record.status !== "cancelled" && (record.entryMode ?? "invite_only") === "open");
       const values = await Promise.all(records.map(async (record) => {
         const [project, entries, matches, prizePool] = await Promise.all([
           this.repositories.getProject(record.projectId),

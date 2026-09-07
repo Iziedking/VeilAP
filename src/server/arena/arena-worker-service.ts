@@ -18,7 +18,7 @@ export type ArenaWorkerBatchResult = {
 
 export interface ArenaWorkerServiceDependencies {
   repositories: Pick<ProjectRepository, "listAllArenaSeasons" | "listArenaScheduledMatches">;
-  seasonService: Pick<ArenaSeasonService, "runScheduledMatch"> & Partial<Pick<ArenaSeasonService, "lockSeason">>;
+  seasonService: Pick<ArenaSeasonService, "runScheduledMatch"> & Partial<Pick<ArenaSeasonService, "lockSeason" | "expireEmptySeason">>;
   workerWalletAddress: string;
   now?: () => Date;
   maxConcurrentMatches?: number;
@@ -63,6 +63,12 @@ export class ArenaWorkerService {
     const autoLockedSeasonIds = new Set<string>();
     const failures: ArenaWorkerTickResult[] = [];
     for (const season of allSeasons.filter((candidate) => candidate.status === "open" && (candidate.locksAt?.getTime() ?? Number.POSITIVE_INFINITY) <= this.now().getTime())) {
+      const expiry = await this.expireEmptySeason(season.projectId, season.id);
+      if (typeof expiry !== "boolean") {
+        failures.push(expiry);
+        continue;
+      }
+      if (expiry) continue;
       const lockFailure = await this.lockDueSeason(season.projectId, season.id);
       if (lockFailure) {
         if (!isExpectedAutoLockBlock(lockFailure.errorCode)) failures.push(lockFailure);
@@ -110,6 +116,12 @@ export class ArenaWorkerService {
     const autoLockedSeasonIds = new Set<string>();
     let lastFailure: ArenaWorkerTickResult | undefined;
     for (const season of allSeasons.filter((candidate) => candidate.status === "open" && (candidate.locksAt?.getTime() ?? Number.POSITIVE_INFINITY) <= this.now().getTime())) {
+      const expiry = await this.expireEmptySeason(season.projectId, season.id);
+      if (typeof expiry !== "boolean") {
+        lastFailure = expiry;
+        continue;
+      }
+      if (expiry) continue;
       const lockFailure = await this.lockDueSeason(season.projectId, season.id);
       if (lockFailure) {
         if (!isExpectedAutoLockBlock(lockFailure.errorCode)) lastFailure = lockFailure;
@@ -152,6 +164,20 @@ export class ArenaWorkerService {
       automatic: true,
     });
     return result.ok ? undefined : { status: "failed", projectId, seasonId, errorCode: result.code };
+  }
+
+  private async expireEmptySeason(projectId: string, seasonId: string): Promise<boolean | ArenaWorkerTickResult> {
+    if (!this.seasonService.expireEmptySeason) return false;
+    const result = await this.seasonService.expireEmptySeason({
+      projectId,
+      seasonId,
+      actorWalletAddress: this.workerWalletAddress,
+      idempotencyKey: `auto-expire-${seasonId}`,
+    });
+    if (!result.ok) {
+      return { status: "failed", projectId, seasonId, errorCode: result.code };
+    }
+    return result.value.expired;
   }
 
   private async runNextForSeason(projectId: string, seasonId: string): Promise<ArenaWorkerTickResult> {

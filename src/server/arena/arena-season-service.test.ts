@@ -280,7 +280,7 @@ describe("ArenaSeasonService", () => {
   });
 
   it("removes expired empty public seasons while keeping active and populated seasons", async () => {
-    const { projectId, service, advance } = await setup();
+    const { repositories, projectId, service, advance } = await setup();
     const active = await service.createSeason({
       projectId,
       actorWalletAddress: company,
@@ -319,6 +319,14 @@ describe("ArenaSeasonService", () => {
       idempotencyKey: "entry-expired-populated",
     })).resolves.toMatchObject({ ok: true });
     advance(24 * 60 * 60 * 1000 + 1);
+
+    await expect(service.expireEmptySeason({
+      projectId,
+      seasonId: emptyExpired.value.id,
+      actorWalletAddress: company,
+      idempotencyKey: "auto-expire-season-expired-empty",
+    })).resolves.toEqual({ ok: true, value: { expired: true } });
+    await expect(repositories.projects.getArenaSeason(projectId, emptyExpired.value.id)).resolves.toMatchObject({ status: "cancelled" });
 
     const listed = await service.listAllPublicSeasons();
     expect(listed).toMatchObject({ ok: true });
