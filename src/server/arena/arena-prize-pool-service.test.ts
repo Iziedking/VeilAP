@@ -199,6 +199,11 @@ describe("ArenaPrizePoolService", () => {
         return {
           execution_status: "SUCCEEDED",
           finality_status: "ACCEPTED_ON_L2",
+          events: [{
+            from_address: "0x123",
+            keys: [company, "0xabc"],
+            data: ["0x32", "0x0"],
+          }],
         };
       },
       async getTransactionTrace() {
@@ -398,5 +403,19 @@ describe("ArenaPrizePoolService", () => {
       actorWalletAddress: company,
       confirmation: confirmation(replayPlan.value, fundingHash, now),
     })).resolves.toEqual({ ok: false, code: "TRANSACTION_ALREADY_USED" });
+
+    const unverifiedPool = await repositories.projects.getArenaPrizePool(project.value.id, "season-2");
+    if (!unverifiedPool) throw new Error("missing unverified pool");
+    await repositories.projects.updateArenaPrizePool({
+      ...unverifiedPool,
+      status: "unknown",
+      fundingTransactionHash: "0x333",
+      updatedAt: now,
+    });
+    await expect(service.getFundingTransactionPlan({
+      projectId: project.value.id,
+      seasonId: "season-2",
+      actorWalletAddress: company,
+    })).resolves.toEqual({ ok: false, code: "TRANSACTION_NOT_CONFIRMED" });
   });
 });

@@ -4,6 +4,7 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 
 ## Change log
 
+- 2026-09-07: Removed manual Lock draw and Run controls from the host desk. Entry remains open until the published lock cutoff. When the minimum roster is present, the worker locks the roster, creates the committed schedule, and starts eligible matches without operator action. A due gauntlet deterministically uses the earliest sealed entrant as its benchmark so it cannot stall on a hidden manual choice. The host sees one concise waiting state and read-only match progress.
 - 2026-09-07: Added one persistent sound control to the shared Arena navigation. The same `Sound on` / `Sound off` preference controls arena background music and match replay cues, so judges do not need to search inside a table view for audio settings.
 - 2026-09-07: Removed the host-facing start-time field. Publishing opens a competition for eligible agent entries immediately; the host chooses only the roster lock cutoff and competition end. The persisted start timestamp records publication time for scheduling compatibility, but it is not a separate user decision.
 - 2026-09-07: The public competition floor removes open seasons that reach their roster lock with zero entries. The season record remains available to operators and audit history, while populated and active competitions stay discoverable.
@@ -74,7 +75,7 @@ Private challenges produce one expiring join link only after the reward pool is 
 
 After a private challenge is created, the host desk keeps reward funding as the next action. Once the pool is verified, the host creates one expiring join link and can copy it, scan its QR code, or use the compact Join action from the same share block. The notification bell surfaces confirmed local events such as competition creation, link generation, roster changes, draw lock, and completed replay; it is a short-lived browser-session feed and never stores the opaque invitation token.
 
-Friend challenges and duel series lock their immutable two-agent roster automatically after the second successful enrollment, which creates the scheduled draw for the worker. Every non-gauntlet competition also auto-locks when its configured deadline arrives; the operator can still lock early. Gauntlets keep the explicit Lock draw action because they require a selected sealed benchmark. Profile competition entries are shown four at a time with Previous and Next controls.
+Friend challenges and duel series lock their immutable two-agent roster automatically after the second successful enrollment. Every other competition locks at its configured cutoff when the minimum roster is present, then the worker starts eligible matches. There is no manual draw or match-start action in the host desk. For gauntlets, the earliest sealed entrant becomes the committed benchmark. Profile competition entries are shown four at a time with Previous and Next controls.
 
 ### Challenge the champion
 

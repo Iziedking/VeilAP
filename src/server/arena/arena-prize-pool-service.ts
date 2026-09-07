@@ -419,6 +419,12 @@ export class ArenaPrizePoolService {
       const confirmation = await confirmStrk20Transaction(this.receiptProvider, {
         transactionHash: normalizedTransactionHash,
         poolAddress: pool.poolAddress,
+        shield: {
+          tokenAddress: pool.tokenAddress,
+          poolAddress: pool.poolAddress,
+          ownerAddress: actorAddress,
+          amountMinor: pool.amountMinor,
+        },
       });
       if (confirmation.kind !== "confirmed") {
         const unknown = { ...pool, status: "unknown" as const, fundingTransactionHash: normalizedTransactionHash, updatedAt: this.now() };
@@ -473,6 +479,83 @@ export class ArenaPrizePoolService {
     }
   }
 
+  async confirmFundingTransaction(input: {
+    projectId: string;
+    seasonId: string;
+    actorWalletAddress: string;
+    transactionHash: string;
+  }): Promise<ArenaPrizePoolResult<ArenaPrizePoolView>> {
+    const normalizedTransactionHash = transactionHash(input.transactionHash);
+    if (!normalizedTransactionHash) return { ok: false, code: "INVALID_INPUT" };
+    const authorized = await this.authorize(input.projectId, input.actorWalletAddress);
+    if (!authorized.ok) return authorized;
+    try {
+      const pool = await this.repositories.getArenaPrizePool(input.projectId, input.seasonId);
+      if (!pool) return { ok: false, code: "ARENA_PRIZE_POOL_NOT_FOUND" };
+      const actorAddress = normalizeFeltAddress(input.actorWalletAddress);
+      const actorFingerprint = fingerprintWallet(input.actorWalletAddress, this.walletHashPepper);
+      if (!actorAddress || actorFingerprint !== pool.sponsorFingerprint) {
+        return { ok: false, code: "ARENA_SPONSOR_WALLET_REQUIRED" };
+      }
+      if (pool.status === "funded" || pool.status === "settlement_pending" || pool.status === "settled") {
+        return pool.fundingTransactionHash === normalizedTransactionHash
+          ? { ok: true, value: view(pool) }
+          : { ok: false, code: "TRANSACTION_ALREADY_USED" };
+      }
+      if (pool.status === "unknown" && pool.fundingTransactionHash !== normalizedTransactionHash) {
+        return { ok: false, code: "TRANSACTION_NOT_CONFIRMED" };
+      }
+      if (await this.repositories.getArenaPrizeTransaction(normalizedTransactionHash)) {
+        return { ok: false, code: "TRANSACTION_ALREADY_USED" };
+      }
+      const confirmation = await confirmStrk20Transaction(this.receiptProvider, {
+        transactionHash: normalizedTransactionHash,
+        poolAddress: pool.poolAddress,
+        shield: {
+          tokenAddress: pool.tokenAddress,
+          poolAddress: pool.poolAddress,
+          ownerAddress: actorAddress,
+          amountMinor: pool.amountMinor,
+        },
+      });
+      if (confirmation.kind !== "confirmed") {
+        const unknown = { ...pool, status: "unknown" as const, fundingTransactionHash: normalizedTransactionHash, updatedAt: this.now() };
+        await this.repositories.updateArenaPrizePool(unknown);
+        return { ok: false, code: "TRANSACTION_NOT_CONFIRMED" };
+      }
+      const updatedAt = this.now();
+      const receiptDigest = commitment({
+        chainReceiptDigest: confirmation.receiptDigest,
+        verification: "shield_receipt",
+      });
+      const next = { ...pool, status: "funded" as const, fundingTransactionHash: normalizedTransactionHash, fundingReceiptDigest: receiptDigest, updatedAt };
+      await this.repositories.confirmArenaPrizePoolTransaction({
+        pool: next,
+        expectedStatus: pool.status,
+        transaction: {
+          transactionHash: normalizedTransactionHash,
+          poolId: pool.id,
+          projectId: pool.projectId,
+          seasonId: pool.seasonId,
+          operation: "funding",
+          receiptDigest,
+          createdAt: updatedAt,
+        },
+        audit: {
+          id: this.idFactory(),
+          projectId: pool.projectId,
+          actorFingerprint,
+          eventType: "arena_prize_pool_funded",
+          payloadDigest: commitment({ poolId: pool.id, transactionHash: normalizedTransactionHash, receiptDigest, verification: "shield_receipt" }),
+          createdAt: updatedAt,
+        },
+      });
+      return { ok: true, value: view(next) };
+    } catch (error) {
+      return { ok: false, code: mapPersistenceError(error) };
+    }
+  }
+
   async getFundingTransactionPlan(input: { projectId: string; seasonId: string; actorWalletAddress: string }): Promise<ArenaPrizePoolResult<ArenaFundingTransactionPlan>> {
     const authorized = await this.authorize(input.projectId, input.actorWalletAddress);
     if (!authorized.ok) return authorized;
@@ -485,6 +568,9 @@ export class ArenaPrizePoolService {
       }
       if (pool.status === "funded" || pool.status === "settlement_pending" || pool.status === "settled") {
         return { ok: false, code: "ARENA_PRIZE_POOL_ALREADY_FUNDED" };
+      }
+      if (pool.status === "unknown") {
+        return { ok: false, code: "TRANSACTION_NOT_CONFIRMED" };
       }
       return { ok: true, value: transferPlan(pool, "strk20_shield", actorAddress) };
     } catch (error) {

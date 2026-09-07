@@ -213,6 +213,46 @@ describe("ArenaSeasonService", () => {
     expect(locked.value.matches).toHaveLength(1);
   });
 
+  it("chooses the earliest sealed entrant when the deadline worker locks a gauntlet", async () => {
+    const { projectId, service } = await setup();
+    const created = await service.createSeason({
+      projectId,
+      actorWalletAddress: company,
+      idempotencyKey: "season-create-auto-gauntlet",
+      templateId: "custom",
+      customRules: {
+        pairingMode: "gauntlet",
+        entryMode: "invite_only",
+        maxEntries: 3,
+        handsPerMatch: 20,
+        encountersPerPair: 1,
+        qualificationHands: 40,
+        resubmissionPolicy: "fixed",
+        rewardPolicy: "optional",
+      },
+      ...seasonInput,
+    });
+    if (!created.ok) throw new Error(created.code);
+    for (const [agentId, key] of [["CINDER", "gauntlet-entry-cinder"], ["EMBER", "gauntlet-entry-ember"], ["NOVA", "gauntlet-entry-nova"]] as const) {
+      const entry = await service.registerEntry({ projectId, seasonId: created.value.id, actorWalletAddress: contributor, agentId, idempotencyKey: key });
+      if (!entry.ok) throw new Error(entry.code);
+    }
+
+    const locked = await service.lockSeason({
+      projectId,
+      seasonId: created.value.id,
+      actorWalletAddress: company,
+      idempotencyKey: "auto-lock-gauntlet-service",
+      automatic: true,
+    });
+    expect(locked.ok).toBe(true);
+    if (!locked.ok) throw new Error(locked.code);
+    expect(locked.value.matches.map((match) => [match.leftAgentId, match.rightAgentId])).toEqual([
+      ["CINDER", "EMBER"],
+      ["CINDER", "NOVA"],
+    ]);
+  });
+
   it("keeps private friend challenges out of the public competition lobby", async () => {
     const { projectId, service } = await setup();
     const publicSeason = await service.createSeason({

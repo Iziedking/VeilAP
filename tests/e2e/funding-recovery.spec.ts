@@ -51,6 +51,7 @@ test("funds the chosen amount through WalletAccountV6 and resumes confirmation a
   const season = { id: seasonId, projectId, name: "Funding recovery", status: "open", entryMode: "invite_only", maxEntries: 2, locksAt: "2099-01-01T00:00:00Z", rules: { rewardPolicy: "optional" } };
   const pool = { id: "funding-pool", projectId, seasonId, tokenAddress: "0x123", tokenSymbol: "USDC", poolAddress: "0x456", amountMinor: "5000000", status: "funding_pending" };
   let confirmations = 0;
+  let submittedFundingHash: string | undefined;
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -64,31 +65,34 @@ test("funds the chosen amount through WalletAccountV6 and resumes confirmation a
     else if (path.endsWith("/strategies")) body = { ok: true, value: [] };
     else if (path.endsWith("/seasons")) body = { ok: true, value: [season] };
     else if (path.endsWith(`/${seasonId}`)) body = { ok: true, value: { season, entries: [], matches: [] } };
-    else if (path.endsWith("/prize-pool")) body = { ok: true, value: pool };
+    else if (path.endsWith("/prize-pool")) body = { ok: true, value: { ...pool, ...(submittedFundingHash ? { status: "unknown", fundingTransactionHash: submittedFundingHash } : {}) } };
     else if (path.endsWith("/funding") && request.method() === "GET") body = { ok: true, value: { ...pool, poolId: pool.id, network: "SN_MAIN", operation: "strk20_shield", recipient: fakeWalletAddress, planDigest: "test-plan" } };
     else if (path.endsWith("/funding")) {
       const payload = request.postDataJSON();
-      expect(payload.authorization.amountMinor).toBe("5000000");
-      expect(payload.authorization.transactionHash).toBe("0xabc123");
+      expect(payload.transactionHash).toBe("0xabc123");
       confirmations++;
-      if (confirmations === 1) { status = 409; body = { ok: false, code: "TRANSACTION_NOT_CONFIRMED" }; }
+      if (confirmations === 1) { submittedFundingHash = payload.transactionHash; status = 409; body = { ok: false, code: "TRANSACTION_NOT_CONFIRMED" }; }
       else body = { ok: true, value: { ...pool, status: "funded" } };
     }
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto(`/arena-console/${projectId}/${seasonId}`);
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
+  await expect(page.getByRole("button", { name: "LOCK DRAW" })).toHaveCount(0);
+  await expect(page.getByText(/Matches start automatically/)).toBeVisible();
   await expect(page.getByText(/Current pool fee: 6 STRK/)).toBeVisible();
   await expect(page.getByRole("button", { name: "CREATE JOIN LINK" })).toHaveCount(0);
   await page.getByRole("button", { name: "FUND REWARD" }).click();
   await expect(page.getByRole("button", { name: "VERIFY FUNDING" })).toBeEnabled();
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("test-wallet-actions")!))).toEqual([{ type: "deposit", token: "0x123", amount: "0x4c4b40" }]);
+  expect(await page.evaluate(() => localStorage.getItem("veil-arena:funding:funding-pool:0x1"))).toBe("0xabc123");
   await expect(page.getByRole("button", { name: "FUND REWARD" })).toHaveCount(0);
   await page.reload();
   await page.getByRole("button", { name: "Veil Arena test wallet" }).click();
   await page.getByRole("button", { name: "VERIFY FUNDING" }).click();
   await expect(page.getByRole("button", { name: "CREATE JOIN LINK" })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("test-wallet-invocations"))).toBe("1");
+  expect(await page.evaluate(() => localStorage.getItem("veil-arena:funding:funding-pool:0x1"))).toBeNull();
   expect(confirmations).toBe(2);
 });
 

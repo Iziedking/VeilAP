@@ -56,6 +56,35 @@ describe("STRK20 receipt confirmation", () => {
     }, poolAddress)).toBe(false);
   });
 
+  it("matches a finalized shield against the configured token, owner, pool, and amount", async () => {
+    const tokenAddress = "0x123";
+    const ownerAddress = "0x789";
+    const receipt = {
+      execution_status: "SUCCEEDED",
+      finality_status: "ACCEPTED_ON_L2",
+      events: [{
+        from_address: tokenAddress,
+        keys: ["0xdead", ownerAddress, poolAddress],
+        data: ["0x4c4b40", "0x0"],
+      }],
+    };
+    const provider = {
+      getTransactionReceipt: async () => receipt,
+      getTransactionTrace: async () => ({ execute_invocation: { contract_address: poolAddress } }),
+    };
+
+    await expect(confirmStrk20Transaction(provider, {
+      transactionHash: "0xfunded",
+      poolAddress,
+      shield: { tokenAddress, poolAddress, ownerAddress, amountMinor: "5000000" },
+    })).resolves.toMatchObject({ kind: "confirmed" });
+    await expect(confirmStrk20Transaction(provider, {
+      transactionHash: "0xwrong-amount",
+      poolAddress,
+      shield: { tokenAddress, poolAddress, ownerAddress, amountMinor: "5000001" },
+    })).resolves.toMatchObject({ kind: "unknown", reason: "SHIELD_RECEIPT_MISMATCH" });
+  });
+
   it("bounds provider calls", async () => {
     const never = new Promise<unknown>(() => undefined);
     await expect(confirmStrk20Transaction({

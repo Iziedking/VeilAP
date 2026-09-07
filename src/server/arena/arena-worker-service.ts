@@ -196,6 +196,5 @@ function batchStatus(results: ArenaWorkerTickResult[]): ArenaWorkerBatchResult["
 
 function isExpectedAutoLockBlock(errorCode: string | undefined): boolean {
   return errorCode === "ARENA_SEASON_TOO_SMALL"
-    || errorCode === "ARENA_PRIZE_POOL_NOT_FUNDED"
-    || errorCode === "ARENA_BENCHMARK_REQUIRED";
+    || errorCode === "ARENA_PRIZE_POOL_NOT_FUNDED";
 }

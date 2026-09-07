@@ -15,11 +15,18 @@ export interface ConfirmationOptions {
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
+export interface ShieldReceiptExpectation {
+  tokenAddress: string;
+  poolAddress: string;
+  ownerAddress: string;
+  amountMinor: string;
+}
+
 type ReceiptState = "succeeded" | "reverted" | "pending";
 
 export async function confirmStrk20Transaction(
   provider: ReceiptTraceProvider,
-  input: { transactionHash: string; poolAddress: string },
+  input: { transactionHash: string; poolAddress: string; shield?: ShieldReceiptExpectation },
   options: ConfirmationOptions = {},
 ): Promise<Strk20Outcome> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
@@ -51,6 +58,9 @@ export async function confirmStrk20Transaction(
         if (!traceTouchesPool(trace, input.poolAddress)) {
           return { kind: "unknown", transactionHash: input.transactionHash, reason: "POOL_TRACE_MISSING" };
         }
+        if (input.shield && !receiptMatchesShield(receipt, input.shield)) {
+          return { kind: "unknown", transactionHash: input.transactionHash, reason: "SHIELD_RECEIPT_MISMATCH" };
+        }
         return {
           kind: "confirmed",
           transactionHash: input.transactionHash,
@@ -64,6 +74,48 @@ export async function confirmStrk20Transaction(
   }
 
   return { kind: "unknown", transactionHash: input.transactionHash, reason: "CONFIRMATION_TIMEOUT" };
+}
+
+function receiptMatchesShield(receipt: unknown, expected: ShieldReceiptExpectation): boolean {
+  const tokenAddress = expected.tokenAddress;
+  const expectedAmount = BigInt(expected.amountMinor);
+  const visited = new Set<object>();
+
+  function visit(value: unknown): boolean {
+    if (typeof value !== "object" || value === null || visited.has(value)) return false;
+    visited.add(value);
+    if (Array.isArray(value)) return value.some(visit);
+    const record = value as Record<string, unknown>;
+    const fromAddress = stringField(record, "from_address", "fromAddress");
+    const keys = arrayOfStrings(record.keys);
+    const data = arrayOfStrings(record.data);
+    if (
+      fromAddress
+      && sameFeltAddress(fromAddress, tokenAddress)
+      && keys.some((key) => sameFeltAddress(key, expected.poolAddress))
+      && keys.some((key) => sameFeltAddress(key, expected.ownerAddress))
+      && data.length >= 1
+    ) {
+      const low = feltBigInt(data[0]);
+      const high = feltBigInt(data[1] ?? "0x0");
+      if (low !== undefined && high !== undefined && low + (high << 128n) === expectedAmount) return true;
+    }
+    return Object.values(record).some(visit);
+  }
+
+  return visit(receipt);
+}
+
+function arrayOfStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function feltBigInt(value: string): bigint | undefined {
+  try {
+    return BigInt(value);
+  } catch {
+    return undefined;
+  }
 }
 
 export function traceTouchesPool(trace: unknown, poolAddress: string): boolean {

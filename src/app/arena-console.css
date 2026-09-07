@@ -58,9 +58,9 @@
 .operator-button span { color: var(--signal); font-size: 17px; }
 .operator-button-signal { background: var(--signal); color: var(--signal-ink); box-shadow: 4px 4px 0 var(--ink); }
 .operator-button-dark { background: var(--ink); color: var(--paper-light); box-shadow: 4px 4px 0 var(--signal); }
-.operator-button:hover:not(:disabled), .operator-run-button:hover:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.operator-button:hover:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
 .operator-button-dark:hover:not(:disabled) { box-shadow: 2px 2px 0 var(--signal); }
-.operator-button:disabled, .operator-run-button:disabled { cursor: not-allowed; opacity: .48; }
+.operator-button:disabled { cursor: not-allowed; opacity: .48; }
 .operator-feedback { margin-top: 25px; padding: 16px 18px; border: 1px solid var(--ink); font-size: 10px; line-height: 1.5; }
 .operator-feedback.is-error { background: #ead4c9; border-color: var(--signal-dark); color: var(--signal-dark); }
 .operator-feedback.is-notice { background: #dfe7df; border-color: var(--green); color: var(--green); }
@@ -210,18 +210,13 @@
 .operator-next-action strong { margin-top: 6px; font-family: var(--arena-display); font-size: 15px; line-height: 1.2; text-transform: uppercase; }
 .operator-next-action small { max-width: 680px; margin-top: 8px; color: var(--ink-soft); font-size: 9px; line-height: 1.5; }
 .operator-next-action .operator-button { flex: 0 0 auto; }
-.operator-lock-bar { padding: 18px 19px; display: grid; grid-template-columns: 180px 1fr auto; gap: 22px; align-items: end; border-bottom: 1px solid var(--rule); background: rgba(242,165,114,.16); }
-.operator-lock-bar input { width: 85px; }
-.operator-lock-bar p { margin: 0; color: var(--ink-soft); font-size: 10px; line-height: 1.5; }
 .operator-match-list { padding: 9px 19px 16px; }
-.operator-match-row { min-height: 70px; display: grid; grid-template-columns: 45px 1fr auto; align-items: center; gap: 15px; border-bottom: 1px solid var(--rule); }
+.operator-match-row { min-height: 70px; display: grid; grid-template-columns: 45px 1fr; align-items: center; gap: 15px; border-bottom: 1px solid var(--rule); }
 .operator-sequence { font-family: var(--arena-display); font-size: 20px; color: var(--signal-dark); }
 .operator-match-row strong, .operator-match-row small { display: block; }
 .operator-match-row strong { font-family: var(--arena-display); font-size: 14px; line-height: 1.25; text-transform: uppercase; }
 .operator-match-row strong b { color: var(--signal-dark); font-family: var(--arena-mono); font-size: 9px; }
 .operator-match-row small { margin-top: 6px; color: var(--ink-soft); font-size: 8px; letter-spacing: .4px; }
-.operator-run-button { min-width: 67px; min-height: 44px; padding: 0 9px; border: 1px solid var(--ink); background: var(--signal); color: var(--signal-ink); cursor: pointer; font-family: var(--arena-mono); font-size: 8px; letter-spacing: .6px; }
-.operator-run-button:disabled { background: var(--paper); }
 
 .operator-result { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; }
 .operator-result header { grid-column: 1 / -1; min-height: 48px; padding: 0 19px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ink); background: var(--signal); color: var(--signal-ink); font-size: 8px; letter-spacing: .8px; }
@@ -345,7 +340,6 @@
   .operator-season-list, .operator-strategy-list, .operator-match-list { padding-inline: 14px; }
   .operator-full-button { width: calc(100% - 28px); margin-inline: 14px; }
   .operator-schedule-meta { padding-inline: 14px; }
-  .operator-lock-bar { padding-inline: 14px; }
   .operator-pool-form { display: block; }
   .operator-chain-step { display: block; padding-inline: 14px; }
   .operator-chain-actions { display: block; }
@@ -362,9 +356,8 @@
   .operator-invite-link input { margin-top: 8px; }
   .operator-invite-actions { margin-top: 10px; }
   .operator-invite-actions .operator-button { flex: 1; width: 100%; }
-  .operator-match-row { grid-template-columns: 34px 1fr auto; gap: 9px; }
+  .operator-match-row { grid-template-columns: 34px 1fr; gap: 9px; }
   .operator-match-row strong { font-size: 11px; }
-  .operator-run-button { min-width: 57px; }
   .operator-result > div { padding-inline: 14px; }
   .operator-result > .operator-button { margin-inline: 14px; }
 }

@@ -4,8 +4,13 @@ import { jsonBodyErrorResponse, readJsonBody } from "@/server/http/json-body";
 import { serviceResponse } from "@/server/http/service-response";
 import { getArenaPrizePoolService } from "@/server/projects/runtime";
 import { arenaTransferConfirmationSchema } from "@/server/arena/arena-prize-pool-service";
+import { z } from "zod";
 
 export const runtime = "nodejs";
+
+const fundingTransactionSchema = z.object({
+  transactionHash: z.string().trim().min(3).max(80),
+}).strict();
 
 export async function POST(
   request: Request,
@@ -15,12 +20,22 @@ export async function POST(
     const actor = await readRequestActor();
     if (!actor.ok) return serviceResponse(actor);
     const { projectId, seasonId } = await context.params;
-    const confirmation = arenaTransferConfirmationSchema.parse(await readJsonBody(request));
-    return serviceResponse(await getArenaPrizePoolService().confirmFunding({
+    const body = await readJsonBody(request);
+    if (typeof body === "object" && body !== null && "authorization" in body) {
+      const confirmation = arenaTransferConfirmationSchema.parse(body);
+      return serviceResponse(await getArenaPrizePoolService().confirmFunding({
+        projectId,
+        seasonId,
+        actorWalletAddress: actor.walletAddress,
+        confirmation,
+      }));
+    }
+    const funding = fundingTransactionSchema.parse(body);
+    return serviceResponse(await getArenaPrizePoolService().confirmFundingTransaction({
       projectId,
       seasonId,
       actorWalletAddress: actor.walletAddress,
-      confirmation,
+      transactionHash: funding.transactionHash,
     }));
   } catch (error) {
     const bodyError = jsonBodyErrorResponse(error);

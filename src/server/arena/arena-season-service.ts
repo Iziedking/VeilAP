@@ -533,11 +533,10 @@ export class ArenaSeasonService {
         const prize = await this.repositories.getArenaPrizePool(projectId, seasonId);
         if (prize?.status !== "funded") return { ok: false, code: "ARENA_PRIZE_POOL_NOT_FUNDED" };
       }
-      // The worker may lock any format when its deadline arrives. Formats
-      // that need an operator-selected benchmark still fail closed below
-      // with ARENA_BENCHMARK_REQUIRED rather than inventing a benchmark.
+      const orderedEntries = [...entries].sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime() || left.agentId.localeCompare(right.agentId));
       const rulesCommitment = season.rulesCommitment ?? tournamentRulesCommitment(rules);
-      const benchmarkAgentId = input.benchmarkAgentId?.trim() || undefined;
+      const benchmarkAgentId = input.benchmarkAgentId?.trim()
+        || (input.automatic && rules.pairingMode === "gauntlet" ? orderedEntries[0]?.agentId : undefined);
       const requestDigest = commitment({
         ...(input.automatic ? {} : { actorFingerprint }),
         seasonId,
@@ -552,7 +551,6 @@ export class ArenaSeasonService {
       if (season.status !== "open") return { ok: false, code: "ARENA_SEASON_ALREADY_LOCKED" };
       if (entries.length < rules.minEntries) return { ok: false, code: "ARENA_SEASON_TOO_SMALL" };
 
-      const orderedEntries = [...entries].sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime() || left.agentId.localeCompare(right.agentId));
       const createdAt = this.now();
       let generatedSchedule: ReturnType<typeof buildTournamentSchedule>;
       try {
