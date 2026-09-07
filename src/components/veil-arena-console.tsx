@@ -206,7 +206,7 @@ function toIso(value: string): string | undefined {
 function defaultCompetitionWindow(): { startsAt: string; locksAt: string; endsAt: string } {
   const now = Date.now();
   return {
-    startsAt: new Date(now + 10 * 60_000).toISOString(),
+    startsAt: new Date(now).toISOString(),
     locksAt: new Date(now + 70 * 60_000).toISOString(),
     endsAt: new Date(now + 24 * 60 * 60_000).toISOString(),
   };
@@ -266,7 +266,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   const [settlementWalletOutcome, setSettlementWalletOutcome] = useState<Strk20Outcome | null>(null);
   const [seasonName, setSeasonName] = useState("");
   const [templateId, setTemplateId] = useState<TournamentTemplateId>("playground");
-  const [startsAt, setStartsAt] = useState("");
   const [locksAt, setLocksAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [entryMode, setEntryMode] = useState<Season["entryMode"]>("open");
@@ -452,11 +451,11 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
   async function createSeason(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const defaults = defaultCompetitionWindow();
-    const starts = toIso(startsAt) ?? defaults.startsAt;
+    const starts = defaults.startsAt;
     const locks = toIso(locksAt) ?? defaults.locksAt;
     const ends = toIso(endsAt) ?? defaults.endsAt;
     if (!seasonName.trim() || !starts || !locks || !ends || !(starts < locks && locks < ends) || !draftRules) {
-      setError("Add a name, choose valid tournament rules, and set the dates in this order: start, lock, end.");
+      setError("Add a name, choose valid tournament rules, and set the roster lock before the competition end.");
       return;
     }
     const amountMinor = draftRequiresFunding ? parseTokenAmountToMinor(prizeAmount, selectedPrizeToken.decimals) : null;
@@ -1067,7 +1066,6 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                   <span><strong>Fund this competition</strong><small>Optional. Turn on to choose STRK or USDC and enter the reward amount.</small></span>
                 </label>
                 <label>SEASON NAME<input value={seasonName} onChange={(event) => setSeasonName(event.target.value)} placeholder="Season 01" required /></label>
-                <label>STARTS AT<input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
                 <label>LOCKS AT<input type="datetime-local" value={locksAt} onChange={(event) => setLocksAt(event.target.value)} /></label>
                 <label>ENDS AT<input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} /></label>
                 <label>QUALIFICATION SAMPLE<select value={qualificationHands} onChange={(event) => setQualificationHands(event.target.value)}><option value="100">100 DECISIONS / QUICK TEST</option><option value="500">500 DECISIONS / EXHIBITION</option><option value="1000">1,000 DECISIONS / CHALLENGE</option><option value="5000">5,000 DECISIONS / LEAGUE</option><option value="20000">20,000 DECISIONS / PRIZE SEASON</option></select><small>Veil Arena calculates repeated rounds from the final roster and spreads them across the competition window.</small></label>
@@ -1093,7 +1091,7 @@ export function VeilArenaConsole({ managedProjectId, managedSeasonId }: { manage
                 {draftRules ? <div className="operator-rule-preview" role="status">
                   <span>{draftRules.pairingMode.replaceAll("_", " ").toUpperCase()}</span>
                   <strong>{draftRules.minEntries}-{draftRules.maxEntries} agents / {draftRules.handsPerMatch} duplicate deals per match / {(draftRules.qualificationHands ?? 0).toLocaleString()} decisions to qualify</strong>
-                  <small>Rounds are scheduled from start to end after the roster locks. One entry per exact strategy. Strategies and detailed table playback stay sealed from non-participants.</small>
+                  <small>Entry opens when you publish. After the roster locks, rounds run until the competition ends. One entry per exact strategy. Strategies and detailed table playback stay sealed from non-participants.</small>
                 </div> : <div className="operator-rule-preview is-error" role="alert">The custom limits do not form a valid tournament.</div>}
                 <button className="operator-button operator-button-dark" type="submit" disabled={busy !== ""}>{busy === "create" ? "PUBLISHING" : "PUBLISH COMPETITION"}<span>+</span></button>
               </form>

@@ -4,6 +4,7 @@ Verified 2026-08-31 against the shipped Veil Arena routes, [dev.fun](https://dev
 
 ## Change log
 
+- 2026-09-07: Removed the host-facing start-time field. Publishing opens a competition for eligible agent entries immediately; the host chooses only the roster lock cutoff and competition end. The persisted start timestamp records publication time for scheduling compatibility, but it is not a separate user decision.
 - 2026-09-06: First-user simplification pass. The public arena now starts with three intent-led actions: watch a real result, enter with an existing agent, or host a competition. Player entry auto-selects the most recently updated saved agent and keeps package import behind an explicit change action. Completed table playback starts paused at a readable pace so a judge can understand one decision before moving to the next. This pass keeps the current deterministic engine honest as verified replay and does not introduce live street-by-street gameplay.
 
 - 2026-09-06: Locked the competition runtime around timed scheduled rounds. A season runs from its published start to end time, with enough evenly spaced rounds to reach the selected qualification sample when every scheduled match completes. Matches in the same round become eligible together and workers execute a bounded number concurrently. Public visitors see competition results and its leaderboard. Only an authenticated entrant in that competition may open its table rooms and verified receipt playback.
@@ -56,7 +57,7 @@ While a match runs, the spectator page refreshes its real status. Once the worke
 
 ### Host
 
-An operator first clicks a competition type: Challenge a friend or Public freepass. The form shows the type, name, and lock-time controls before anything else. Funding is off by default. A single Fund this competition checkbox reveals the STRK/USDC selector and exact amount field; there is no seeded reward amount. When funded, the operator connects, opens the wallet, submits, and verifies the expected receipt. The system creates the underlying project automatically. Project IDs remain available in technical details but are not setup inputs.
+An operator first clicks a competition type: Challenge a friend or Public freepass. The form shows the type, name, roster lock cutoff, and competition end before anything else. Publishing opens the competition for eligible agent entries immediately, so there is no separate start-time control. Funding is off by default. A single Fund this competition checkbox reveals the STRK/USDC selector and exact amount field; there is no seeded reward amount. When funded, the operator connects, opens the wallet, submits, and verifies the expected receipt. The system creates the underlying project automatically. Project IDs remain available in technical details but are not setup inputs.
 
 The host chooses a qualification sample from a dropdown. Preset cards supply the pairing mode, table size, duplicate deals per match, admission, replacement, and funding rules. At roster lock, Veil Arena calculates the required number of rounds from the actual entrant count and spreads those rounds across the published competition window. The final round becomes eligible before the end time. The worker never claims a future round early.
 

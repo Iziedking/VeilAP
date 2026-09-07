@@ -61,6 +61,12 @@ test("routes arena and host work away from the landing page", async ({ page }) =
   await page.goto("/arena-console", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { level: 1, name: "Host a competition." })).toBeVisible();
   await expect(page.getByLabel("SEASON NAME")).toBeVisible();
+  await expect(page.getByLabel("STARTS AT")).toHaveCount(0);
+  await expect(page.getByLabel("LOCKS AT")).toBeVisible();
+  await expect(page.getByLabel("ENDS AT")).toBeVisible();
+  const fundingDescription = page.locator(".operator-funding-toggle > span").nth(1);
+  await expect(fundingDescription).toBeVisible();
+  expect(await fundingDescription.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(200);
   await expect(page.getByLabel("PROJECT ID")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /publish competition/i })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/fallbackAction|minHoleRankTotal|maxToCallMinor/);
